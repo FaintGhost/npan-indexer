@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Npan Search Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fc;
+        --panel: #ffffff;
+        --line: #dde3ef;
+        --text: #182034;
+        --muted: #5f6f8b;
+        --primary: #0f6fff;
+        --danger: #b42318;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background: var(--bg);
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+      .title {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+      .desc {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 120px auto;
+        gap: 10px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+      input,
+      textarea,
+      button,
+      select {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 10px;
+        font-size: 14px;
+      }
+      button {
+        cursor: pointer;
+        background: #fff;
+      }
+      button.primary {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .status {
+        font-size: 13px;
+        color: var(--muted);
+        min-height: 20px;
+      }
+      .status.error {
+        color: var(--danger);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        padding: 10px 8px;
+        vertical-align: top;
+        font-size: 13px;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .mono {
+        font-family: "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .links {
+        width: 100%;
+        min-height: 120px;
+      }
+      @media (max-width: 860px) {
+        .grid,
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="panel">
+        <h1 class="title">Npan Search Demo</h1>
+        <p class="desc">最小纯 HTML 测试页：搜索本地索引，选择文件后生成可复制下载链接。</p>
+      </div>
+
+      <div class="panel">
+        <div class="grid">
+          <div>
+            <label for="baseUrl">API Base URL</label>
+            <input id="baseUrl" placeholder="http://127.0.0.1:1323" />
+          </div>
+          <div>
+            <label for="apiKey">X-API-Key（可选）</label>
+            <input id="apiKey" placeholder="若服务启用 NPA_ADMIN_API_KEY 则必填" />
+          </div>
+          <div>
+            <label for="pageSize">每页条数</label>
+            <select id="pageSize">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div style="display:flex; align-items:flex-end; gap:8px;">
+            <button id="searchBtn" class="primary">搜索</button>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <label for="bearerToken">Bearer Token（生成下载链接必需，除非服务端允许配置回退）</label>
+          <input id="bearerToken" placeholder="可通过 go run ./cmd/cli token 获取 access_token" />
+        </div>
+        <div style="margin-top:10px;">
+          <label for="query">搜索关键词</label>
+          <input id="query" placeholder="输入文件名关键词" />
+        </div>
+        <p id="status" class="status"></p>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar" style="margin-bottom:8px;">
+          <button id="selectAllBtn">勾选全部文件</button>
+          <button id="clearSelBtn">清空选择</button>
+          <button id="genLinksBtn" class="primary">为已选文件生成链接</button>
+          <button id="copyLinksBtn">复制链接</button>
+        </div>
+        <div style="overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px;">选</th>
+                <th style="width:120px;">类型</th>
+                <th>名称</th>
+                <th style="width:130px;">source_id</th>
+                <th style="width:180px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody">
+              <tr><td colspan="5" class="muted">暂无数据，请先搜索。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <label for="linksOutput">下载链接输出</label>
+        <textarea id="linksOutput" class="links" placeholder="生成后会在这里显示，每行一个链接"></textarea>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        items: [],
+        linksByFileId: new Map(),
+        selected: new Set()
+      };
+
+      const el = {
+        baseUrl: document.getElementById("baseUrl"),
+        apiKey: document.getElementById("apiKey"),
+        bearerToken: document.getElementById("bearerToken"),
+        pageSize: document.getElementById("pageSize"),
+        query: document.getElementById("query"),
+        searchBtn: document.getElementById("searchBtn"),
+        selectAllBtn: document.getElementById("selectAllBtn"),
+        clearSelBtn: document.getElementById("clearSelBtn"),
+        genLinksBtn: document.getElementById("genLinksBtn"),
+        copyLinksBtn: document.getElementById("copyLinksBtn"),
+        resultBody: document.getElementById("resultBody"),
+        linksOutput: document.getElementById("linksOutput"),
+        status: document.getElementById("status")
+      };
+
+      el.baseUrl.value = window.location.origin;
+
+      function setStatus(text, isError) {
+        el.status.textContent = text || "";
+        el.status.classList.toggle("error", !!isError);
+      }
+
+      function getHeaders() {
+        const headers = {};
+        const apiKey = el.apiKey.value.trim();
+        const bearerToken = el.bearerToken.value.trim();
+        if (apiKey) {
+          headers["X-API-Key"] = apiKey;
+        }
+        if (bearerToken) {
+          headers["Authorization"] = "Bearer " + bearerToken;
+        }
+        return headers;
+      }
+
+      async function requestJSON(path, params) {
+        const base = el.baseUrl.value.trim().replace(/\/$/, "");
+        const url = new URL(base + path);
+        if (params) {
+          Object.keys(params).forEach((key) => {
+            const value = params[key];
+            if (value !== undefined && value !== null && value !== "") {
+              url.searchParams.set(key, String(value));
+            }
+          });
+        }
+
+        const resp = await fetch(url.toString(), {
+          method: "GET",
+          headers: getHeaders()
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          throw new Error(data.error || "请求失败: HTTP " + resp.status);
+        }
+        return data;
+      }
+
+      function escapeHTML(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&#39;");
+      }
+
+      function getSelectedFileIds() {
+        return Array.from(state.selected).filter((id) => {
+          return state.items.some((item) => item.type === "file" && item.source_id === id);
+        });
+      }
+
+      function renderRows() {
+        if (!state.items.length) {
+          el.resultBody.innerHTML = '<tr><td colspan="5" class="muted">无结果。</td></tr>';
+          return;
+        }
+
+        const rows = state.items.map((item) => {
+          const isFile = item.type === "file";
+          const checked = isFile && state.selected.has(item.source_id) ? "checked" : "";
+          const safeName = escapeHTML(item.name || "");
+          const safeType = escapeHTML(item.type || "");
+          const sourceID = Number(item.source_id || 0);
+          const link = state.linksByFileId.get(sourceID) || "";
+          const actionButtons = isFile
+            ? '<button data-action="single-link" data-id="' + sourceID + '">生成链接</button>' +
+              (link ? ' <a href="' + escapeHTML(link) + '" target="_blank" rel="noreferrer">直接下载</a>' : "")
+            : '<span class="muted">文件夹不可下载</span>';
+
+          return (
+            "<tr>" +
+            '<td><input type="checkbox" data-action="toggle" data-id="' + sourceID + '" ' + checked + " " + (isFile ? "" : "disabled") + " /></td>" +
+            "<td>" + safeType + "</td>" +
+            "<td>" + safeName + "</td>" +
+            '<td class="mono">' + sourceID + "</td>" +
+            "<td>" + actionButtons + "</td>" +
+            "</tr>"
+          );
+        });
+
+        el.resultBody.innerHTML = rows.join("");
+      }
+
+      function syncOutput() {
+        const links = getSelectedFileIds()
+          .map((id) => state.linksByFileId.get(id))
+          .filter(Boolean);
+        el.linksOutput.value = links.join("\n");
+      }
+
+      async function search() {
+        const query = el.query.value.trim();
+        if (!query) {
+          setStatus("请输入关键词", true);
+          return;
+        }
+        setStatus("搜索中...");
+
+        try {
+          const data = await requestJSON("/api/v1/search/local", {
+            query,
+            page: 1,
+            page_size: Number(el.pageSize.value) || 20,
+            type: "all",
+            include_deleted: false
+          });
+          state.items = Array.isArray(data.items) ? data.items : [];
+          state.selected.clear();
+          state.linksByFileId.clear();
+          renderRows();
+          syncOutput();
+          setStatus("搜索完成，共 " + (data.total || state.items.length) + " 条");
+        } catch (error) {
+          setStatus(error.message || String(error), true);
+        }
+      }
+
+      async function generateLink(fileID) {
+        const data = await requestJSON("/api/v1/download-url", { file_id: fileID });
+        state.linksByFileId.set(fileID, data.download_url || "");
+      }
+
+      async function generateLinksForSelection() {
+        const ids = getSelectedFileIds();
+        if (!ids.length) {
+          setStatus("请先勾选至少一个文件", true);
+          return;
+        }
+
+        setStatus("生成链接中...（" + ids.length + "）");
+        let ok = 0;
+        let failed = 0;
+        for (const id of ids) {
+          try {
+            await generateLink(id);
+            ok += 1;
+          } catch (error) {
+            failed += 1;
+          }
+        }
+        renderRows();
+        syncOutput();
+        if (failed > 0 && !el.bearerToken.value.trim()) {
+          setStatus("生成完成：成功 " + ok + "，失败 " + failed + "。请填写 Bearer Token 后重试。", true);
+          return;
+        }
+        setStatus("生成完成：成功 " + ok + "，失败 " + failed + (failed ? "（可重试）" : ""));
+      }
+
+      async function copyLinks() {
+        const text = el.linksOutput.value.trim();
+        if (!text) {
+          setStatus("没有可复制的链接", true);
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(text);
+          setStatus("已复制到剪贴板");
+        } catch (error) {
+          el.linksOutput.focus();
+          el.linksOutput.select();
+          setStatus("浏览器限制复制，请手动 Ctrl/Cmd + C", true);
+        }
+      }
+
+      el.searchBtn.addEventListener("click", search);
+      el.query.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          search();
+        }
+      });
+
+      el.selectAllBtn.addEventListener("click", () => {
+        state.items.forEach((item) => {
+          if (item.type === "file") {
+            state.selected.add(item.source_id);
+          }
+        });
+        renderRows();
+        syncOutput();
+      });
+
+      el.clearSelBtn.addEventListener("click", () => {
+        state.selected.clear();
+        syncOutput();
+        renderRows();
+      });
+
+      el.genLinksBtn.addEventListener("click", generateLinksForSelection);
+      el.copyLinksBtn.addEventListener("click", copyLinks);
+
+      el.resultBody.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+        const action = target.getAttribute("data-action");
+        const id = Number(target.getAttribute("data-id") || 0);
+        if (!action || !id) {
+          return;
+        }
+
+        if (action === "single-link") {
+          try {
+            setStatus("生成链接中...");
+            await generateLink(id);
+            renderRows();
+            syncOutput();
+            setStatus("已生成文件 " + id + " 的下载链接");
+          } catch (error) {
+            setStatus(error.message || String(error), true);
+          }
+          return;
+        }
+      });
+
+      el.resultBody.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) {
+          return;
+        }
+        if (target.getAttribute("data-action") !== "toggle") {
+          return;
+        }
+
+        const id = Number(target.getAttribute("data-id") || 0);
+        if (!id) {
+          return;
+        }
+
+        if (target.checked) {
+          state.selected.add(id);
+        } else {
+          state.selected.delete(id);
+        }
+        syncOutput();
+      });
+    </script>
+  </body>
+</html>

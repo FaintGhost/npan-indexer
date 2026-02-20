@@ -33,6 +33,15 @@ go run ./cmd/server
 go run ./cmd/cli --help
 ```
 
+5. 打开最小 Web Demo（纯 HTML）。
+
+```bash
+# 启动服务后访问
+http://127.0.0.1:1323/demo
+```
+
+说明：Demo 的“生成下载链接”会调用 `/api/v1/download-url`，需要有效 NPAN token（可用 `go run ./cmd/cli token` 获取）。
+
 ## 常用命令
 
 ```bash
@@ -47,6 +56,9 @@ go build ./...
 
 # 启动 HTTP 服务
 go run ./cmd/server
+
+# 访问最小 HTML Demo
+# http://127.0.0.1:1323/demo
 
 # 查询同步进度
 go run ./cmd/cli sync-progress

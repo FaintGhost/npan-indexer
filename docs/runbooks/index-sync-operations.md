@@ -15,6 +15,9 @@
   - `go run ./cmd/cli sync-full --token <token> --root-folder-ids 0`
   - 交互式排障建议使用默认人类可读进度：`--progress-output human`
   - 如需机器采集进度日志可切换：`--progress-output json`
+  - 人类可读进度会附带估算进度字段：
+    - `est=xx.x%(docs=a/b roots=c/d)`：按已知根目录 `estimatedTotalDocs` 估算，`a` 为已处理文档数（`files+folders`），`b` 为估算总文档数。
+    - `est=n/a`：当前根目录无法可靠获取总量，不显示百分比（不影响同步本身）。
 3. 或服务方式触发：
   - `POST /api/v1/sync/full/start`
 3. 同步完成后确认指标：

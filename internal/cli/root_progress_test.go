@@ -53,6 +53,7 @@ func TestRenderSyncFullProgressHuman(t *testing.T) {
 	currentPageID := int64(2)
 	currentPageCount := int64(9)
 	queueLength := int64(7)
+	estimatedTotalDocs := int64(120)
 
 	progress := &models.SyncProgressState{
 		Status:         "running",
@@ -73,6 +74,11 @@ func TestRenderSyncFullProgressHuman(t *testing.T) {
 				CurrentPageID:    &currentPageID,
 				CurrentPageCount: &currentPageCount,
 				QueueLength:      &queueLength,
+				Stats: models.CrawlStats{
+					FilesIndexed:   30,
+					FoldersVisited: 5,
+				},
+				EstimatedTotalDocs: &estimatedTotalDocs,
 			},
 		},
 	}
@@ -105,8 +111,41 @@ func TestRenderSyncFullProgressHuman(t *testing.T) {
 	if !strings.Contains(line, "root{folder=456 page=3/9 queue=7}") {
 		t.Fatalf("expected active root detail in line, got: %s", line)
 	}
+	if !strings.Contains(line, "est=29.2%") {
+		t.Fatalf("expected estimate percentage in line, got: %s", line)
+	}
+	if !strings.Contains(line, "docs=35/120") {
+		t.Fatalf("expected estimate docs in line, got: %s", line)
+	}
+	if !strings.Contains(line, "roots=1/2") {
+		t.Fatalf("expected estimate coverage roots in line, got: %s", line)
+	}
 
 	if snapshot.updatedAtMillis != 3000 || snapshot.filesIndexed != 30 || snapshot.pagesFetched != 9 {
 		t.Fatalf("snapshot not updated correctly: %#v", snapshot)
+	}
+}
+
+func TestRenderSyncFullProgressHuman_EstimateNA(t *testing.T) {
+	t.Parallel()
+
+	progress := &models.SyncProgressState{
+		Status:    "running",
+		StartedAt: 1000,
+		UpdatedAt: 2000,
+		Roots:     []int64{1},
+		RootProgress: map[string]*models.RootSyncProgress{
+			"1": {
+				Stats: models.CrawlStats{
+					FilesIndexed:   3,
+					FoldersVisited: 2,
+				},
+			},
+		},
+	}
+
+	line := renderSyncFullProgressHuman(progress, &progressRenderSnapshot{})
+	if !strings.Contains(line, "est=n/a") {
+		t.Fatalf("expected est=n/a, got: %s", line)
 	}
 }

@@ -11,6 +11,7 @@ type NpanFolder struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	ParentID   int64  `json:"parent_id"`
+	ItemCount  int64  `json:"item_count,omitempty"`
 	ModifiedAt int64  `json:"modified_at,omitempty"`
 	InTrash    bool   `json:"in_trash,omitempty"`
 	IsDeleted  bool   `json:"is_deleted,omitempty"`
@@ -79,16 +80,17 @@ type NpanDepartment struct {
 }
 
 type RootSyncProgress struct {
-	RootFolderID     int64      `json:"rootFolderId"`
-	CheckpointFile   string     `json:"checkpointFile"`
-	Status           string     `json:"status"`
-	Stats            CrawlStats `json:"stats"`
-	CurrentFolderID  *int64     `json:"currentFolderId,omitempty"`
-	CurrentPageID    *int64     `json:"currentPageId,omitempty"`
-	CurrentPageCount *int64     `json:"currentPageCount,omitempty"`
-	QueueLength      *int64     `json:"queueLength,omitempty"`
-	UpdatedAt        int64      `json:"updatedAt"`
-	Error            string     `json:"error,omitempty"`
+	RootFolderID       int64      `json:"rootFolderId"`
+	CheckpointFile     string     `json:"checkpointFile"`
+	Status             string     `json:"status"`
+	EstimatedTotalDocs *int64     `json:"estimatedTotalDocs,omitempty"`
+	Stats              CrawlStats `json:"stats"`
+	CurrentFolderID    *int64     `json:"currentFolderId,omitempty"`
+	CurrentPageID      *int64     `json:"currentPageId,omitempty"`
+	CurrentPageCount   *int64     `json:"currentPageCount,omitempty"`
+	QueueLength        *int64     `json:"queueLength,omitempty"`
+	UpdatedAt          int64      `json:"updatedAt"`
+	Error              string     `json:"error,omitempty"`
 }
 
 type SyncProgressState struct {

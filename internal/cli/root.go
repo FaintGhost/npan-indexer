@@ -45,6 +45,15 @@ type progressRenderSnapshot struct {
 	pagesFetched    int64
 }
 
+type progressEstimate struct {
+	available       bool
+	doneDocs        int64
+	totalDocs       int64
+	knownRoots      int
+	totalRoots      int
+	progressPercent float64
+}
+
 func printJSON(value any) error {
 	encoded, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -82,6 +91,45 @@ func formatDurationCompact(d time.Duration) string {
 		return fmt.Sprintf("%dm%ds", minutes, seconds)
 	}
 	return fmt.Sprintf("%ds", seconds)
+}
+
+func computeProgressEstimate(progress *models.SyncProgressState) progressEstimate {
+	result := progressEstimate{}
+	if progress == nil {
+		return result
+	}
+
+	result.totalRoots = len(progress.Roots)
+	if len(progress.RootProgress) == 0 || len(progress.Roots) == 0 {
+		return result
+	}
+
+	for _, rootID := range progress.Roots {
+		root := progress.RootProgress[fmt.Sprintf("%d", rootID)]
+		if root == nil || root.EstimatedTotalDocs == nil || *root.EstimatedTotalDocs <= 0 {
+			continue
+		}
+
+		result.knownRoots++
+		result.totalDocs += *root.EstimatedTotalDocs
+
+		doneDocs := root.Stats.FilesIndexed + root.Stats.FoldersVisited
+		if doneDocs < 0 {
+			doneDocs = 0
+		}
+		result.doneDocs += doneDocs
+	}
+
+	if result.knownRoots == 0 || result.totalDocs <= 0 {
+		return result
+	}
+	if result.doneDocs > result.totalDocs {
+		result.doneDocs = result.totalDocs
+	}
+
+	result.available = true
+	result.progressPercent = (float64(result.doneDocs) * 100.0) / float64(result.totalDocs)
+	return result
 }
 
 func renderSyncFullProgressHuman(progress *models.SyncProgressState, snapshot *progressRenderSnapshot) string {
@@ -147,8 +195,21 @@ func renderSyncFullProgressHuman(progress *models.SyncProgressState, snapshot *p
 		}
 	}
 
+	estimate := computeProgressEstimate(progress)
+	estimateText := "est=n/a"
+	if estimate.available {
+		estimateText = fmt.Sprintf(
+			"est=%.1f%%(docs=%d/%d roots=%d/%d)",
+			estimate.progressPercent,
+			estimate.doneDocs,
+			estimate.totalDocs,
+			estimate.knownRoots,
+			estimate.totalRoots,
+		)
+	}
+
 	return fmt.Sprintf(
-		"[%s] status=%s roots=%d/%d active=%s files=%d pages=%d folders=%d failed=%d file_rate=%s page_rate=%s elapsed=%s%s",
+		"[%s] status=%s roots=%d/%d active=%s files=%d pages=%d folders=%d failed=%d file_rate=%s page_rate=%s %s elapsed=%s%s",
 		timestamp,
 		progress.Status,
 		completedRoots,
@@ -160,6 +221,7 @@ func renderSyncFullProgressHuman(progress *models.SyncProgressState, snapshot *p
 		progress.AggregateStats.FailedRequests,
 		fileRateText,
 		pageRateText,
+		estimateText,
 		formatDurationCompact(time.Duration(elapsedMillis)*time.Millisecond),
 		activeRootDetail,
 	)
@@ -167,13 +229,22 @@ func renderSyncFullProgressHuman(progress *models.SyncProgressState, snapshot *p
 
 func printSyncFullProgress(progress *models.SyncProgressState, mode syncProgressOutputMode, snapshot *progressRenderSnapshot) error {
 	if mode == syncProgressOutputJSON {
+		estimate := computeProgressEstimate(progress)
 		return printJSON(map[string]any{
 			"status":      progress.Status,
 			"active_root": progress.ActiveRoot,
 			"completed":   len(progress.CompletedRoots),
 			"total_roots": len(progress.Roots),
 			"stats":       progress.AggregateStats,
-			"updated_at":  progress.UpdatedAt,
+			"estimate": map[string]any{
+				"available":        estimate.available,
+				"done_docs":        estimate.doneDocs,
+				"total_docs":       estimate.totalDocs,
+				"known_roots":      estimate.knownRoots,
+				"total_roots":      estimate.totalRoots,
+				"progress_percent": estimate.progressPercent,
+			},
+			"updated_at": progress.UpdatedAt,
 		})
 	}
 

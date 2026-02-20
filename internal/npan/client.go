@@ -180,6 +180,7 @@ func mapFolder(row map[string]any) models.NpanFolder {
 		ID:         toInt64(row["id"], 0),
 		Name:       fmt.Sprintf("%v", row["name"]),
 		ParentID:   parentID,
+		ItemCount:  toInt64(row["item_count"], 0),
 		ModifiedAt: toInt64(row["modified_at"], 0),
 		InTrash:    toBool(row["in_trash"]),
 		IsDeleted:  toBool(row["is_deleted"]),
@@ -318,8 +319,9 @@ func (c *HTTPClient) ListDepartmentFolders(ctx context.Context, departmentID int
 	result := make([]models.NpanFolder, 0, len(body.Folders))
 	for _, folder := range body.Folders {
 		result = append(result, models.NpanFolder{
-			ID:   toInt64(folder["id"], 0),
-			Name: fmt.Sprintf("%v", folder["name"]),
+			ID:        toInt64(folder["id"], 0),
+			Name:      fmt.Sprintf("%v", folder["name"]),
+			ItemCount: toInt64(folder["item_count"], 0),
 		})
 	}
 
