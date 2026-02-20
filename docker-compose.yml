@@ -1,0 +1,12 @@
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: meilisearch
+    restart: always
+    ports:
+      - "7700:7700"
+    volumes:
+      - ./data/data.ms:/meili_data/data.ms
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-change-me-in-env}
+      - MEILI_DB_PATH=/meili_data/data.ms

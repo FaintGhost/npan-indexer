@@ -1,0 +1,526 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"sync"
+	"time"
+
+	"npan/internal/indexer"
+	"npan/internal/models"
+	"npan/internal/npan"
+	"npan/internal/search"
+	"npan/internal/storage"
+)
+
+type SyncStartRequest struct {
+	RootFolderIDs      []int64 `json:"root_folder_ids"`
+	IncludeDepartments *bool   `json:"include_departments"`
+	DepartmentIDs      []int64 `json:"department_ids"`
+	ResumeProgress     *bool   `json:"resume_progress"`
+	RootWorkers        int     `json:"root_workers"`
+	ProgressEvery      int     `json:"progress_every"`
+	CheckpointTemplate string  `json:"checkpoint_template"`
+}
+
+type SyncManager struct {
+	index         *search.MeiliIndex
+	progressStore *storage.JSONProgressStore
+	meiliHost     string
+	meiliIndex    string
+
+	defaultCheckpointTemplate string
+	defaultRootWorkers        int
+	defaultProgressEvery      int
+	retry                     models.RetryPolicyOptions
+	maxConcurrent             int
+	minTimeMS                 int
+
+	mu      sync.Mutex
+	running bool
+	cancel  context.CancelFunc
+}
+
+type SyncManagerArgs struct {
+	Index              *search.MeiliIndex
+	ProgressStore      *storage.JSONProgressStore
+	MeiliHost          string
+	MeiliIndex         string
+	CheckpointTemplate string
+	RootWorkers        int
+	ProgressEvery      int
+	Retry              models.RetryPolicyOptions
+	MaxConcurrent      int
+	MinTimeMS          int
+}
+
+func NewSyncManager(args SyncManagerArgs) *SyncManager {
+	return &SyncManager{
+		index:                     args.Index,
+		progressStore:             args.ProgressStore,
+		meiliHost:                 args.MeiliHost,
+		meiliIndex:                args.MeiliIndex,
+		defaultCheckpointTemplate: args.CheckpointTemplate,
+		defaultRootWorkers:        args.RootWorkers,
+		defaultProgressEvery:      args.ProgressEvery,
+		retry:                     args.Retry,
+		maxConcurrent:             args.MaxConcurrent,
+		minTimeMS:                 args.MinTimeMS,
+	}
+}
+
+func (m *SyncManager) IsRunning() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.running
+}
+
+func (m *SyncManager) GetProgress() (*models.SyncProgressState, error) {
+	return m.progressStore.Load()
+}
+
+func (m *SyncManager) Cancel() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.running || m.cancel == nil {
+		return false
+	}
+	m.cancel()
+	return true
+}
+
+func (m *SyncManager) Start(api npan.API, request SyncStartRequest) error {
+	m.mu.Lock()
+	if m.running {
+		m.mu.Unlock()
+		return fmt.Errorf("已有全量同步任务在运行")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.running = true
+	m.cancel = cancel
+	m.mu.Unlock()
+
+	go func() {
+		defer func() {
+			m.mu.Lock()
+			m.running = false
+			m.cancel = nil
+			m.mu.Unlock()
+		}()
+
+		_ = m.run(ctx, api, request)
+	}()
+
+	return nil
+}
+
+func buildCheckpointFilePath(template string, rootID int64, multiRoots bool) string {
+	if !multiRoots {
+		return template
+	}
+
+	if len(template) > 5 && template[len(template)-5:] == ".json" {
+		return template[:len(template)-5] + fmt.Sprintf(".%d.json", rootID)
+	}
+	return template + fmt.Sprintf(".%d.json", rootID)
+}
+
+func containsInt64(items []int64, target int64) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueSorted(values []int64) []int64 {
+	seen := map[int64]struct{}{}
+	result := make([]int64, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result
+}
+
+func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, request SyncStartRequest) ([]int64, error) {
+	roots := append([]int64{}, request.RootFolderIDs...)
+
+	includeDepartments := request.IncludeDepartments == nil || *request.IncludeDepartments
+	if includeDepartments {
+		departmentIDs := append([]int64{}, request.DepartmentIDs...)
+		if len(departmentIDs) == 0 {
+			deps, err := api.ListUserDepartments(ctx)
+			if err != nil {
+				return nil, err
+			}
+			for _, dep := range deps {
+				departmentIDs = append(departmentIDs, dep.ID)
+			}
+		}
+
+		for _, departmentID := range departmentIDs {
+			folders, err := api.ListDepartmentFolders(ctx, departmentID)
+			if err != nil {
+				return nil, err
+			}
+			for _, folder := range folders {
+				roots = append(roots, folder.ID)
+			}
+		}
+	}
+
+	return uniqueSorted(roots), nil
+}
+
+func createInitialProgress(args struct {
+	Roots              []int64
+	RootCheckpointMap  map[int64]string
+	StartedAt          int64
+	MeiliHost          string
+	MeiliIndex         string
+	CheckpointTemplate string
+}) *models.SyncProgressState {
+	rootProgress := map[string]*models.RootSyncProgress{}
+	for _, root := range args.Roots {
+		rootProgress[fmt.Sprintf("%d", root)] = &models.RootSyncProgress{
+			RootFolderID:   root,
+			CheckpointFile: args.RootCheckpointMap[root],
+			Status:         "pending",
+			Stats: models.CrawlStats{
+				StartedAt: args.StartedAt,
+				EndedAt:   args.StartedAt,
+			},
+			UpdatedAt: args.StartedAt,
+		}
+	}
+
+	return &models.SyncProgressState{
+		Status:             "running",
+		StartedAt:          args.StartedAt,
+		UpdatedAt:          args.StartedAt,
+		MeiliHost:          args.MeiliHost,
+		MeiliIndex:         args.MeiliIndex,
+		CheckpointTemplate: args.CheckpointTemplate,
+		Roots:              append([]int64{}, args.Roots...),
+		CompletedRoots:     []int64{},
+		AggregateStats: models.CrawlStats{
+			StartedAt: args.StartedAt,
+			EndedAt:   args.StartedAt,
+		},
+		RootProgress: rootProgress,
+	}
+}
+
+func updateAggregateFromRoots(progress *models.SyncProgressState) {
+	aggregate := models.CrawlStats{
+		StartedAt: progress.AggregateStats.StartedAt,
+		EndedAt:   time.Now().UnixMilli(),
+	}
+
+	for _, rootID := range progress.Roots {
+		root := progress.RootProgress[fmt.Sprintf("%d", rootID)]
+		if root == nil {
+			continue
+		}
+		aggregate.FoldersVisited += root.Stats.FoldersVisited
+		aggregate.FilesIndexed += root.Stats.FilesIndexed
+		aggregate.PagesFetched += root.Stats.PagesFetched
+		aggregate.FailedRequests += root.Stats.FailedRequests
+	}
+
+	progress.AggregateStats = aggregate
+	progress.UpdatedAt = time.Now().UnixMilli()
+}
+
+func restoreProgress(existing *models.SyncProgressState, roots []int64, rootCheckpointMap map[int64]string) *models.SyncProgressState {
+	now := time.Now().UnixMilli()
+	restored := *existing
+	restored.Status = "running"
+	restored.UpdatedAt = now
+	restored.ActiveRoot = nil
+	restored.LastError = ""
+	restored.Roots = append([]int64{}, roots...)
+	restored.CompletedRoots = []int64{}
+	if restored.RootProgress == nil {
+		restored.RootProgress = map[string]*models.RootSyncProgress{}
+	}
+
+	for _, rootID := range roots {
+		key := fmt.Sprintf("%d", rootID)
+		rp, exists := restored.RootProgress[key]
+		if !exists || rp == nil {
+			restored.RootProgress[key] = &models.RootSyncProgress{
+				RootFolderID:   rootID,
+				CheckpointFile: rootCheckpointMap[rootID],
+				Status:         "pending",
+				Stats: models.CrawlStats{
+					StartedAt: existing.StartedAt,
+					EndedAt:   existing.StartedAt,
+				},
+				UpdatedAt: now,
+			}
+			continue
+		}
+
+		rp.CheckpointFile = rootCheckpointMap[rootID]
+		rp.UpdatedAt = now
+		if rp.Status == "done" || containsInt64(existing.CompletedRoots, rootID) {
+			rp.Status = "done"
+			restored.CompletedRoots = append(restored.CompletedRoots, rootID)
+		} else {
+			rp.Status = "pending"
+			rp.Error = ""
+		}
+	}
+
+	updateAggregateFromRoots(&restored)
+	return &restored
+}
+
+func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress *models.SyncProgressState, progressMu *sync.Mutex, rootID int64, checkpointFile string, progressEvery int) error {
+	key := fmt.Sprintf("%d", rootID)
+
+	progressMu.Lock()
+	rp := progress.RootProgress[key]
+	if rp == nil {
+		progressMu.Unlock()
+		return nil
+	}
+
+	resumeBase := rp.Stats
+	rp.Status = "running"
+	rp.Error = ""
+	now := time.Now().UnixMilli()
+	rp.UpdatedAt = now
+	progress.ActiveRoot = &rootID
+	updateAggregateFromRoots(progress)
+	if err := m.progressStore.Save(progress); err != nil {
+		progressMu.Unlock()
+		return err
+	}
+	progressMu.Unlock()
+
+	checkpointStore := storage.NewJSONCheckpointStore(checkpointFile)
+	limiter := indexer.NewRequestLimiter(m.maxConcurrent, m.minTimeMS)
+
+	stats, err := indexer.RunFullCrawl(ctx, indexer.FullCrawlDeps{
+		API:             api,
+		IndexWriter:     &meiliIndexWriter{index: m.index},
+		Limiter:         limiter,
+		CheckpointStore: checkpointStore,
+		RootFolderID:    rootID,
+		Retry:           m.retry,
+		OnProgress: func(event indexer.ProgressEvent) {
+			if progressEvery > 1 && event.Stats.PagesFetched%int64(progressEvery) != 0 {
+				return
+			}
+
+			progressMu.Lock()
+			defer progressMu.Unlock()
+
+			root := progress.RootProgress[key]
+			if root == nil {
+				return
+			}
+
+			root.Stats = models.CrawlStats{
+				FoldersVisited: resumeBase.FoldersVisited + event.Stats.FoldersVisited,
+				FilesIndexed:   resumeBase.FilesIndexed + event.Stats.FilesIndexed,
+				PagesFetched:   resumeBase.PagesFetched + event.Stats.PagesFetched,
+				FailedRequests: resumeBase.FailedRequests + event.Stats.FailedRequests,
+				StartedAt:      resumeBase.StartedAt,
+				EndedAt:        time.Now().UnixMilli(),
+			}
+			root.CurrentFolderID = &event.CurrentFolderID
+			root.CurrentPageID = &event.CurrentPageID
+			root.CurrentPageCount = &event.CurrentPageCount
+			root.QueueLength = &event.QueueLength
+			root.UpdatedAt = time.Now().UnixMilli()
+
+			updateAggregateFromRoots(progress)
+			_ = m.progressStore.Save(progress)
+		},
+	})
+
+	progressMu.Lock()
+	defer progressMu.Unlock()
+
+	rp = progress.RootProgress[key]
+	if rp == nil {
+		return err
+	}
+
+	if err != nil {
+		rp.Status = "error"
+		rp.Error = err.Error()
+		rp.UpdatedAt = time.Now().UnixMilli()
+		progress.Status = "error"
+		progress.LastError = err.Error()
+		updateAggregateFromRoots(progress)
+		_ = m.progressStore.Save(progress)
+		return err
+	}
+
+	rp.Status = "done"
+	rp.Error = ""
+	rp.Stats = models.CrawlStats{
+		FoldersVisited: resumeBase.FoldersVisited + stats.FoldersVisited,
+		FilesIndexed:   resumeBase.FilesIndexed + stats.FilesIndexed,
+		PagesFetched:   resumeBase.PagesFetched + stats.PagesFetched,
+		FailedRequests: resumeBase.FailedRequests + stats.FailedRequests,
+		StartedAt:      resumeBase.StartedAt,
+		EndedAt:        stats.EndedAt,
+	}
+	rp.CurrentFolderID = nil
+	rp.CurrentPageID = nil
+	rp.CurrentPageCount = nil
+	zero := int64(0)
+	rp.QueueLength = &zero
+	rp.UpdatedAt = time.Now().UnixMilli()
+
+	if !containsInt64(progress.CompletedRoots, rootID) {
+		progress.CompletedRoots = append(progress.CompletedRoots, rootID)
+	}
+
+	updateAggregateFromRoots(progress)
+	return m.progressStore.Save(progress)
+}
+
+func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRequest) error {
+	roots, err := m.discoverRootFolders(ctx, api, request)
+	if err != nil {
+		return err
+	}
+	if len(roots) == 0 {
+		return fmt.Errorf("未发现可遍历的根目录")
+	}
+
+	checkpointTemplate := request.CheckpointTemplate
+	if checkpointTemplate == "" {
+		checkpointTemplate = m.defaultCheckpointTemplate
+	}
+
+	rootCheckpointMap := map[int64]string{}
+	for _, root := range roots {
+		rootCheckpointMap[root] = buildCheckpointFilePath(checkpointTemplate, root, len(roots) > 1)
+	}
+
+	resume := true
+	if request.ResumeProgress != nil {
+		resume = *request.ResumeProgress
+	}
+
+	existing, err := m.progressStore.Load()
+	if err != nil {
+		return err
+	}
+
+	var progress *models.SyncProgressState
+	if resume && existing != nil {
+		progress = restoreProgress(existing, roots, rootCheckpointMap)
+	} else {
+		startedAt := time.Now().UnixMilli()
+		progress = createInitialProgress(struct {
+			Roots              []int64
+			RootCheckpointMap  map[int64]string
+			StartedAt          int64
+			MeiliHost          string
+			MeiliIndex         string
+			CheckpointTemplate string
+		}{
+			Roots:              roots,
+			RootCheckpointMap:  rootCheckpointMap,
+			StartedAt:          startedAt,
+			MeiliHost:          m.meiliHost,
+			MeiliIndex:         m.meiliIndex,
+			CheckpointTemplate: checkpointTemplate,
+		})
+	}
+
+	if err := m.progressStore.Save(progress); err != nil {
+		return err
+	}
+
+	rootWorkers := request.RootWorkers
+	if rootWorkers <= 0 {
+		rootWorkers = m.defaultRootWorkers
+	}
+	if rootWorkers <= 0 {
+		rootWorkers = 1
+	}
+
+	progressEvery := request.ProgressEvery
+	if progressEvery <= 0 {
+		progressEvery = m.defaultProgressEvery
+	}
+	if progressEvery <= 0 {
+		progressEvery = 1
+	}
+
+	semaphore := make(chan struct{}, rootWorkers)
+	errCh := make(chan error, len(roots))
+	var wg sync.WaitGroup
+	progressMu := &sync.Mutex{}
+
+	for _, rootID := range roots {
+		status := "pending"
+		if rp := progress.RootProgress[fmt.Sprintf("%d", rootID)]; rp != nil {
+			status = rp.Status
+		}
+		if resume && status == "done" {
+			continue
+		}
+
+		wg.Add(1)
+		go func(currentRoot int64) {
+			defer wg.Done()
+
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			if err := m.runSingleRoot(ctx, api, progress, progressMu, currentRoot, rootCheckpointMap[currentRoot], progressEvery); err != nil {
+				errCh <- err
+			}
+		}(rootID)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	progressMu.Lock()
+	defer progressMu.Unlock()
+
+	for syncErr := range errCh {
+		if syncErr != nil {
+			progress.Status = "error"
+			progress.LastError = syncErr.Error()
+			progress.ActiveRoot = nil
+			updateAggregateFromRoots(progress)
+			_ = m.progressStore.Save(progress)
+			return syncErr
+		}
+	}
+
+	progress.Status = "done"
+	progress.LastError = ""
+	progress.ActiveRoot = nil
+	updateAggregateFromRoots(progress)
+	return m.progressStore.Save(progress)
+}
+
+type meiliIndexWriter struct {
+	index *search.MeiliIndex
+}
+
+func (w *meiliIndexWriter) UpsertDocuments(_ context.Context, docs []models.IndexDocument) error {
+	return w.index.UpsertDocuments(docs)
+}

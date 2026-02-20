@@ -1,0 +1,33 @@
+# Environment
+.env
+
+# Go build artifacts
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Runtime data (keep folder skeletons with .gitkeep)
+data/checkpoints/*
+!data/checkpoints/.gitkeep
+data/progress/*
+!data/progress/.gitkeep
+data/dumps/*
+!data/dumps/.gitkeep
+data/data.ms/
+
+# Temporary caches
+.cache/
+tmp/
