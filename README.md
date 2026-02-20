@@ -13,6 +13,7 @@
 
 ```bash
 cp .env.example .env
+cp .env.meilisearch.example .env.meilisearch
 ```
 
 2. 启动 Meilisearch（可选，若你已有实例可跳过）。

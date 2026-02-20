@@ -7,6 +7,5 @@ services:
       - "7700:7700"
     volumes:
       - ./data:/meili_data
-    environment:
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-change-me-in-env}
-      - MEILI_DB_PATH=/meili_data
+    env_file:
+      - .env.meilisearch
