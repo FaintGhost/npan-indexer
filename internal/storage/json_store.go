@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -13,6 +14,62 @@ import (
 type JSONCheckpointStore struct {
 	filePath string
 	mu       sync.Mutex
+}
+
+func writeFileAtomic(filePath string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(dir, filepath.Base(filePath)+".tmp-*")
+	if err != nil {
+		return err
+	}
+
+	tmpPath := tmpFile.Name()
+	keepTmp := true
+	defer func() {
+		if keepTmp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+
+	if err := tmpFile.Chmod(perm); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		return err
+	}
+	keepTmp = false
+
+	// 尽量把目录项也刷盘，降低掉电后 rename 丢失风险。
+	dirHandle, err := os.Open(dir)
+	if err != nil {
+		return nil
+	}
+	defer dirHandle.Close()
+
+	if err := dirHandle.Sync(); err != nil {
+		return fmt.Errorf("同步目录元数据失败: %w", err)
+	}
+	return nil
 }
 
 func NewJSONCheckpointStore(filePath string) *JSONCheckpointStore {
@@ -42,16 +99,12 @@ func (s *JSONCheckpointStore) Save(checkpoint *models.CrawlCheckpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := os.MkdirAll(filepath.Dir(s.filePath), 0o755); err != nil {
-		return err
-	}
-
 	data, err := json.MarshalIndent(checkpoint, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(s.filePath, data, 0o644)
+	return writeFileAtomic(s.filePath, data, 0o644)
 }
 
 func (s *JSONCheckpointStore) Clear() error {
@@ -101,16 +154,12 @@ func (s *JSONProgressStore) Save(state *models.SyncProgressState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := os.MkdirAll(filepath.Dir(s.filePath), 0o755); err != nil {
-		return err
-	}
-
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(s.filePath, data, 0o644)
+	return writeFileAtomic(s.filePath, data, 0o644)
 }
 
 type JSONSyncStateStore struct {
@@ -145,14 +194,10 @@ func (s *JSONSyncStateStore) Save(state *models.SyncState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := os.MkdirAll(filepath.Dir(s.filePath), 0o755); err != nil {
-		return err
-	}
-
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(s.filePath, data, 0o644)
+	return writeFileAtomic(s.filePath, data, 0o644)
 }

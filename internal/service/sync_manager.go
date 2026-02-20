@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -286,7 +287,7 @@ func restoreProgress(existing *models.SyncProgressState, roots []int64, rootChec
 	return &restored
 }
 
-func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress *models.SyncProgressState, progressMu *sync.Mutex, rootID int64, checkpointFile string, progressEvery int) error {
+func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress *models.SyncProgressState, progressMu *sync.Mutex, rootID int64, checkpointFile string, progressEvery int, limiter *indexer.RequestLimiter) error {
 	key := fmt.Sprintf("%d", rootID)
 
 	progressMu.Lock()
@@ -310,7 +311,6 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 	progressMu.Unlock()
 
 	checkpointStore := storage.NewJSONCheckpointStore(checkpointFile)
-	limiter := indexer.NewRequestLimiter(m.maxConcurrent, m.minTimeMS)
 
 	stats, err := indexer.RunFullCrawl(ctx, indexer.FullCrawlDeps{
 		API:             api,
@@ -360,6 +360,15 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 	}
 
 	if err != nil {
+		if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+			rp.Status = "cancelled"
+			rp.Error = ctx.Err().Error()
+			rp.UpdatedAt = time.Now().UnixMilli()
+			updateAggregateFromRoots(progress)
+			_ = m.progressStore.Save(progress)
+			return err
+		}
+
 		rp.Status = "error"
 		rp.Error = err.Error()
 		rp.UpdatedAt = time.Now().UnixMilli()
@@ -467,9 +476,29 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	}
 
 	semaphore := make(chan struct{}, rootWorkers)
-	errCh := make(chan error, len(roots))
-	var wg sync.WaitGroup
 	progressMu := &sync.Mutex{}
+	limiter := indexer.NewRequestLimiter(m.maxConcurrent, m.minTimeMS)
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
+
+	var (
+		wg         sync.WaitGroup
+		firstErr   error
+		firstErrMu sync.Mutex
+	)
+
+	setFirstErr := func(err error) {
+		if err == nil {
+			return
+		}
+		firstErrMu.Lock()
+		defer firstErrMu.Unlock()
+		if firstErr != nil {
+			return
+		}
+		firstErr = err
+		runCancel()
+	}
 
 	for _, rootID := range roots {
 		status := "pending"
@@ -484,30 +513,43 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		go func(currentRoot int64) {
 			defer wg.Done()
 
-			semaphore <- struct{}{}
+			select {
+			case semaphore <- struct{}{}:
+			case <-runCtx.Done():
+				return
+			}
 			defer func() { <-semaphore }()
 
-			if err := m.runSingleRoot(ctx, api, progress, progressMu, currentRoot, rootCheckpointMap[currentRoot], progressEvery); err != nil {
-				errCh <- err
+			if err := m.runSingleRoot(runCtx, api, progress, progressMu, currentRoot, rootCheckpointMap[currentRoot], progressEvery, limiter); err != nil {
+				if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+					return
+				}
+				setFirstErr(err)
 			}
 		}(rootID)
 	}
 
 	wg.Wait()
-	close(errCh)
 
 	progressMu.Lock()
 	defer progressMu.Unlock()
 
-	for syncErr := range errCh {
-		if syncErr != nil {
-			progress.Status = "error"
-			progress.LastError = syncErr.Error()
-			progress.ActiveRoot = nil
-			updateAggregateFromRoots(progress)
-			_ = m.progressStore.Save(progress)
-			return syncErr
-		}
+	if firstErr != nil {
+		progress.Status = "error"
+		progress.LastError = firstErr.Error()
+		progress.ActiveRoot = nil
+		updateAggregateFromRoots(progress)
+		_ = m.progressStore.Save(progress)
+		return firstErr
+	}
+
+	if ctx.Err() != nil {
+		progress.Status = "cancelled"
+		progress.LastError = ctx.Err().Error()
+		progress.ActiveRoot = nil
+		updateAggregateFromRoots(progress)
+		_ = m.progressStore.Save(progress)
+		return ctx.Err()
 	}
 
 	progress.Status = "done"

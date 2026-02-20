@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,6 +67,25 @@ func parseBearerHeader(header string) string {
 	return strings.TrimSpace(value[7:])
 }
 
+func (h *Handlers) requireAPIAccess(c *echo.Context) bool {
+	expected := strings.TrimSpace(h.cfg.AdminAPIKey)
+	if expected == "" {
+		return true
+	}
+
+	provided := strings.TrimSpace(c.Request().Header.Get("X-API-Key"))
+	if provided == "" {
+		provided = parseBearerHeader(c.Request().Header.Get("Authorization"))
+	}
+
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+		_ = writeError(c, http.StatusUnauthorized, "未授权")
+		return false
+	}
+
+	return true
+}
+
 type authPayload struct {
 	Token        string `json:"token"`
 	ClientID     string `json:"client_id"`
@@ -75,26 +95,52 @@ type authPayload struct {
 	OAuthHost    string `json:"oauth_host"`
 }
 
-func (h *Handlers) resolveAuthOptions(c *echo.Context, payload authPayload) npan.AuthResolverOptions {
+func (h *Handlers) resolveAuthOptions(c *echo.Context, payload authPayload, allowConfigFallback bool) npan.AuthResolverOptions {
 	tokenFromHeader := parseBearerHeader(c.Request().Header.Get("Authorization"))
 
+	tokenCandidates := []string{
+		payload.Token,
+		tokenFromHeader,
+		strings.TrimSpace(c.QueryParam("token")),
+	}
+	clientIDCandidates := []string{payload.ClientID}
+	clientSecretCandidates := []string{payload.ClientSecret}
+	subIDCandidates := []int64{payload.SubID}
+	oauthHostCandidates := []string{payload.OAuthHost}
+
+	if allowConfigFallback {
+		tokenCandidates = append(tokenCandidates, h.cfg.Token)
+		clientIDCandidates = append(clientIDCandidates, h.cfg.ClientID)
+		clientSecretCandidates = append(clientSecretCandidates, h.cfg.ClientSecret)
+		subIDCandidates = append(subIDCandidates, h.cfg.SubID)
+		oauthHostCandidates = append(oauthHostCandidates, h.cfg.OAuthHost)
+	}
+
 	subType := npan.TokenSubjectType(payload.SubType)
-	if subType == "" {
+	if subType == "" && allowConfigFallback {
 		subType = h.cfg.SubType
+	}
+	if subType == "" {
+		subType = npan.TokenSubjectUser
+	}
+
+	oauthHost := firstNotEmpty(oauthHostCandidates...)
+	if oauthHost == "" {
+		oauthHost = npan.DefaultOAuthHost
 	}
 
 	return npan.AuthResolverOptions{
-		Token:        firstNotEmpty(payload.Token, tokenFromHeader, strings.TrimSpace(c.QueryParam("token")), h.cfg.Token),
-		ClientID:     firstNotEmpty(payload.ClientID, h.cfg.ClientID),
-		ClientSecret: firstNotEmpty(payload.ClientSecret, h.cfg.ClientSecret),
-		SubID:        firstPositive(payload.SubID, h.cfg.SubID),
+		Token:        firstNotEmpty(tokenCandidates...),
+		ClientID:     firstNotEmpty(clientIDCandidates...),
+		ClientSecret: firstNotEmpty(clientSecretCandidates...),
+		SubID:        firstPositive(subIDCandidates...),
 		SubType:      subType,
-		OAuthHost:    firstNotEmpty(payload.OAuthHost, h.cfg.OAuthHost),
+		OAuthHost:    oauthHost,
 	}
 }
 
-func (h *Handlers) resolveToken(c *echo.Context, payload authPayload) (string, npan.AuthResolverOptions, error) {
-	authOptions := h.resolveAuthOptions(c, payload)
+func (h *Handlers) resolveToken(c *echo.Context, payload authPayload, allowConfigFallback bool) (string, npan.AuthResolverOptions, error) {
+	authOptions := h.resolveAuthOptions(c, payload, allowConfigFallback)
 	token, err := npan.ResolveBearerToken(c.Request().Context(), nil, authOptions)
 	if err != nil {
 		return "", authOptions, err
@@ -137,22 +183,26 @@ func (h *Handlers) Health(c *echo.Context) error {
 }
 
 func (h *Handlers) Token(c *echo.Context) error {
+	if !h.requireAPIAccess(c) {
+		return nil
+	}
+
 	var payload authPayload
 	if err := c.Bind(&payload); err != nil {
 		return writeError(c, http.StatusBadRequest, "请求体格式错误")
 	}
 
-	subType := npan.TokenSubjectType(payload.SubType)
-	if subType == "" {
-		subType = npan.TokenSubjectUser
+	authOptions := h.resolveAuthOptions(c, payload, h.cfg.AllowConfigAuthFallback)
+	if authOptions.ClientID == "" || authOptions.ClientSecret == "" || authOptions.SubID <= 0 {
+		return writeError(c, http.StatusBadRequest, "缺少认证参数: client_id/client_secret/sub_id")
 	}
 
 	token, err := npan.RequestAccessToken(c.Request().Context(), nil, npan.TokenRequestOptions{
-		OAuthHost:    firstNotEmpty(payload.OAuthHost, h.cfg.OAuthHost),
-		ClientID:     firstNotEmpty(payload.ClientID, h.cfg.ClientID),
-		ClientSecret: firstNotEmpty(payload.ClientSecret, h.cfg.ClientSecret),
-		SubID:        firstPositive(payload.SubID, h.cfg.SubID),
-		SubType:      subType,
+		OAuthHost:    authOptions.OAuthHost,
+		ClientID:     authOptions.ClientID,
+		ClientSecret: authOptions.ClientSecret,
+		SubID:        authOptions.SubID,
+		SubType:      authOptions.SubType,
 	})
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, err.Error())
@@ -162,6 +212,10 @@ func (h *Handlers) Token(c *echo.Context) error {
 }
 
 func (h *Handlers) RemoteSearch(c *echo.Context) error {
+	if !h.requireAPIAccess(c) {
+		return nil
+	}
+
 	queryWords := strings.TrimSpace(c.QueryParam("query"))
 	if queryWords == "" {
 		queryWords = strings.TrimSpace(c.QueryParam("q"))
@@ -170,7 +224,7 @@ func (h *Handlers) RemoteSearch(c *echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "缺少 query 参数")
 	}
 
-	token, authOptions, err := h.resolveToken(c, authPayload{})
+	token, authOptions, err := h.resolveToken(c, authPayload{}, h.cfg.AllowConfigAuthFallback)
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, err.Error())
 	}
@@ -206,6 +260,10 @@ func (h *Handlers) RemoteSearch(c *echo.Context) error {
 }
 
 func (h *Handlers) DownloadURL(c *echo.Context) error {
+	if !h.requireAPIAccess(c) {
+		return nil
+	}
+
 	fileIDRaw := strings.TrimSpace(c.QueryParam("file_id"))
 	if fileIDRaw == "" {
 		return writeError(c, http.StatusBadRequest, "缺少 file_id 参数")
@@ -221,7 +279,7 @@ func (h *Handlers) DownloadURL(c *echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "valid_period 必须是整数")
 	}
 
-	token, authOptions, err := h.resolveToken(c, authPayload{})
+	token, authOptions, err := h.resolveToken(c, authPayload{}, h.cfg.AllowConfigAuthFallback)
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, err.Error())
 	}
@@ -240,6 +298,10 @@ func (h *Handlers) DownloadURL(c *echo.Context) error {
 }
 
 func (h *Handlers) LocalSearch(c *echo.Context) error {
+	if !h.requireAPIAccess(c) {
+		return nil
+	}
+
 	query := strings.TrimSpace(c.QueryParam("query"))
 	if query == "" {
 		query = strings.TrimSpace(c.QueryParam("q"))
@@ -310,12 +372,16 @@ type syncStartPayload struct {
 }
 
 func (h *Handlers) StartFullSync(c *echo.Context) error {
+	if !h.requireAPIAccess(c) {
+		return nil
+	}
+
 	var payload syncStartPayload
 	if err := c.Bind(&payload); err != nil {
 		return writeError(c, http.StatusBadRequest, "请求体格式错误")
 	}
 
-	token, authOptions, err := h.resolveToken(c, payload.authPayload)
+	token, authOptions, err := h.resolveToken(c, payload.authPayload, h.cfg.AllowConfigAuthFallback)
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, err.Error())
 	}
@@ -340,6 +406,10 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 }
 
 func (h *Handlers) GetFullSyncProgress(c *echo.Context) error {
+	if !h.requireAPIAccess(c) {
+		return nil
+	}
+
 	progress, err := h.syncManager.GetProgress()
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, err.Error())
@@ -352,6 +422,10 @@ func (h *Handlers) GetFullSyncProgress(c *echo.Context) error {
 }
 
 func (h *Handlers) CancelFullSync(c *echo.Context) error {
+	if !h.requireAPIAccess(c) {
+		return nil
+	}
+
 	if !h.syncManager.Cancel() {
 		return writeError(c, http.StatusConflict, "当前没有运行中的同步任务")
 	}

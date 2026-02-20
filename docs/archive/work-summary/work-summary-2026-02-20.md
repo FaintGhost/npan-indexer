@@ -122,3 +122,20 @@
 - 验证结果：
   - `go test ./...` 通过
   - `go build ./...` 通过
+
+## 当日追加记录（生产级审查修复）
+
+- 安全修复
+  - 新增 `NPA_ADMIN_API_KEY`，支持对 `/api/v1/*` 开启 API Key 访问保护（`X-API-Key`）。
+  - 新增 `NPA_ALLOW_CONFIG_AUTH_FALLBACK`（默认 `false`），默认禁止 HTTP 请求回退服务端配置凭据。
+- 稳定性修复
+  - 多 root 同步改为共享全局 limiter，避免总并发/QPS 随 root 数放大。
+  - 任一 root 失败后立即取消其余 goroutine，减少无效上游流量。
+  - checkpoint/progress/sync-state 改为原子写（临时文件 + fsync + rename），降低状态损坏风险。
+- 回归测试补充
+  - 新增 `internal/httpx/handlers_test.go`（鉴权与凭据回退行为）。
+  - 新增 `internal/storage/json_store_test.go`（原子写与持久化加载）。
+- 验证结果
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go/pkg/mod go test ./...` 通过。
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go/pkg/mod go test -race ./...` 通过。
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go/pkg/mod go build ./...` 通过。

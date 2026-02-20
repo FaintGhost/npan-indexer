@@ -12,6 +12,9 @@ import (
 type Config struct {
 	ServerAddr string
 
+	AdminAPIKey             string
+	AllowConfigAuthFallback bool
+
 	BaseURL   string
 	OAuthHost string
 
@@ -113,7 +116,9 @@ func Load() Config {
 	}
 
 	return Config{
-		ServerAddr: readString("SERVER_ADDR", ":1323"),
+		ServerAddr:              readString("SERVER_ADDR", ":1323"),
+		AdminAPIKey:             readString("NPA_ADMIN_API_KEY", ""),
+		AllowConfigAuthFallback: readBool("NPA_ALLOW_CONFIG_AUTH_FALLBACK", false),
 
 		BaseURL:   readString("NPA_BASE_URL", "https://npan.novastar.tech:6001/openapi"),
 		OAuthHost: readString("NPA_OAUTH_HOST", npan.DefaultOAuthHost),
