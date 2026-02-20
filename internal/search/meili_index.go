@@ -1,7 +1,9 @@
 package search
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/meilisearch/meilisearch-go"
 
@@ -12,6 +14,8 @@ type MeiliIndex struct {
 	index meilisearch.IndexManager
 }
 
+const defaultTaskPollInterval = 100 * time.Millisecond
+
 func NewMeiliIndex(host string, apiKey string, indexName string) *MeiliIndex {
 	client := meilisearch.New(host, meilisearch.WithAPIKey(apiKey))
 	return &MeiliIndex{index: client.Index(indexName)}
@@ -21,32 +25,64 @@ func NewMeiliIndexFromManager(index meilisearch.IndexManager) *MeiliIndex {
 	return &MeiliIndex{index: index}
 }
 
-func (m *MeiliIndex) EnsureSettings() error {
-	_, err := m.index.UpdateSettings(&meilisearch.Settings{
+func (m *MeiliIndex) waitTask(ctx context.Context, taskInfo *meilisearch.TaskInfo) error {
+	if taskInfo == nil {
+		return fmt.Errorf("meilisearch 未返回 task 信息")
+	}
+
+	task, err := m.index.WaitForTaskWithContext(ctx, taskInfo.TaskUID, defaultTaskPollInterval)
+	if err != nil {
+		return err
+	}
+
+	if task.Status == meilisearch.TaskStatusSucceeded {
+		return nil
+	}
+
+	return fmt.Errorf(
+		"meilisearch task 执行失败: task_uid=%d status=%s code=%s message=%s",
+		taskInfo.TaskUID,
+		task.Status,
+		task.Error.Code,
+		task.Error.Message,
+	)
+}
+
+func (m *MeiliIndex) EnsureSettings(ctx context.Context) error {
+	taskInfo, err := m.index.UpdateSettingsWithContext(ctx, &meilisearch.Settings{
 		SearchableAttributes: []string{"name", "path_text"},
 		FilterableAttributes: []string{"type", "parent_id", "modified_at", "in_trash", "is_deleted"},
 		SortableAttributes:   []string{"modified_at", "size", "created_at"},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return m.waitTask(ctx, taskInfo)
 }
 
-func (m *MeiliIndex) UpsertDocuments(docs []models.IndexDocument) error {
+func (m *MeiliIndex) UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error {
 	if len(docs) == 0 {
 		return nil
 	}
 
 	primaryKey := "doc_id"
-	_, err := m.index.AddDocuments(docs, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
-	return err
+	taskInfo, err := m.index.AddDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &primaryKey})
+	if err != nil {
+		return err
+	}
+	return m.waitTask(ctx, taskInfo)
 }
 
-func (m *MeiliIndex) DeleteDocuments(docIDs []string) error {
+func (m *MeiliIndex) DeleteDocuments(ctx context.Context, docIDs []string) error {
 	if len(docIDs) == 0 {
 		return nil
 	}
 
-	_, err := m.index.DeleteDocuments(docIDs, nil)
-	return err
+	taskInfo, err := m.index.DeleteDocumentsWithContext(ctx, docIDs, nil)
+	if err != nil {
+		return err
+	}
+	return m.waitTask(ctx, taskInfo)
 }
 
 func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error) {

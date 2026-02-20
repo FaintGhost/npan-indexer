@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"npan/internal/config"
+	"npan/internal/indexer"
 	"npan/internal/models"
 	"npan/internal/npan"
 	"npan/internal/search"
@@ -31,12 +32,152 @@ type authOptions struct {
 	baseURL      string
 }
 
+type syncProgressOutputMode string
+
+const (
+	syncProgressOutputHuman syncProgressOutputMode = "human"
+	syncProgressOutputJSON  syncProgressOutputMode = "json"
+)
+
+type progressRenderSnapshot struct {
+	updatedAtMillis int64
+	filesIndexed    int64
+	pagesFetched    int64
+}
+
 func printJSON(value any) error {
 	encoded, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
 	fmt.Println(string(encoded))
+	return nil
+}
+
+func resolveSyncProgressOutputMode(raw string) (syncProgressOutputMode, error) {
+	mode := syncProgressOutputMode(strings.ToLower(strings.TrimSpace(raw)))
+	switch mode {
+	case "", syncProgressOutputHuman:
+		return syncProgressOutputHuman, nil
+	case syncProgressOutputJSON:
+		return syncProgressOutputJSON, nil
+	default:
+		return "", fmt.Errorf("不支持的进度输出模式: %s（可选: human|json）", raw)
+	}
+}
+
+func formatDurationCompact(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int64(d / time.Second)
+	hours := totalSeconds / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	if hours > 0 {
+		return fmt.Sprintf("%dh%dm%ds", hours, minutes, seconds)
+	}
+	if minutes > 0 {
+		return fmt.Sprintf("%dm%ds", minutes, seconds)
+	}
+	return fmt.Sprintf("%ds", seconds)
+}
+
+func renderSyncFullProgressHuman(progress *models.SyncProgressState, snapshot *progressRenderSnapshot) string {
+	timestamp := time.Now().Format("15:04:05")
+	if progress != nil && progress.UpdatedAt > 0 {
+		timestamp = time.UnixMilli(progress.UpdatedAt).Format("15:04:05")
+	}
+
+	totalRoots := len(progress.Roots)
+	completedRoots := len(progress.CompletedRoots)
+	activeRoot := "-"
+	if progress.ActiveRoot != nil {
+		activeRoot = fmt.Sprintf("%d", *progress.ActiveRoot)
+	}
+
+	fileRateText := "-"
+	pageRateText := "-"
+	if snapshot != nil && snapshot.updatedAtMillis > 0 && progress.UpdatedAt > snapshot.updatedAtMillis {
+		deltaMillis := progress.UpdatedAt - snapshot.updatedAtMillis
+		if deltaMillis > 0 {
+			fileDelta := progress.AggregateStats.FilesIndexed - snapshot.filesIndexed
+			pageDelta := progress.AggregateStats.PagesFetched - snapshot.pagesFetched
+			if fileDelta < 0 {
+				fileDelta = 0
+			}
+			if pageDelta < 0 {
+				pageDelta = 0
+			}
+			fileRateText = fmt.Sprintf("%d/s", fileDelta*1000/deltaMillis)
+			pageRateText = fmt.Sprintf("%d/s", pageDelta*1000/deltaMillis)
+		}
+	}
+
+	if snapshot != nil {
+		snapshot.updatedAtMillis = progress.UpdatedAt
+		snapshot.filesIndexed = progress.AggregateStats.FilesIndexed
+		snapshot.pagesFetched = progress.AggregateStats.PagesFetched
+	}
+
+	elapsedMillis := progress.UpdatedAt - progress.StartedAt
+	if elapsedMillis < 0 {
+		elapsedMillis = 0
+	}
+
+	activeRootDetail := ""
+	if progress.ActiveRoot != nil {
+		if rp := progress.RootProgress[fmt.Sprintf("%d", *progress.ActiveRoot)]; rp != nil {
+			currentFolder := "-"
+			if rp.CurrentFolderID != nil {
+				currentFolder = fmt.Sprintf("%d", *rp.CurrentFolderID)
+			}
+			currentPage := "-"
+			if rp.CurrentPageID != nil && rp.CurrentPageCount != nil && *rp.CurrentPageCount > 0 {
+				currentPage = fmt.Sprintf("%d/%d", *rp.CurrentPageID+1, *rp.CurrentPageCount)
+			} else if rp.CurrentPageID != nil {
+				currentPage = fmt.Sprintf("%d", *rp.CurrentPageID)
+			}
+			queue := "-"
+			if rp.QueueLength != nil {
+				queue = fmt.Sprintf("%d", *rp.QueueLength)
+			}
+			activeRootDetail = fmt.Sprintf(" root{folder=%s page=%s queue=%s}", currentFolder, currentPage, queue)
+		}
+	}
+
+	return fmt.Sprintf(
+		"[%s] status=%s roots=%d/%d active=%s files=%d pages=%d folders=%d failed=%d file_rate=%s page_rate=%s elapsed=%s%s",
+		timestamp,
+		progress.Status,
+		completedRoots,
+		totalRoots,
+		activeRoot,
+		progress.AggregateStats.FilesIndexed,
+		progress.AggregateStats.PagesFetched,
+		progress.AggregateStats.FoldersVisited,
+		progress.AggregateStats.FailedRequests,
+		fileRateText,
+		pageRateText,
+		formatDurationCompact(time.Duration(elapsedMillis)*time.Millisecond),
+		activeRootDetail,
+	)
+}
+
+func printSyncFullProgress(progress *models.SyncProgressState, mode syncProgressOutputMode, snapshot *progressRenderSnapshot) error {
+	if mode == syncProgressOutputJSON {
+		return printJSON(map[string]any{
+			"status":      progress.Status,
+			"active_root": progress.ActiveRoot,
+			"completed":   len(progress.CompletedRoots),
+			"total_roots": len(progress.Roots),
+			"stats":       progress.AggregateStats,
+			"updated_at":  progress.UpdatedAt,
+		})
+	}
+
+	fmt.Println(renderSyncFullProgressHuman(progress, snapshot))
 	return nil
 }
 
@@ -105,6 +246,16 @@ func firstPositive(values ...int64) int64 {
 	return 0
 }
 
+func normalizeUnixSeconds(value int64) int64 {
+	if value <= 0 {
+		return 0
+	}
+	if value >= 1_000_000_000_000 {
+		return value / 1000
+	}
+	return value
+}
+
 func addAuthFlags(command *cobra.Command, options *authOptions, cfg config.Config) {
 	command.Flags().StringVar(&options.token, "token", cfg.Token, "用户 Bearer token")
 	command.Flags().StringVar(&options.clientID, "client-id", cfg.ClientID, "开放平台 client_id")
@@ -126,6 +277,7 @@ func NewRootCommand(cfg config.Config) *cobra.Command {
 	rootCmd.AddCommand(newSearchLocalCommand(cfg))
 	rootCmd.AddCommand(newDownloadURLCommand(cfg))
 	rootCmd.AddCommand(newSyncFullCommand(cfg))
+	rootCmd.AddCommand(newSyncIncrementalCommand(cfg))
 	rootCmd.AddCommand(newSyncProgressCommand(cfg))
 
 	return rootCmd
@@ -351,6 +503,7 @@ func newSyncFullCommand(cfg config.Config) *cobra.Command {
 	var resumeProgress bool
 	var rootWorkers int
 	var progressEvery int
+	var progressOutput string
 	var checkpointTemplate string
 	var meiliHost string
 	var meiliKey string
@@ -382,7 +535,7 @@ func newSyncFullCommand(cfg config.Config) *cobra.Command {
 			}
 
 			meiliIndex := search.NewMeiliIndex(meiliHost, meiliKey, meiliIndexName)
-			if err := meiliIndex.EnsureSettings(); err != nil {
+			if err := meiliIndex.EnsureSettings(cmd.Context()); err != nil {
 				return err
 			}
 
@@ -417,6 +570,12 @@ func newSyncFullCommand(cfg config.Config) *cobra.Command {
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 			defer signal.Stop(sigCh)
 
+			outputMode, err := resolveSyncProgressOutputMode(progressOutput)
+			if err != nil {
+				return err
+			}
+			snapshot := &progressRenderSnapshot{}
+
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 
@@ -424,23 +583,26 @@ func newSyncFullCommand(cfg config.Config) *cobra.Command {
 				select {
 				case <-cmd.Context().Done():
 					syncManager.Cancel()
+					if !waitSyncManagerStopped(syncManager, 15*time.Second) {
+						return fmt.Errorf("同步取消超时，任务仍在后台运行")
+					}
 					return cmd.Context().Err()
 				case <-sigCh:
 					syncManager.Cancel()
-					return fmt.Errorf("收到中断信号，已请求取消同步")
+					if !waitSyncManagerStopped(syncManager, 15*time.Second) {
+						return fmt.Errorf("收到中断信号，等待同步停止超时")
+					}
+					progress, _ := syncManager.GetProgress()
+					if progress != nil {
+						_ = printSyncFullProgress(progress, outputMode, snapshot)
+					}
+					return fmt.Errorf("收到中断信号，同步已取消")
 				case <-ticker.C:
 					progress, loadErr := syncManager.GetProgress()
 					if loadErr != nil || progress == nil {
 						continue
 					}
-					_ = printJSON(map[string]any{
-						"status":      progress.Status,
-						"active_root": progress.ActiveRoot,
-						"completed":   len(progress.CompletedRoots),
-						"total_roots": len(progress.Roots),
-						"stats":       progress.AggregateStats,
-						"updated_at":  progress.UpdatedAt,
-					})
+					_ = printSyncFullProgress(progress, outputMode, snapshot)
 				}
 			}
 
@@ -469,11 +631,155 @@ func newSyncFullCommand(cfg config.Config) *cobra.Command {
 	cmd.Flags().BoolVar(&resumeProgress, "resume-progress", true, "是否从现有进度恢复")
 	cmd.Flags().IntVar(&rootWorkers, "root-workers", cfg.SyncRootWorkers, "根目录并发 worker 数")
 	cmd.Flags().IntVar(&progressEvery, "progress-every", cfg.SyncProgressEvery, "每处理 N 页记录一次进度")
+	cmd.Flags().StringVar(&progressOutput, "progress-output", "human", "进度输出模式: human|json")
 	cmd.Flags().StringVar(&checkpointTemplate, "checkpoint-template", cfg.CheckpointTemplate, "checkpoint 文件模板")
 
 	cmd.Flags().StringVar(&meiliHost, "meili-host", cfg.MeiliHost, "Meili 地址")
 	cmd.Flags().StringVar(&meiliKey, "meili-key", cfg.MeiliAPIKey, "Meili API key")
 	cmd.Flags().StringVar(&meiliIndexName, "meili-index", cfg.MeiliIndex, "Meili 索引名")
+
+	return cmd
+}
+
+func waitSyncManagerStopped(syncManager *service.SyncManager, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for syncManager.IsRunning() {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return true
+}
+
+func newSyncIncrementalCommand(cfg config.Config) *cobra.Command {
+	var options authOptions
+	var meiliHost string
+	var meiliKey string
+	var meiliIndexName string
+	var syncStateFile string
+	var windowOverlapMS int64
+	var incrementalQueryWords string
+
+	cmd := &cobra.Command{
+		Use:   "sync-incremental",
+		Short: "执行增量同步到 Meilisearch",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			token, authOptions, err := resolveToken(cmd.Context(), cfg, options)
+			if err != nil {
+				return err
+			}
+
+			api := newAPIClient(firstNotEmpty(options.baseURL, cfg.BaseURL), token, authOptions)
+			meiliIndex := search.NewMeiliIndex(meiliHost, meiliKey, meiliIndexName)
+			if err := meiliIndex.EnsureSettings(cmd.Context()); err != nil {
+				return err
+			}
+
+			stateStore := storage.NewJSONSyncStateStore(syncStateFile)
+			beforeState, err := stateStore.Load()
+			if err != nil {
+				return err
+			}
+
+			if windowOverlapMS < 0 {
+				windowOverlapMS = 0
+			}
+
+			windowEnd := time.Now().Unix()
+			sinceUsed := int64(0)
+			totalChanges := 0
+			upsertCount := 0
+			deleteCount := 0
+
+			windowOverlapSeconds := windowOverlapMS / 1000
+			if windowOverlapMS%1000 != 0 {
+				windowOverlapSeconds++
+			}
+
+			err = indexer.RunIncrementalSync(cmd.Context(), indexer.IncrementalDeps{
+				FetchChanges: func(ctx context.Context, since int64) ([]indexer.IncrementalInputItem, error) {
+					sinceUsed = since
+					querySince := since - windowOverlapSeconds
+					if querySince < 0 {
+						querySince = 0
+					}
+
+					changes, err := indexer.FetchIncrementalChanges(ctx, indexer.IncrementalFetchOptions{
+						Since: querySince,
+						Until: windowEnd,
+						Retry: cfg.Retry,
+						Fetch: func(ctx context.Context, start *int64, end *int64, pageID int64) (map[string]any, error) {
+							return api.SearchUpdatedWindow(ctx, incrementalQueryWords, start, end, pageID)
+						},
+					})
+					if err != nil {
+						return nil, err
+					}
+
+					totalChanges = len(changes)
+					upsertCount = 0
+					deleteCount = 0
+					for _, change := range changes {
+						if change.Deleted {
+							deleteCount++
+						} else {
+							upsertCount++
+						}
+					}
+
+					return changes, nil
+				},
+				StateStore: stateStore,
+				UpsertDocuments: func(ctx context.Context, docs []models.IndexDocument) error {
+					return meiliIndex.UpsertDocuments(ctx, docs)
+				},
+				DeleteDocuments: func(ctx context.Context, docIDs []string) error {
+					return meiliIndex.DeleteDocuments(ctx, docIDs)
+				},
+				NowProvider: func() int64 {
+					return windowEnd
+				},
+			})
+			if err != nil {
+				return err
+			}
+
+			afterState, err := stateStore.Load()
+			if err != nil {
+				return err
+			}
+
+			beforeCursor := int64(0)
+			if beforeState != nil {
+				beforeCursor = normalizeUnixSeconds(beforeState.LastSyncTime)
+			}
+			afterCursor := int64(0)
+			if afterState != nil {
+				afterCursor = normalizeUnixSeconds(afterState.LastSyncTime)
+			}
+
+			return printJSON(map[string]any{
+				"status":        "done",
+				"cursor_before": beforeCursor,
+				"cursor_after":  afterCursor,
+				"since_used":    sinceUsed,
+				"window_end":    windowEnd,
+				"time_unit":     "seconds",
+				"changes_total": totalChanges,
+				"upserts":       upsertCount,
+				"deletes":       deleteCount,
+			})
+		},
+	}
+
+	addAuthFlags(cmd, &options, cfg)
+	cmd.Flags().StringVar(&meiliHost, "meili-host", cfg.MeiliHost, "Meili 地址")
+	cmd.Flags().StringVar(&meiliKey, "meili-key", cfg.MeiliAPIKey, "Meili API key")
+	cmd.Flags().StringVar(&meiliIndexName, "meili-index", cfg.MeiliIndex, "Meili 索引名")
+	cmd.Flags().StringVar(&syncStateFile, "sync-state-file", cfg.SyncStateFile, "增量游标状态文件路径")
+	cmd.Flags().Int64Var(&windowOverlapMS, "window-overlap-ms", 2000, "增量窗口回看毫秒数，防止边界漏数")
+	cmd.Flags().StringVar(&incrementalQueryWords, "incremental-query-words", cfg.IncrementalQuery, "增量查询词（默认 * OR *，可覆盖）")
 
 	return cmd
 }

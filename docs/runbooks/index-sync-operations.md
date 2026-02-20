@@ -13,6 +13,8 @@
   - `go build ./...`
 2. 执行全量任务（CLI 方式）：
   - `go run ./cmd/cli sync-full --token <token> --root-folder-ids 0`
+  - 交互式排障建议使用默认人类可读进度：`--progress-output human`
+  - 如需机器采集进度日志可切换：`--progress-output json`
 3. 或服务方式触发：
   - `POST /api/v1/sync/full/start`
 3. 同步完成后确认指标：
@@ -24,7 +26,10 @@
 
 - 建议每 5~15 分钟执行一次增量同步。
 - 每次执行读取 `lastSyncTime`，仅处理变更文档。
+- `lastSyncTime` 使用秒级时间戳；若历史状态为毫秒值，程序会自动兼容迁移。
 - 同步成功后推进游标；失败时保留旧游标。
+- CLI 示例：
+  - `go run ./cmd/cli sync-incremental --incremental-query-words "* OR *" --window-overlap-ms 2000`
 
 ## 4. 检索与下载
 

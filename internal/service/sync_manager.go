@@ -563,6 +563,6 @@ type meiliIndexWriter struct {
 	index *search.MeiliIndex
 }
 
-func (w *meiliIndexWriter) UpsertDocuments(_ context.Context, docs []models.IndexDocument) error {
-	return w.index.UpsertDocuments(docs)
+func (w *meiliIndexWriter) UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error {
+	return w.index.UpsertDocuments(ctx, docs)
 }

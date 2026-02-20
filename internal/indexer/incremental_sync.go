@@ -7,6 +7,17 @@ import (
 	"npan/internal/models"
 )
 
+func normalizeUnixSeconds(ts int64) int64 {
+	if ts <= 0 {
+		return 0
+	}
+	// 兼容历史毫秒游标，统一转为秒级语义。
+	if ts >= 1_000_000_000_000 {
+		return ts / 1000
+	}
+	return ts
+}
+
 type IncrementalInputItem struct {
 	Doc     models.IndexDocument
 	Deleted bool
@@ -38,7 +49,7 @@ func RunIncrementalSync(ctx context.Context, deps IncrementalDeps) error {
 
 	since := int64(0)
 	if state != nil {
-		since = state.LastSyncTime
+		since = normalizeUnixSeconds(state.LastSyncTime)
 	}
 
 	changes, err := deps.FetchChanges(ctx, since)
@@ -67,5 +78,5 @@ func RunIncrementalSync(ctx context.Context, deps IncrementalDeps) error {
 		}
 	}
 
-	return deps.StateStore.Save(&models.SyncState{LastSyncTime: nowProvider()})
+	return deps.StateStore.Save(&models.SyncState{LastSyncTime: normalizeUnixSeconds(nowProvider())})
 }

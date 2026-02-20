@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"npan/internal/config"
@@ -14,7 +15,7 @@ func main() {
 	cfg := config.Load()
 
 	meiliIndex := search.NewMeiliIndex(cfg.MeiliHost, cfg.MeiliAPIKey, cfg.MeiliIndex)
-	if err := meiliIndex.EnsureSettings(); err != nil {
+	if err := meiliIndex.EnsureSettings(context.Background()); err != nil {
 		log.Fatalf("初始化 Meili 设置失败: %v", err)
 	}
 

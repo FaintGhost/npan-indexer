@@ -256,9 +256,14 @@ func (c *HTTPClient) GetDownloadURL(ctx context.Context, fileID int64, validPeri
 	return body, nil
 }
 
-func (c *HTTPClient) SearchUpdatedWindow(ctx context.Context, start *int64, end *int64, pageID int64) (map[string]any, error) {
+func (c *HTTPClient) SearchUpdatedWindow(ctx context.Context, queryWords string, start *int64, end *int64, pageID int64) (map[string]any, error) {
+	trimmedQuery := strings.TrimSpace(queryWords)
+	if trimmedQuery == "" {
+		trimmedQuery = "* OR *"
+	}
+
 	query := url.Values{}
-	query.Set("query_words", "*")
+	query.Set("query_words", trimmedQuery)
 	query.Set("type", "all")
 	query.Set("page_id", strconv.FormatInt(pageID, 10))
 	query.Set("query_filter", "all")

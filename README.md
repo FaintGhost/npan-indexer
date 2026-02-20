@@ -50,6 +50,18 @@ go run ./cmd/server
 
 # 查询同步进度
 go run ./cmd/cli sync-progress
+
+# 全量同步（默认人类可读进度）
+go run ./cmd/cli sync-full
+
+# 全量同步（结构化 JSON 进度）
+go run ./cmd/cli sync-full --progress-output json
+
+# 执行增量同步
+go run ./cmd/cli sync-incremental
+
+# 执行增量同步（显式指定查询词与窗口回看）
+go run ./cmd/cli sync-incremental --incremental-query-words "* OR *" --window-overlap-ms 2000
 ```
 
 ## API 入口
