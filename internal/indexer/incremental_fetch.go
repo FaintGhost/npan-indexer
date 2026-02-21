@@ -12,11 +12,19 @@ import (
 
 type UpdatedWindowFetcher func(ctx context.Context, start *int64, end *int64, pageID int64) (map[string]any, error)
 
+// IncrementalFetchProgress 是增量拉取过程中每页完成后的进度快照。
+type IncrementalFetchProgress struct {
+	PageID    int64
+	PageCount int64
+	Changes   int
+}
+
 type IncrementalFetchOptions struct {
-	Since int64
-	Until int64
-	Retry models.RetryPolicyOptions
-	Fetch UpdatedWindowFetcher
+	Since      int64
+	Until      int64
+	Retry      models.RetryPolicyOptions
+	Fetch      UpdatedWindowFetcher
+	OnProgress func(IncrementalFetchProgress)
 }
 
 func FetchIncrementalChanges(ctx context.Context, opts IncrementalFetchOptions) ([]IncrementalInputItem, error) {
@@ -100,6 +108,14 @@ func FetchIncrementalChanges(ctx context.Context, opts IncrementalFetchOptions) 
 		pageCount := toInt64(page["page_count"], 1)
 		if pageCount <= 0 {
 			pageCount = 1
+		}
+
+		if opts.OnProgress != nil {
+			opts.OnProgress(IncrementalFetchProgress{
+				PageID:    pageID,
+				PageCount: pageCount,
+				Changes:   len(changesByID),
+			})
 		}
 
 		pageID++

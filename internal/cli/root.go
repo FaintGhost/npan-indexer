@@ -731,11 +731,17 @@ func newSyncIncrementalCommand(cfg config.Config) *cobra.Command {
 	var syncStateFile string
 	var windowOverlapMS int64
 	var incrementalQueryWords string
+	var progressOutput string
 
 	cmd := &cobra.Command{
 		Use:   "sync-incremental",
 		Short: "执行增量同步到 Meilisearch",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			outputMode, err := resolveSyncProgressOutputMode(progressOutput)
+			if err != nil {
+				return err
+			}
+
 			token, authOptions, err := resolveToken(cmd.Context(), cfg, options)
 			if err != nil {
 				return err
@@ -768,6 +774,20 @@ func newSyncIncrementalCommand(cfg config.Config) *cobra.Command {
 				windowOverlapSeconds++
 			}
 
+			printIncrementalProgress := func(phase string, detail string) {
+				if outputMode == syncProgressOutputJSON {
+					_ = printJSON(map[string]any{
+						"phase":  phase,
+						"detail": detail,
+					})
+				} else {
+					timestamp := time.Now().Format("15:04:05")
+					fmt.Printf("[%s] %s %s\n", timestamp, phase, detail)
+				}
+			}
+
+			printIncrementalProgress("fetch", "开始拉取变更...")
+
 			err = indexer.RunIncrementalSync(cmd.Context(), indexer.IncrementalDeps{
 				FetchChanges: func(ctx context.Context, since int64) ([]indexer.IncrementalInputItem, error) {
 					sinceUsed = since
@@ -782,6 +802,9 @@ func newSyncIncrementalCommand(cfg config.Config) *cobra.Command {
 						Retry: cfg.Retry,
 						Fetch: func(ctx context.Context, start *int64, end *int64, pageID int64) (map[string]any, error) {
 							return api.SearchUpdatedWindow(ctx, incrementalQueryWords, start, end, pageID)
+						},
+						OnProgress: func(p indexer.IncrementalFetchProgress) {
+							printIncrementalProgress("fetch", fmt.Sprintf("page=%d/%d changes=%d", p.PageID+1, p.PageCount, p.Changes))
 						},
 					})
 					if err != nil {
@@ -799,14 +822,25 @@ func newSyncIncrementalCommand(cfg config.Config) *cobra.Command {
 						}
 					}
 
+					printIncrementalProgress("fetch", fmt.Sprintf("完成, changes=%d upserts=%d deletes=%d", totalChanges, upsertCount, deleteCount))
 					return changes, nil
 				},
 				StateStore: stateStore,
 				UpsertDocuments: func(ctx context.Context, docs []models.IndexDocument) error {
-					return meiliIndex.UpsertDocuments(ctx, docs)
+					printIncrementalProgress("upsert", fmt.Sprintf("写入 %d 条文档...", len(docs)))
+					err := meiliIndex.UpsertDocuments(ctx, docs)
+					if err == nil {
+						printIncrementalProgress("upsert", fmt.Sprintf("完成, count=%d", len(docs)))
+					}
+					return err
 				},
 				DeleteDocuments: func(ctx context.Context, docIDs []string) error {
-					return meiliIndex.DeleteDocuments(ctx, docIDs)
+					printIncrementalProgress("delete", fmt.Sprintf("删除 %d 条文档...", len(docIDs)))
+					err := meiliIndex.DeleteDocuments(ctx, docIDs)
+					if err == nil {
+						printIncrementalProgress("delete", fmt.Sprintf("完成, count=%d", len(docIDs)))
+					}
+					return err
 				},
 				NowProvider: func() int64 {
 					return windowEnd
@@ -851,6 +885,7 @@ func newSyncIncrementalCommand(cfg config.Config) *cobra.Command {
 	cmd.Flags().StringVar(&syncStateFile, "sync-state-file", cfg.SyncStateFile, "增量游标状态文件路径")
 	cmd.Flags().Int64Var(&windowOverlapMS, "window-overlap-ms", 2000, "增量窗口回看毫秒数，防止边界漏数")
 	cmd.Flags().StringVar(&incrementalQueryWords, "incremental-query-words", cfg.IncrementalQuery, "增量查询词（默认 * OR *，可覆盖）")
+	cmd.Flags().StringVar(&progressOutput, "progress-output", "human", "进度输出模式: human|json")
 
 	return cmd
 }
