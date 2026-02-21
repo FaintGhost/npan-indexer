@@ -1,9 +1,17 @@
+FROM oven/bun:alpine AS frontend
+WORKDIR /web
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY web/ .
+RUN bun run build
+
 FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+COPY --from=frontend /web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=linux go build \
       -ldflags="-s -w" -trimpath \
       -o /out/npan-server ./cmd/server
