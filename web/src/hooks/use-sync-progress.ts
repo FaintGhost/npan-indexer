@@ -58,6 +58,7 @@ export function useSyncProgress(headers: Record<string, string>) {
     try {
       await apiPost('/api/v1/admin/sync/full', {
         root_folder_ids: rootFolderIds,
+        resume_progress: true,
       }, { headers })
       const result = await fetchProgress()
       if (result) {
