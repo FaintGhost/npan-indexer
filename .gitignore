@@ -5,6 +5,8 @@
 !.env.meilisearch.example
 
 # Go build artifacts
+/cli
+/server
 bin/
 dist/
 *.exe
