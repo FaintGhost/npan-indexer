@@ -11,6 +11,7 @@ const baseProgress: SyncProgress = {
   rootNames: {},
   completedRoots: [100],
   activeRoot: 200,
+  mode: 'full',
   aggregateStats: {
     foldersVisited: 50,
     filesIndexed: 300,
@@ -115,5 +116,28 @@ describe('SyncProgressDisplay', () => {
   it('hides verification when null', () => {
     render(<SyncProgressDisplay progress={baseProgress} />)
     expect(screen.queryByText('验证通过')).not.toBeInTheDocument()
+  })
+
+  it('renders incremental mode stats', () => {
+    const incrementalProgress: SyncProgress = {
+      ...baseProgress,
+      mode: 'incremental',
+      incrementalStats: {
+        changesFetched: 42,
+        upserted: 30,
+        deleted: 5,
+        skippedUpserts: 3,
+        skippedDeletes: 1,
+        cursorBefore: 100,
+        cursorAfter: 200,
+      },
+    }
+    render(<SyncProgressDisplay progress={incrementalProgress} />)
+    expect(screen.getByText('增量同步')).toBeInTheDocument()
+    expect(screen.getByText('变更').closest('div')).toHaveTextContent('42')
+    expect(screen.getByText('写入').closest('div')).toHaveTextContent('30')
+    expect(screen.getByText('删除').closest('div')).toHaveTextContent('5')
+    expect(screen.getByText('跳过写入').closest('div')).toHaveTextContent('3')
+    expect(screen.getByText('跳过删除').closest('div')).toHaveTextContent('1')
   })
 })

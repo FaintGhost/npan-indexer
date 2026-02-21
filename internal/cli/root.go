@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"npan/internal/config"
-	"npan/internal/indexer"
 	"npan/internal/models"
 	"npan/internal/npan"
 	"npan/internal/search"
@@ -347,6 +346,7 @@ func NewRootCommand(cfg config.Config) *cobra.Command {
 	rootCmd.AddCommand(newSearchRemoteCommand(cfg))
 	rootCmd.AddCommand(newSearchLocalCommand(cfg))
 	rootCmd.AddCommand(newDownloadURLCommand(cfg))
+	rootCmd.AddCommand(newSyncCommand(cfg))
 	rootCmd.AddCommand(newSyncFullCommand(cfg))
 	rootCmd.AddCommand(newSyncIncrementalCommand(cfg))
 	rootCmd.AddCommand(newSyncProgressCommand(cfg))
@@ -566,6 +566,167 @@ func newDownloadURLCommand(cfg config.Config) *cobra.Command {
 	return cmd
 }
 
+func newSyncCommand(cfg config.Config) *cobra.Command {
+	var options authOptions
+	var rootFolderIDsRaw string
+	var includeDepartments bool
+	var departmentIDsRaw string
+	var resumeProgress bool
+	var rootWorkers int
+	var progressEvery int
+	var progressOutput string
+	var checkpointTemplate string
+	var meiliHost string
+	var meiliKey string
+	var meiliIndexName string
+	var syncStateFile string
+	var windowOverlapMS int64
+	var incrementalQueryWords string
+	var mode string
+
+	cmd := &cobra.Command{
+		Use:   "sync",
+		Short: "自适应同步到 Meilisearch（自动选择全量或增量）",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			token, authOptions, err := resolveToken(cmd.Context(), cfg, options)
+			if err != nil {
+				return err
+			}
+
+			roots, err := parseInt64CSV(rootFolderIDsRaw)
+			if err != nil {
+				return err
+			}
+			if len(roots) == 0 {
+				roots = append([]int64{}, cfg.DefaultRootFolderIDs...)
+			}
+
+			departmentIDs, err := parseInt64CSV(departmentIDsRaw)
+			if err != nil {
+				return err
+			}
+			if len(departmentIDs) == 0 {
+				departmentIDs = append([]int64{}, cfg.DefaultDepartmentIDs...)
+			}
+
+			meiliIndex := search.NewMeiliIndex(meiliHost, meiliKey, meiliIndexName)
+			if err := meiliIndex.EnsureSettings(cmd.Context()); err != nil {
+				return err
+			}
+
+			syncManager := service.NewSyncManager(service.SyncManagerArgs{
+				Index:              meiliIndex,
+				ProgressStore:      storage.NewJSONProgressStore(cfg.ProgressFile),
+				MeiliHost:          meiliHost,
+				MeiliIndex:         meiliIndexName,
+				CheckpointTemplate: checkpointTemplate,
+				RootWorkers:        rootWorkers,
+				ProgressEvery:      progressEvery,
+				Retry:              cfg.Retry,
+				MaxConcurrent:      cfg.SyncMaxConcurrent,
+				MinTimeMS:          cfg.SyncMinTimeMS,
+				SyncStateFile:      syncStateFile,
+				IncrementalQuery:   incrementalQueryWords,
+				WindowOverlapMS:    windowOverlapMS,
+			})
+
+			api := newAPIClient(firstNotEmpty(options.baseURL, cfg.BaseURL), token, authOptions)
+
+			syncMode := models.SyncMode(mode)
+
+			if err := syncManager.Start(api, service.SyncStartRequest{
+				Mode:               syncMode,
+				RootFolderIDs:      roots,
+				IncludeDepartments: &includeDepartments,
+				DepartmentIDs:      departmentIDs,
+				ResumeProgress:     &resumeProgress,
+				RootWorkers:        rootWorkers,
+				ProgressEvery:      progressEvery,
+				CheckpointTemplate: checkpointTemplate,
+				WindowOverlapMS:    windowOverlapMS,
+				IncrementalQuery:   incrementalQueryWords,
+			}); err != nil {
+				return err
+			}
+
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			defer signal.Stop(sigCh)
+
+			outputMode, err := resolveSyncProgressOutputMode(progressOutput)
+			if err != nil {
+				return err
+			}
+			snapshot := &progressRenderSnapshot{}
+
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+
+			for syncManager.IsRunning() {
+				select {
+				case <-cmd.Context().Done():
+					syncManager.Cancel()
+					if !waitSyncManagerStopped(syncManager, 15*time.Second) {
+						return fmt.Errorf("同步取消超时，任务仍在后台运行")
+					}
+					return cmd.Context().Err()
+				case <-sigCh:
+					syncManager.Cancel()
+					if !waitSyncManagerStopped(syncManager, 15*time.Second) {
+						return fmt.Errorf("收到中断信号，等待同步停止超时")
+					}
+					progress, _ := syncManager.GetProgress()
+					if progress != nil {
+						_ = printSyncFullProgress(progress, outputMode, snapshot)
+					}
+					return fmt.Errorf("收到中断信号，同步已取消")
+				case <-ticker.C:
+					progress, loadErr := syncManager.GetProgress()
+					if loadErr != nil || progress == nil {
+						continue
+					}
+					_ = printSyncFullProgress(progress, outputMode, snapshot)
+				}
+			}
+
+			progress, err := syncManager.GetProgress()
+			if err != nil {
+				return err
+			}
+			if progress == nil {
+				return fmt.Errorf("未找到同步进度")
+			}
+			if progress.Status == "error" {
+				if progress.LastError != "" {
+					return fmt.Errorf("同步失败: %s", progress.LastError)
+				}
+				return fmt.Errorf("同步失败")
+			}
+
+			return printJSON(progress)
+		},
+	}
+
+	addAuthFlags(cmd, &options, cfg)
+	cmd.Flags().StringVar(&rootFolderIDsRaw, "root-folder-ids", "", "根目录 ID 列表，逗号分隔")
+	cmd.Flags().BoolVar(&includeDepartments, "include-departments", cfg.DefaultIncludeDepartments, "是否自动扫描部门根目录")
+	cmd.Flags().StringVar(&departmentIDsRaw, "department-ids", "", "部门 ID 列表，逗号分隔")
+	cmd.Flags().BoolVar(&resumeProgress, "resume-progress", true, "是否从现有进度恢复")
+	cmd.Flags().IntVar(&rootWorkers, "root-workers", cfg.SyncRootWorkers, "根目录并发 worker 数")
+	cmd.Flags().IntVar(&progressEvery, "progress-every", cfg.SyncProgressEvery, "每处理 N 页记录一次进度")
+	cmd.Flags().StringVar(&progressOutput, "progress-output", "human", "进度输出模式: human|json")
+	cmd.Flags().StringVar(&checkpointTemplate, "checkpoint-template", cfg.CheckpointTemplate, "checkpoint 文件模板")
+	cmd.Flags().StringVar(&meiliHost, "meili-host", cfg.MeiliHost, "Meili 地址")
+	cmd.Flags().StringVar(&meiliKey, "meili-key", cfg.MeiliAPIKey, "Meili API key")
+	cmd.Flags().StringVar(&meiliIndexName, "meili-index", cfg.MeiliIndex, "Meili 索引名")
+	cmd.Flags().StringVar(&syncStateFile, "sync-state-file", cfg.SyncStateFile, "增量游标状态文件路径")
+	cmd.Flags().Int64Var(&windowOverlapMS, "window-overlap-ms", 2000, "增量窗口回看毫秒数，防止边界漏数")
+	cmd.Flags().StringVar(&incrementalQueryWords, "incremental-query-words", cfg.IncrementalQuery, "增量查询词（默认 * OR *，可覆盖）")
+	cmd.Flags().StringVar(&mode, "mode", "auto", "同步模式: auto|full|incremental")
+
+	return cmd
+}
+
 func newSyncFullCommand(cfg config.Config) *cobra.Command {
 	var options authOptions
 	var rootFolderIDsRaw string
@@ -621,6 +782,7 @@ func newSyncFullCommand(cfg config.Config) *cobra.Command {
 				Retry:              cfg.Retry,
 				MaxConcurrent:      cfg.SyncMaxConcurrent,
 				MinTimeMS:          cfg.SyncMinTimeMS,
+				SyncStateFile:      cfg.SyncStateFile,
 			})
 
 			api := newAPIClient(firstNotEmpty(options.baseURL, cfg.BaseURL), token, authOptions)
@@ -737,144 +899,94 @@ func newSyncIncrementalCommand(cfg config.Config) *cobra.Command {
 		Use:   "sync-incremental",
 		Short: "执行增量同步到 Meilisearch",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			outputMode, err := resolveSyncProgressOutputMode(progressOutput)
-			if err != nil {
-				return err
-			}
-
 			token, authOptions, err := resolveToken(cmd.Context(), cfg, options)
 			if err != nil {
 				return err
 			}
 
-			api := newAPIClient(firstNotEmpty(options.baseURL, cfg.BaseURL), token, authOptions)
 			meiliIndex := search.NewMeiliIndex(meiliHost, meiliKey, meiliIndexName)
 			if err := meiliIndex.EnsureSettings(cmd.Context()); err != nil {
 				return err
 			}
 
-			stateStore := storage.NewJSONSyncStateStore(syncStateFile)
-			beforeState, err := stateStore.Load()
-			if err != nil {
+			syncManager := service.NewSyncManager(service.SyncManagerArgs{
+				Index:              meiliIndex,
+				ProgressStore:      storage.NewJSONProgressStore(cfg.ProgressFile),
+				MeiliHost:          meiliHost,
+				MeiliIndex:         meiliIndexName,
+				Retry:              cfg.Retry,
+				MaxConcurrent:      cfg.SyncMaxConcurrent,
+				MinTimeMS:          cfg.SyncMinTimeMS,
+				SyncStateFile:      syncStateFile,
+				IncrementalQuery:   incrementalQueryWords,
+				WindowOverlapMS:    windowOverlapMS,
+			})
+
+			api := newAPIClient(firstNotEmpty(options.baseURL, cfg.BaseURL), token, authOptions)
+
+			if err := syncManager.Start(api, service.SyncStartRequest{
+				Mode:             models.SyncModeIncremental,
+				WindowOverlapMS:  windowOverlapMS,
+				IncrementalQuery: incrementalQueryWords,
+			}); err != nil {
 				return err
 			}
 
-			if windowOverlapMS < 0 {
-				windowOverlapMS = 0
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			defer signal.Stop(sigCh)
+
+			outputMode, err := resolveSyncProgressOutputMode(progressOutput)
+			if err != nil {
+				return err
 			}
+			snapshot := &progressRenderSnapshot{}
 
-			windowEnd := time.Now().Unix()
-			sinceUsed := int64(0)
-			totalChanges := 0
-			upsertCount := 0
-			deleteCount := 0
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
 
-			windowOverlapSeconds := windowOverlapMS / 1000
-			if windowOverlapMS%1000 != 0 {
-				windowOverlapSeconds++
-			}
-
-			printIncrementalProgress := func(phase string, detail string) {
-				if outputMode == syncProgressOutputJSON {
-					_ = printJSON(map[string]any{
-						"phase":  phase,
-						"detail": detail,
-					})
-				} else {
-					timestamp := time.Now().Format("15:04:05")
-					fmt.Printf("[%s] %s %s\n", timestamp, phase, detail)
+			for syncManager.IsRunning() {
+				select {
+				case <-cmd.Context().Done():
+					syncManager.Cancel()
+					if !waitSyncManagerStopped(syncManager, 15*time.Second) {
+						return fmt.Errorf("同步取消超时，任务仍在后台运行")
+					}
+					return cmd.Context().Err()
+				case <-sigCh:
+					syncManager.Cancel()
+					if !waitSyncManagerStopped(syncManager, 15*time.Second) {
+						return fmt.Errorf("收到中断信号，等待同步停止超时")
+					}
+					progress, _ := syncManager.GetProgress()
+					if progress != nil {
+						_ = printSyncFullProgress(progress, outputMode, snapshot)
+					}
+					return fmt.Errorf("收到中断信号，同步已取消")
+				case <-ticker.C:
+					progress, loadErr := syncManager.GetProgress()
+					if loadErr != nil || progress == nil {
+						continue
+					}
+					_ = printSyncFullProgress(progress, outputMode, snapshot)
 				}
 			}
 
-			printIncrementalProgress("fetch", "开始拉取变更...")
-
-			err = indexer.RunIncrementalSync(cmd.Context(), indexer.IncrementalDeps{
-				FetchChanges: func(ctx context.Context, since int64) ([]indexer.IncrementalInputItem, error) {
-					sinceUsed = since
-					querySince := since - windowOverlapSeconds
-					if querySince < 0 {
-						querySince = 0
-					}
-
-					changes, err := indexer.FetchIncrementalChanges(ctx, indexer.IncrementalFetchOptions{
-						Since: querySince,
-						Until: windowEnd,
-						Retry: cfg.Retry,
-						Fetch: func(ctx context.Context, start *int64, end *int64, pageID int64) (map[string]any, error) {
-							return api.SearchUpdatedWindow(ctx, incrementalQueryWords, start, end, pageID)
-						},
-						OnProgress: func(p indexer.IncrementalFetchProgress) {
-							printIncrementalProgress("fetch", fmt.Sprintf("page=%d/%d changes=%d", p.PageID+1, p.PageCount, p.Changes))
-						},
-					})
-					if err != nil {
-						return nil, err
-					}
-
-					totalChanges = len(changes)
-					upsertCount = 0
-					deleteCount = 0
-					for _, change := range changes {
-						if change.Deleted {
-							deleteCount++
-						} else {
-							upsertCount++
-						}
-					}
-
-					printIncrementalProgress("fetch", fmt.Sprintf("完成, changes=%d upserts=%d deletes=%d", totalChanges, upsertCount, deleteCount))
-					return changes, nil
-				},
-				StateStore: stateStore,
-				UpsertDocuments: func(ctx context.Context, docs []models.IndexDocument) error {
-					printIncrementalProgress("upsert", fmt.Sprintf("写入 %d 条文档...", len(docs)))
-					err := meiliIndex.UpsertDocuments(ctx, docs)
-					if err == nil {
-						printIncrementalProgress("upsert", fmt.Sprintf("完成, count=%d", len(docs)))
-					}
-					return err
-				},
-				DeleteDocuments: func(ctx context.Context, docIDs []string) error {
-					printIncrementalProgress("delete", fmt.Sprintf("删除 %d 条文档...", len(docIDs)))
-					err := meiliIndex.DeleteDocuments(ctx, docIDs)
-					if err == nil {
-						printIncrementalProgress("delete", fmt.Sprintf("完成, count=%d", len(docIDs)))
-					}
-					return err
-				},
-				NowProvider: func() int64 {
-					return windowEnd
-				},
-			})
+			progress, err := syncManager.GetProgress()
 			if err != nil {
 				return err
 			}
-
-			afterState, err := stateStore.Load()
-			if err != nil {
-				return err
+			if progress == nil {
+				return fmt.Errorf("未找到同步进度")
+			}
+			if progress.Status == "error" {
+				if progress.LastError != "" {
+					return fmt.Errorf("同步失败: %s", progress.LastError)
+				}
+				return fmt.Errorf("同步失败")
 			}
 
-			beforeCursor := int64(0)
-			if beforeState != nil {
-				beforeCursor = normalizeUnixSeconds(beforeState.LastSyncTime)
-			}
-			afterCursor := int64(0)
-			if afterState != nil {
-				afterCursor = normalizeUnixSeconds(afterState.LastSyncTime)
-			}
-
-			return printJSON(map[string]any{
-				"status":        "done",
-				"cursor_before": beforeCursor,
-				"cursor_after":  afterCursor,
-				"since_used":    sinceUsed,
-				"window_end":    windowEnd,
-				"time_unit":     "seconds",
-				"changes_total": totalChanges,
-				"upserts":       upsertCount,
-				"deletes":       deleteCount,
-			})
+			return printJSON(progress)
 		},
 	}
 

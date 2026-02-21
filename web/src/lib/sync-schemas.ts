@@ -23,6 +23,18 @@ export const RootProgressSchema = z.object({
 
 export type RootProgress = z.infer<typeof RootProgressSchema>
 
+export const IncrementalSyncStatsSchema = z.object({
+  changesFetched: z.number(),
+  upserted: z.number(),
+  deleted: z.number(),
+  skippedUpserts: z.number(),
+  skippedDeletes: z.number(),
+  cursorBefore: z.number(),
+  cursorAfter: z.number(),
+})
+
+export type IncrementalSyncStats = z.infer<typeof IncrementalSyncStatsSchema>
+
 export const SyncProgressSchema = z.object({
   status: z.enum(['idle', 'running', 'done', 'error', 'cancelled']),
   startedAt: z.number(),
@@ -33,6 +45,8 @@ export const SyncProgressSchema = z.object({
   activeRoot: z.number().nullable().optional(),
   aggregateStats: CrawlStatsSchema,
   rootProgress: z.record(z.string(), RootProgressSchema),
+  mode: z.string().optional().default(''),
+  incrementalStats: IncrementalSyncStatsSchema.optional().nullable(),
   lastError: z.string().optional().default(''),
   verification: z
     .object({

@@ -96,6 +96,24 @@ type RootSyncProgress struct {
 	Error              string     `json:"error,omitempty"`
 }
 
+type SyncMode string
+
+const (
+	SyncModeAuto        SyncMode = "auto"
+	SyncModeFull        SyncMode = "full"
+	SyncModeIncremental SyncMode = "incremental"
+)
+
+type IncrementalSyncStats struct {
+	ChangesFetched int64 `json:"changesFetched"`
+	Upserted       int64 `json:"upserted"`
+	Deleted        int64 `json:"deleted"`
+	SkippedUpserts int64 `json:"skippedUpserts"`
+	SkippedDeletes int64 `json:"skippedDeletes"`
+	CursorBefore   int64 `json:"cursorBefore"`
+	CursorAfter    int64 `json:"cursorAfter"`
+}
+
 type SyncVerification struct {
 	MeiliDocCount      int64    `json:"meiliDocCount"`
 	CrawledDocCount    int64    `json:"crawledDocCount"`
@@ -107,6 +125,7 @@ type SyncVerification struct {
 
 type SyncProgressState struct {
 	Status             string                       `json:"status"`
+	Mode               string                       `json:"mode,omitempty"`
 	StartedAt          int64                        `json:"startedAt"`
 	UpdatedAt          int64                        `json:"updatedAt"`
 	MeiliHost          string                       `json:"meiliHost"`
@@ -118,6 +137,7 @@ type SyncProgressState struct {
 	ActiveRoot         *int64                       `json:"activeRoot,omitempty"`
 	AggregateStats     CrawlStats                   `json:"aggregateStats"`
 	RootProgress       map[string]*RootSyncProgress `json:"rootProgress"`
+	IncrementalStats   *IncrementalSyncStats        `json:"incrementalStats,omitempty"`
 	LastError          string                       `json:"lastError,omitempty"`
 	Verification       *SyncVerification            `json:"verification,omitempty"`
 }

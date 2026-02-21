@@ -408,6 +408,7 @@ func (h *Handlers) AppDownloadURL(c *echo.Context) error {
 
 type syncStartPayload struct {
 	authPayload
+	Mode               string  `json:"mode"`
 	RootFolderIDs      []int64 `json:"root_folder_ids"`
 	IncludeDepartments *bool   `json:"include_departments"`
 	DepartmentIDs      []int64 `json:"department_ids"`
@@ -415,6 +416,8 @@ type syncStartPayload struct {
 	RootWorkers        int     `json:"root_workers"`
 	ProgressEvery      int     `json:"progress_every"`
 	CheckpointTemplate string  `json:"checkpoint_template"`
+	WindowOverlapMS    int64   `json:"window_overlap_ms"`
+	IncrementalQuery   string  `json:"incremental_query"`
 }
 
 func (h *Handlers) StartFullSync(c *echo.Context) error {
@@ -431,6 +434,7 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 
 	api := h.newAPIClient(token, authOptions)
 	err = h.syncManager.Start(api, service.SyncStartRequest{
+		Mode:               models.SyncMode(payload.Mode),
 		RootFolderIDs:      payload.RootFolderIDs,
 		IncludeDepartments: payload.IncludeDepartments,
 		DepartmentIDs:      payload.DepartmentIDs,
@@ -438,6 +442,8 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 		RootWorkers:        payload.RootWorkers,
 		ProgressEvery:      payload.ProgressEvery,
 		CheckpointTemplate: payload.CheckpointTemplate,
+		WindowOverlapMS:    payload.WindowOverlapMS,
+		IncrementalQuery:   payload.IncrementalQuery,
 	})
 	if err != nil {
 		slog.Error("启动同步失败", "error", err, "handler", "StartFullSync")

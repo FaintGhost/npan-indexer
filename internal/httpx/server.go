@@ -70,6 +70,7 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS) *echo.Echo 
 	// Admin (requires API key, uses server-configured credentials for upstream API)
 	admin := e.Group("/api/v1/admin", APIKeyAuth(adminAPIKey), ConfigFallbackAuth(), RateLimitMiddleware(5, 10))
 	admin.POST("/sync/full", handlers.StartFullSync)
+	admin.POST("/sync/start", handlers.StartFullSync)
 	admin.GET("/sync/full/progress", handlers.GetFullSyncProgress)
 	admin.POST("/sync/full/cancel", handlers.CancelFullSync)
 

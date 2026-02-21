@@ -16,13 +16,16 @@ import (
 )
 
 type SyncStartRequest struct {
-	RootFolderIDs      []int64 `json:"root_folder_ids"`
-	IncludeDepartments *bool   `json:"include_departments"`
-	DepartmentIDs      []int64 `json:"department_ids"`
-	ResumeProgress     *bool   `json:"resume_progress"`
-	RootWorkers        int     `json:"root_workers"`
-	ProgressEvery      int     `json:"progress_every"`
-	CheckpointTemplate string  `json:"checkpoint_template"`
+	Mode               models.SyncMode `json:"mode"`
+	RootFolderIDs      []int64         `json:"root_folder_ids"`
+	IncludeDepartments *bool           `json:"include_departments"`
+	DepartmentIDs      []int64         `json:"department_ids"`
+	ResumeProgress     *bool           `json:"resume_progress"`
+	RootWorkers        int             `json:"root_workers"`
+	ProgressEvery      int             `json:"progress_every"`
+	CheckpointTemplate string          `json:"checkpoint_template"`
+	WindowOverlapMS    int64           `json:"window_overlap_ms"`
+	IncrementalQuery   string          `json:"incremental_query"`
 }
 
 type SyncManager struct {
@@ -38,6 +41,10 @@ type SyncManager struct {
 	maxConcurrent             int
 	minTimeMS                 int
 	activityChecker           indexer.ActivityChecker
+
+	syncStateFile             string
+	defaultIncrementalQuery   string
+	defaultWindowOverlapMS    int64
 
 	mu      sync.Mutex
 	running bool
@@ -56,6 +63,9 @@ type SyncManagerArgs struct {
 	MaxConcurrent      int
 	MinTimeMS          int
 	ActivityChecker    indexer.ActivityChecker
+	SyncStateFile      string
+	IncrementalQuery   string
+	WindowOverlapMS    int64
 }
 
 func NewSyncManager(args SyncManagerArgs) *SyncManager {
@@ -71,6 +81,9 @@ func NewSyncManager(args SyncManagerArgs) *SyncManager {
 		maxConcurrent:             args.MaxConcurrent,
 		minTimeMS:                 args.MinTimeMS,
 		activityChecker:           args.ActivityChecker,
+		syncStateFile:             args.SyncStateFile,
+		defaultIncrementalQuery:   args.IncrementalQuery,
+		defaultWindowOverlapMS:    args.WindowOverlapMS,
 	}
 }
 
@@ -153,6 +166,20 @@ func uniqueSorted(values []int64) []int64 {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
 	return result
+}
+
+func resolveMode(mode models.SyncMode, state *models.SyncState) models.SyncMode {
+	switch mode {
+	case models.SyncModeFull:
+		return models.SyncModeFull
+	case models.SyncModeIncremental:
+		return models.SyncModeIncremental
+	default:
+		if state != nil && state.LastSyncTime > 0 {
+			return models.SyncModeIncremental
+		}
+		return models.SyncModeFull
+	}
 }
 
 func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, request SyncStartRequest) ([]int64, map[int64]int64, map[int64]string, error) {
@@ -437,7 +464,103 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 	return m.progressStore.Save(progress)
 }
 
+func (m *SyncManager) runIncremental(ctx context.Context, api npan.API, progress *models.SyncProgressState, request SyncStartRequest, limiter *indexer.RequestLimiter) error {
+	query := request.IncrementalQuery
+	if query == "" {
+		query = m.defaultIncrementalQuery
+	}
+	if query == "" {
+		query = "*"
+	}
+
+	overlapMS := request.WindowOverlapMS
+	if overlapMS <= 0 {
+		overlapMS = m.defaultWindowOverlapMS
+	}
+
+	if progress.IncrementalStats == nil {
+		progress.IncrementalStats = &models.IncrementalSyncStats{}
+	}
+
+	cursorBefore := progress.IncrementalStats.CursorBefore
+	since := cursorBefore
+	if since > 0 && overlapMS > 0 {
+		overlapSec := overlapMS / 1000
+		if overlapSec > 0 {
+			since -= overlapSec
+			if since < 0 {
+				since = 0
+			}
+		}
+	}
+
+	changes, err := indexer.FetchIncrementalChanges(ctx, indexer.IncrementalFetchOptions{
+		Since: since,
+		Until: 0,
+		Retry: m.retry,
+		Fetch: func(ctx context.Context, start *int64, end *int64, pageID int64) (map[string]any, error) {
+			var result map[string]any
+			schedErr := limiter.Schedule(ctx, func() error {
+				var fetchErr error
+				result, fetchErr = api.SearchUpdatedWindow(ctx, query, start, end, pageID)
+				return fetchErr
+			})
+			return result, schedErr
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	var upserts []models.IndexDocument
+	var deleteIDs []string
+	for _, item := range changes {
+		if item.Deleted {
+			deleteIDs = append(deleteIDs, item.Doc.DocID)
+		} else {
+			upserts = append(upserts, item.Doc)
+		}
+	}
+
+	progress.IncrementalStats.ChangesFetched = int64(len(changes))
+
+	if len(upserts) > 0 {
+		err := indexer.WithRetryVoid(ctx, func() error {
+			return m.index.UpsertDocuments(ctx, upserts)
+		}, m.retry)
+		if err != nil {
+			progress.IncrementalStats.SkippedUpserts += int64(len(upserts))
+		} else {
+			progress.IncrementalStats.Upserted += int64(len(upserts))
+		}
+	}
+
+	if len(deleteIDs) > 0 {
+		err := indexer.WithRetryVoid(ctx, func() error {
+			return m.index.DeleteDocuments(ctx, deleteIDs)
+		}, m.retry)
+		if err != nil {
+			progress.IncrementalStats.SkippedDeletes += int64(len(deleteIDs))
+		} else {
+			progress.IncrementalStats.Deleted += int64(len(deleteIDs))
+		}
+	}
+
+	progress.IncrementalStats.CursorAfter = time.Now().UnixMilli()
+	return nil
+}
+
 func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRequest) error {
+	// Mode resolution
+	syncStateStore := storage.NewJSONSyncStateStore(m.syncStateFile)
+	syncState, _ := syncStateStore.Load()
+	effectiveMode := resolveMode(request.Mode, syncState)
+
+	if effectiveMode == models.SyncModeIncremental {
+		return m.runIncrementalPath(ctx, api, request, syncState, syncStateStore)
+	}
+
+	// Full crawl path
 	roots, rootEstimateMap, rootNameMap, err := m.discoverRootFolders(ctx, api, request)
 	if err != nil {
 		return err
@@ -595,13 +718,82 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	progress.Status = "done"
 	progress.LastError = ""
 	progress.ActiveRoot = nil
+	progress.Mode = string(models.SyncModeFull)
 	updateAggregateFromRoots(progress)
+
+	// Write cursor for future incremental runs
+	if m.syncStateFile != "" {
+		_ = syncStateStore.Save(&models.SyncState{LastSyncTime: time.Now().UnixMilli()})
+	}
 
 	meiliCount, err := m.index.DocumentCount(ctx)
 	if err == nil {
 		progress.Verification = buildVerification(meiliCount, progress.AggregateStats)
 	}
 
+	return m.progressStore.Save(progress)
+}
+
+func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, request SyncStartRequest, syncState *models.SyncState, syncStateStore *storage.JSONSyncStateStore) error {
+	now := time.Now().UnixMilli()
+
+	cursorBefore := int64(0)
+	if syncState != nil && syncState.LastSyncTime > 0 {
+		cursorBefore = syncState.LastSyncTime
+		if cursorBefore >= 1_000_000_000_000 {
+			cursorBefore = cursorBefore / 1000
+		}
+	}
+
+	progress := &models.SyncProgressState{
+		Status:             "running",
+		Mode:               string(models.SyncModeIncremental),
+		StartedAt:          now,
+		UpdatedAt:          now,
+		MeiliHost:          m.meiliHost,
+		MeiliIndex:         m.meiliIndex,
+		Roots:              []int64{},
+		CompletedRoots:     []int64{},
+		RootProgress:       map[string]*models.RootSyncProgress{},
+		AggregateStats:     models.CrawlStats{StartedAt: now, EndedAt: now},
+		IncrementalStats:   &models.IncrementalSyncStats{CursorBefore: cursorBefore},
+	}
+
+	if err := m.progressStore.Save(progress); err != nil {
+		return err
+	}
+
+	limiter := indexer.NewRequestLimiter(m.maxConcurrent, m.minTimeMS)
+	if m.activityChecker != nil {
+		limiter.SetActivityChecker(m.activityChecker)
+	}
+
+	err := m.runIncremental(ctx, api, progress, request, limiter)
+
+	if err != nil {
+		if ctx.Err() != nil {
+			progress.Status = "cancelled"
+			progress.LastError = ctx.Err().Error()
+		} else {
+			progress.Status = "error"
+			progress.LastError = err.Error()
+		}
+	} else {
+		progress.Status = "done"
+
+		if m.syncStateFile != "" && syncStateStore != nil {
+			_ = syncStateStore.Save(&models.SyncState{
+				LastSyncTime: progress.IncrementalStats.CursorAfter,
+			})
+		}
+
+		meiliCount, verErr := m.index.DocumentCount(ctx)
+		if verErr == nil {
+			progress.Verification = buildVerification(meiliCount, progress.AggregateStats)
+		}
+	}
+
+	progress.UpdatedAt = time.Now().UnixMilli()
 	return m.progressStore.Save(progress)
 }
 

@@ -35,6 +35,9 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
             )}
             {config.label}
           </span>
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+            {progress.mode === 'incremental' ? '增量同步' : '全量同步'}
+          </span>
         </div>
         {progress.startedAt > 0 && (
           <ElapsedTime
@@ -72,20 +75,34 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
       )}
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="已索引文件" value={stats.filesIndexed} />
-        <StatCard label="已抓取页" value={stats.pagesFetched} />
-        <StatCard label="已访问文件夹" value={stats.foldersVisited} />
-        {(stats.filesDiscovered ?? 0) > 0 && (
-          <StatCard label="已发现" value={stats.filesDiscovered ?? 0} />
-        )}
-        {(stats.skippedFiles ?? 0) > 0 && (
-          <StatCard label="已跳过" value={stats.skippedFiles ?? 0} skipped />
-        )}
-        {stats.failedRequests > 0 && (
-          <StatCard label="失败请求" value={stats.failedRequests} error />
-        )}
-      </div>
+      {progress.mode === 'incremental' && progress.incrementalStats ? (
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="变更" value={progress.incrementalStats.changesFetched} />
+          <StatCard label="写入" value={progress.incrementalStats.upserted} />
+          <StatCard label="删除" value={progress.incrementalStats.deleted} />
+          {progress.incrementalStats.skippedUpserts > 0 && (
+            <StatCard label="跳过写入" value={progress.incrementalStats.skippedUpserts} skipped />
+          )}
+          {progress.incrementalStats.skippedDeletes > 0 && (
+            <StatCard label="跳过删除" value={progress.incrementalStats.skippedDeletes} skipped />
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="已索引文件" value={stats.filesIndexed} />
+          <StatCard label="已抓取页" value={stats.pagesFetched} />
+          <StatCard label="已访问文件夹" value={stats.foldersVisited} />
+          {(stats.filesDiscovered ?? 0) > 0 && (
+            <StatCard label="已发现" value={stats.filesDiscovered ?? 0} />
+          )}
+          {(stats.skippedFiles ?? 0) > 0 && (
+            <StatCard label="已跳过" value={stats.skippedFiles ?? 0} skipped />
+          )}
+          {stats.failedRequests > 0 && (
+            <StatCard label="失败请求" value={stats.failedRequests} error />
+          )}
+        </div>
+      )}
 
       {/* Verification result */}
       {progress.verification != null && (
