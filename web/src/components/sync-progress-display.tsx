@@ -1,44 +1,75 @@
+import { useState, useEffect } from 'react'
 import type { SyncProgress } from '@/lib/sync-schemas'
 
 interface SyncProgressDisplayProps {
   progress: SyncProgress
 }
 
-const defaultConfig = { label: '空闲', color: 'bg-slate-100 text-slate-600' }
-
-const statusConfig: Record<string, { label: string; color: string }> = {
-  idle: defaultConfig,
-  running: { label: '运行中', color: 'bg-blue-100 text-blue-600' },
-  done: { label: '已完成', color: 'bg-emerald-100 text-emerald-600' },
-  error: { label: '出错', color: 'bg-rose-100 text-rose-600' },
-  cancelled: { label: '已取消', color: 'bg-slate-100 text-slate-500' },
+const statusConfig: Record<string, { label: string; color: string; badgeBg: string }> = {
+  idle: { label: '空闲', color: 'text-slate-600', badgeBg: 'bg-slate-100' },
+  running: { label: '运行中', color: 'text-blue-600', badgeBg: 'bg-blue-100' },
+  done: { label: '已完成', color: 'text-emerald-600', badgeBg: 'bg-emerald-100' },
+  error: { label: '出错', color: 'text-rose-600', badgeBg: 'bg-rose-100' },
+  cancelled: { label: '已取消', color: 'text-slate-500', badgeBg: 'bg-slate-100' },
 }
+
+const defaultConfig = { label: '空闲', color: 'text-slate-600', badgeBg: 'bg-slate-100' } as const
 
 export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
   const config = statusConfig[progress.status] ?? defaultConfig
   const stats = progress.aggregateStats
+  const isRunning = progress.status === 'running'
+
+  const rootsDone = progress.completedRoots.length
+  const rootsTotal = progress.roots.length
+  const rootPercent = rootsTotal > 0 ? Math.round((rootsDone / rootsTotal) * 100) : 0
 
   return (
     <div className="space-y-4">
-      {/* Status badge */}
-      <div className="flex items-center gap-3">
-        <span className={`inline-flex items-center rounded-lg px-3 py-1 text-sm font-medium ${config.color}`}>
-          {config.label}
-        </span>
-      </div>
-
-      {/* Roots progress */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="text-sm font-medium text-slate-700">根目录进度</h3>
-        <p className="mt-1 text-2xl font-semibold text-slate-900">
-          {progress.completedRoots.length} / {progress.roots.length}
-        </p>
-        {progress.activeRoot != null && (
-          <p className="mt-1 text-sm text-slate-500">
-            当前: {progress.activeRoot}
-          </p>
+      {/* Header: status + elapsed time */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-sm font-medium ${config.badgeBg} ${config.color}`}>
+            {isRunning && (
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+            )}
+            {config.label}
+          </span>
+        </div>
+        {progress.startedAt > 0 && (
+          <ElapsedTime
+            startedAt={progress.startedAt}
+            endedAt={stats.endedAt}
+            isRunning={isRunning}
+          />
         )}
       </div>
+
+      {/* Root progress bar */}
+      {rootsTotal > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-slate-700">根目录进度</span>
+            <span className="tabular-nums text-slate-500">
+              {rootsDone} / {rootsTotal}
+              <span className="ml-1 text-slate-400">({rootPercent}%)</span>
+            </span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ease-out ${
+                isRunning ? 'bg-blue-500' : progress.status === 'done' ? 'bg-emerald-500' : 'bg-slate-400'
+              }`}
+              style={{ width: `${rootPercent}%` }}
+            />
+          </div>
+          {progress.activeRoot != null && isRunning && (
+            <p className="mt-2 text-xs text-slate-400">
+              当前根目录: <span className="font-mono">{progress.activeRoot}</span>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3">
@@ -46,15 +77,14 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
         <StatCard label="已抓取页" value={stats.pagesFetched} />
         <StatCard label="已访问文件夹" value={stats.foldersVisited} />
         {stats.failedRequests > 0 && (
-          <StatCard
-            label="失败请求"
-            value={stats.failedRequests}
-            className="text-rose-600"
-          />
+          <StatCard label="失败请求" value={stats.failedRequests} error />
         )}
       </div>
 
-      {/* Error message */}
+      {/* Per-root details (collapsed by default, expandable) */}
+      {rootsTotal > 0 && <RootDetails progress={progress} />}
+
+      {/* Error */}
       {progress.lastError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
           <p className="text-sm text-rose-600">{progress.lastError}</p>
@@ -64,19 +94,107 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
   )
 }
 
+function ElapsedTime({
+  startedAt,
+  endedAt,
+  isRunning,
+}: {
+  startedAt: number
+  endedAt: number
+  isRunning: boolean
+}) {
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    if (!isRunning) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [isRunning])
+
+  const end = isRunning ? now : endedAt > 0 ? endedAt : Date.now()
+  // startedAt might be in seconds or milliseconds
+  const startMs = startedAt < 1e12 ? startedAt * 1000 : startedAt
+  const endMs = end < 1e12 ? end * 1000 : end
+  const elapsed = Math.max(0, Math.floor((endMs - startMs) / 1000))
+
+  const hours = Math.floor(elapsed / 3600)
+  const minutes = Math.floor((elapsed % 3600) / 60)
+  const seconds = elapsed % 60
+
+  const parts: string[] = []
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0 || hours > 0) parts.push(`${minutes}m`)
+  parts.push(`${seconds}s`)
+
+  return (
+    <span className="tabular-nums text-sm text-slate-400">
+      {isRunning ? '已耗时 ' : '用时 '}{parts.join(' ')}
+    </span>
+  )
+}
+
+function RootDetails({ progress }: { progress: SyncProgress }) {
+  const [expanded, setExpanded] = useState(false)
+  const entries = Object.entries(progress.rootProgress)
+  if (entries.length === 0) return null
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between p-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+      >
+        <span>根目录详情 ({entries.length})</span>
+        <span className="text-slate-400">{expanded ? '收起' : '展开'}</span>
+      </button>
+      {expanded && (
+        <div className="border-t border-slate-100 divide-y divide-slate-100">
+          {entries.map(([key, root]) => {
+            const rootStatus = root.status === 'done'
+              ? 'text-emerald-600'
+              : root.status === 'running'
+                ? 'text-blue-600'
+                : root.status === 'error'
+                  ? 'text-rose-600'
+                  : 'text-slate-500'
+
+            return (
+              <div key={key} className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm text-slate-700">{root.rootFolderId}</span>
+                  <span className={`text-xs font-medium ${rootStatus}`}>{root.status}</span>
+                </div>
+                <div className="mt-1 flex gap-4 text-xs text-slate-400">
+                  <span>{root.stats.filesIndexed.toLocaleString()} 文件</span>
+                  <span>{root.stats.foldersVisited.toLocaleString()} 文件夹</span>
+                  <span>{root.stats.pagesFetched.toLocaleString()} 页</span>
+                  {root.stats.failedRequests > 0 && (
+                    <span className="text-rose-400">{root.stats.failedRequests} 失败</span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StatCard({
   label,
   value,
-  className = '',
+  error = false,
 }: {
   label: string
   value: number
-  className?: string
+  error?: boolean
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-semibold text-slate-900 ${className}`}>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${error ? 'text-rose-600' : 'text-slate-900'}`}>
         {value.toLocaleString()}
       </p>
     </div>

@@ -3,11 +3,12 @@ import { apiGet, apiPost, ApiError } from '@/lib/api-client'
 import { SyncProgressSchema } from '@/lib/sync-schemas'
 import type { SyncProgress } from '@/lib/sync-schemas'
 
-const POLL_INTERVAL = 3000
+const POLL_INTERVAL = 2000
 
 export function useSyncProgress(headers: Record<string, string>) {
   const [progress, setProgress] = useState<SyncProgress | null>(null)
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -100,7 +101,9 @@ export function useSyncProgress(headers: Record<string, string>) {
   useEffect(() => {
     if (!hasAuth) return
 
+    setInitialLoading(true)
     void fetchProgress().then((result) => {
+      setInitialLoading(false)
       if (result) {
         startPolling(result.status)
       }
@@ -113,5 +116,5 @@ export function useSyncProgress(headers: Record<string, string>) {
     }
   }, [hasAuth]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { progress, loading, error, startSync, cancelSync, refetch: fetchProgress }
+  return { progress, loading, initialLoading, error, startSync, cancelSync, refetch: fetchProgress }
 }

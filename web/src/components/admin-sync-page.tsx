@@ -102,9 +102,20 @@ export function AdminSyncPage() {
       )}
 
       {/* Progress display */}
-      {sync.progress && <SyncProgressDisplay progress={sync.progress} />}
+      {sync.initialLoading && (
+        <div className="space-y-4">
+          <div className="h-8 w-24 animate-pulse rounded-lg bg-slate-200" />
+          <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
+            <div className="h-20 animate-pulse rounded-xl bg-slate-100" />
+          </div>
+        </div>
+      )}
 
-      {!sync.progress && !sync.loading && !sync.error && (
+      {!sync.initialLoading && sync.progress && <SyncProgressDisplay progress={sync.progress} />}
+
+      {!sync.initialLoading && !sync.progress && !sync.loading && !sync.error && (
         <div className="py-12 text-center">
           <p className="text-sm text-slate-400">暂无同步记录</p>
         </div>
