@@ -94,8 +94,11 @@ export function useSyncProgress(headers: Record<string, string>) {
     }
   }, [headers, fetchProgress])
 
-  // Initial fetch
+  // Initial fetch — skip when no auth headers yet.
+  const hasAuth = 'X-API-Key' in headers
   useEffect(() => {
+    if (!hasAuth) return
+
     void fetchProgress().then((result) => {
       if (result) {
         startPolling(result.status)
@@ -107,7 +110,7 @@ export function useSyncProgress(headers: Record<string, string>) {
         clearInterval(intervalRef.current)
       }
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasAuth]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { progress, loading, error, startSync, cancelSync, refetch: fetchProgress }
 }
