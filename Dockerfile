@@ -3,7 +3,7 @@ WORKDIR /web
 COPY web/package.json web/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY web/ .
-RUN bun run build
+RUN bun run --bun vite build
 
 FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache ca-certificates tzdata
