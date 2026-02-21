@@ -41,7 +41,7 @@ go run ./cmd/cli --help
 http://127.0.0.1:1323/demo
 ```
 
-说明：Demo 的“生成下载链接”会调用 `/api/v1/download-url`，需要有效 NPAN token（可用 `go run ./cmd/cli token` 获取）。
+说明：Demo 会调用 `/api/v1/demo/search` 与 `/api/v1/demo/download-url`，终端用户页面不需要填写 token 或 API key；所需凭据由后端服务端配置处理。页面为 sticky 搜索栏 + 输入即搜 + 无限滚动懒加载。
 
 ## 常用命令
 
@@ -84,6 +84,8 @@ go run ./cmd/cli sync-incremental --incremental-query-words "* OR *" --window-ov
 - `GET /api/v1/npan/search`
 - `GET /api/v1/search/local`
 - `GET /api/v1/download-url`
+- `GET /api/v1/demo/search`
+- `GET /api/v1/demo/download-url`
 - `POST /api/v1/sync/full/start`
 - `GET /api/v1/sync/full/progress`
 - `POST /api/v1/sync/full/cancel`

@@ -61,6 +61,8 @@ func NewServer(handlers *Handlers) *echo.Echo {
 	api.GET("/npan/search", handlers.RemoteSearch)
 	api.GET("/download-url", handlers.DownloadURL)
 	api.GET("/search/local", handlers.LocalSearch)
+	api.GET("/demo/search", handlers.DemoSearch)
+	api.GET("/demo/download-url", handlers.DemoDownloadURL)
 	api.POST("/sync/full/start", handlers.StartFullSync)
 	api.GET("/sync/full/progress", handlers.GetFullSyncProgress)
 	api.POST("/sync/full/cancel", handlers.CancelFullSync)

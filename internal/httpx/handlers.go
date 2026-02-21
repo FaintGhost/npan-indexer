@@ -360,6 +360,81 @@ func (h *Handlers) LocalSearch(c *echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
+func (h *Handlers) DemoSearch(c *echo.Context) error {
+	query := strings.TrimSpace(c.QueryParam("query"))
+	if query == "" {
+		query = strings.TrimSpace(c.QueryParam("q"))
+	}
+	if query == "" {
+		return writeError(c, http.StatusBadRequest, "缺少 query 参数")
+	}
+
+	page := int64(1)
+	if raw := strings.TrimSpace(c.QueryParam("page")); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed <= 0 {
+			return writeError(c, http.StatusBadRequest, "page 必须是正整数")
+		}
+		page = parsed
+	}
+
+	pageSize := int64(30)
+	if raw := strings.TrimSpace(c.QueryParam("page_size")); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || parsed <= 0 {
+			return writeError(c, http.StatusBadRequest, "page_size 必须是正整数")
+		}
+		pageSize = parsed
+	}
+
+	result, err := h.queryService.Query(models.LocalSearchParams{
+		Query:          query,
+		Type:           string(models.ItemTypeFile),
+		Page:           page,
+		PageSize:       pageSize,
+		IncludeDeleted: false,
+	})
+	if err != nil {
+		return writeError(c, http.StatusBadRequest, err.Error())
+	}
+
+	return c.JSON(http.StatusOK, result)
+}
+
+func (h *Handlers) DemoDownloadURL(c *echo.Context) error {
+	fileIDRaw := strings.TrimSpace(c.QueryParam("file_id"))
+	if fileIDRaw == "" {
+		return writeError(c, http.StatusBadRequest, "缺少 file_id 参数")
+	}
+
+	fileID, err := strconv.ParseInt(fileIDRaw, 10, 64)
+	if err != nil || fileID <= 0 {
+		return writeError(c, http.StatusBadRequest, "file_id 必须是正整数")
+	}
+
+	validPeriod, err := parseInt64Pointer(c.QueryParam("valid_period"))
+	if err != nil {
+		return writeError(c, http.StatusBadRequest, "valid_period 必须是整数")
+	}
+
+	token, authOptions, err := h.resolveToken(c, authPayload{}, true)
+	if err != nil {
+		return writeError(c, http.StatusServiceUnavailable, "下载服务暂不可用，请联系管理员检查服务端凭据")
+	}
+
+	api := h.newAPIClient(token, authOptions)
+	downloadService := service.NewDownloadURLService(api)
+	downloadURL, err := downloadService.GetDownloadURL(c.Request().Context(), fileID, validPeriod)
+	if err != nil {
+		return writeError(c, http.StatusBadGateway, "生成下载链接失败，请稍后重试")
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"file_id":      fileID,
+		"download_url": downloadURL,
+	})
+}
+
 type syncStartPayload struct {
 	authPayload
 	RootFolderIDs      []int64 `json:"root_folder_ids"`

@@ -24,6 +24,12 @@ func TestNewServer_RegistersDemoRoutes(t *testing.T) {
 	if !seen["GET /demo/"] {
 		t.Fatal("expected GET /demo/ route to be registered")
 	}
+	if !seen["GET /api/v1/demo/search"] {
+		t.Fatal("expected GET /api/v1/demo/search route to be registered")
+	}
+	if !seen["GET /api/v1/demo/download-url"] {
+		t.Fatal("expected GET /api/v1/demo/download-url route to be registered")
+	}
 }
 
 func TestDemoPage_ReturnsHTML(t *testing.T) {
@@ -49,5 +55,11 @@ func TestDemoPage_ReturnsHTML(t *testing.T) {
 	}
 	if !strings.Contains(body, "Npan Search Demo") {
 		t.Fatalf("expected demo page title marker, got: %q", body)
+	}
+	if strings.Contains(body, "X-API-Key") {
+		t.Fatalf("expected no API key input on demo page, got: %q", body)
+	}
+	if strings.Contains(body, "Bearer Token") {
+		t.Fatalf("expected no bearer token input on demo page, got: %q", body)
 	}
 }

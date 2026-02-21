@@ -4,267 +4,283 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Npan Search Demo</title>
+    <meta name="description" content="Npan 文件搜索与直接下载 Demo" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+XiaoWei&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
       :root {
-        color-scheme: light;
-        --bg: #f7f8fc;
-        --panel: #ffffff;
-        --line: #dde3ef;
-        --text: #182034;
-        --muted: #5f6f8b;
-        --primary: #0f6fff;
-        --danger: #b42318;
+        --paper: #f3f6fd;
+        --paper-dark: #e9eefb;
       }
-      * {
-        box-sizing: border-box;
-      }
+
       body {
-        margin: 0;
-        font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-        color: var(--text);
-        background: var(--bg);
+        font-family: "Noto Sans SC", sans-serif;
+        background:
+          radial-gradient(
+            1200px 560px at 50% -260px,
+            #dae6ff 0%,
+            transparent 72%
+          ),
+          linear-gradient(180deg, #f9fbff 0%, #f3f6fd 100%);
+        background-attachment: fixed;
       }
-      .wrap {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 20px;
+
+      .font-display {
+        font-family: "ZCOOL XiaoWei", serif;
       }
-      .panel {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 14px;
+
+      /* ================= 动画优化核心区 ================= */
+
+      /* 为重要元素分配独立的 View Transition 图层 */
+      .search-stage {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        width: 100%;
+        /* 只保留颜色相关的常规过渡，防止和布局过渡打架 */
+        transition:
+          background-color 400ms ease,
+          border-color 400ms ease;
+        view-transition-name: search-stage;
       }
-      .title {
-        margin: 0 0 8px;
-        font-size: 22px;
+
+      .search-card {
+        transition: box-shadow 400ms ease;
+        view-transition-name: search-card;
       }
-      .desc {
-        margin: 0;
-        color: var(--muted);
-        font-size: 14px;
+
+      .results-wrap {
+        position: relative;
+        z-index: 10;
+        view-transition-name: results-wrap;
       }
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr 120px auto;
-        gap: 10px;
+
+      /* 重写 View Transition 的默认行为，减缓速度，增加丝滑的阻尼感 */
+      ::view-transition-group(search-stage),
+      ::view-transition-group(search-card),
+      ::view-transition-group(results-wrap) {
+        animation-duration: 650ms;
+        animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
       }
-      .row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 10px;
+
+      /* ============================================== */
+
+      /* 锁死默认状态的滚动 */
+      body.mode-hero {
+        overflow: hidden;
       }
-      label {
-        display: block;
-        font-size: 13px;
-        margin-bottom: 6px;
-        color: var(--muted);
-      }
-      input,
-      textarea,
-      button,
-      select {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 9px 10px;
-        font-size: 14px;
-      }
-      button {
-        cursor: pointer;
-        background: #fff;
-      }
-      button.primary {
-        background: var(--primary);
-        color: #fff;
-        border-color: var(--primary);
-      }
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .toolbar {
+
+      /* 默认状态：全屏居中 */
+      body.mode-hero .search-stage {
+        height: 100vh;
+        height: 100dvh;
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border-bottom: 1px solid transparent;
       }
-      .status {
-        font-size: 13px;
-        color: var(--muted);
-        min-height: 20px;
+
+      body.mode-hero .search-card {
+        transform: scale(1.02);
+        box-shadow: 0 24px 60px rgba(23, 48, 105, 0.14);
       }
-      .status.error {
-        color: var(--danger);
+
+      /* 默认状态下，结果列表在屏幕下方待命，保持实际宽度，防止从角落闪现 */
+      body.mode-hero .results-wrap {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(60px);
       }
-      table {
-        width: 100%;
-        border-collapse: collapse;
+
+      /* 搜索状态：吸顶 + 毛玻璃遮挡 */
+      body.mode-docked .search-stage {
+        height: auto;
+        padding-top: 16px;
+        padding-bottom: 16px;
+        background: rgba(243, 246, 253, 0.85);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgba(218, 230, 255, 0.6);
+        box-shadow: 0 4px 24px -8px rgba(23, 48, 105, 0.08);
       }
-      th,
-      td {
-        border-bottom: 1px solid var(--line);
-        text-align: left;
-        padding: 10px 8px;
-        vertical-align: top;
-        font-size: 13px;
+
+      body.mode-docked .search-card {
+        transform: scale(1);
+        box-shadow: 0 4px 16px rgba(23, 48, 105, 0.04);
       }
-      th {
-        color: var(--muted);
-        font-weight: 600;
+
+      body.mode-docked .results-wrap {
+        opacity: 1;
+        transform: translateY(0);
       }
-      .mono {
-        font-family: "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+
+      /* 滚动条与其他细节样式 */
+      .thin-scrollbar {
+        scrollbar-width: thin;
       }
-      .muted {
-        color: var(--muted);
+
+      .thin-scrollbar::-webkit-scrollbar {
+        width: 8px;
       }
-      .links {
-        width: 100%;
-        min-height: 120px;
+
+      .thin-scrollbar::-webkit-scrollbar-thumb {
+        background: #ced7ea;
+        border-radius: 9999px;
       }
-      @media (max-width: 860px) {
-        .grid,
-        .row {
-          grid-template-columns: 1fr;
-        }
+
+      ::view-transition-old(results-list),
+      ::view-transition-new(results-list) {
+        animation-duration: 300ms;
+        animation-timing-function: ease;
+      }
+
+      ::view-transition-old(result-card),
+      ::view-transition-new(result-card) {
+        animation-duration: 300ms;
+        animation-timing-function: ease;
       }
     </style>
   </head>
-  <body>
-    <div class="wrap">
-      <div class="panel">
-        <h1 class="title">Npan Search Demo</h1>
-        <p class="desc">最小纯 HTML 测试页：搜索本地索引，选择文件后生成可复制下载链接。</p>
-      </div>
+  <body class="mode-hero text-slate-800 antialiased">
+    <header class="search-stage">
+      <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 w-full">
+        <div
+          class="search-card w-full rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-6"
+        >
+          <div
+            class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+          >
+            <div>
+              <h1
+                class="font-display text-4xl leading-tight tracking-wide text-slate-900"
+              >
+                Npan Search
+              </h1>
+              <p class="mt-1 text-sm text-slate-500">
+                像搜索引擎一样查找文件，命中后直接下载。
+              </p>
+            </div>
+            <div
+              class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+            >
+              Tailwind v4 + View Transition
+            </div>
+          </div>
 
-      <div class="panel">
-        <div class="grid">
-          <div>
-            <label for="baseUrl">API Base URL</label>
-            <input id="baseUrl" placeholder="http://127.0.0.1:1323" />
+          <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+            <input
+              id="queryInput"
+              type="text"
+              autocomplete="off"
+              placeholder="输入文件名关键词，例如：MX40、固件、安装包"
+              class="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[15px] text-slate-800 outline-none ring-blue-100 transition focus:border-blue-300 focus:ring-4"
+            />
+            <button
+              id="searchBtn"
+              type="button"
+              class="h-12 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-md shadow-blue-200 transition hover:bg-blue-500 active:scale-[0.99]"
+            >
+              搜索
+            </button>
           </div>
-          <div>
-            <label for="apiKey">X-API-Key（可选）</label>
-            <input id="apiKey" placeholder="若服务启用 NPA_ADMIN_API_KEY 则必填" />
-          </div>
-          <div>
-            <label for="pageSize">每页条数</label>
-            <select id="pageSize">
-              <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-          </div>
-          <div style="display:flex; align-items:flex-end; gap:8px;">
-            <button id="searchBtn" class="primary">搜索</button>
-          </div>
-        </div>
-        <div style="margin-top:10px;">
-          <label for="bearerToken">Bearer Token（生成下载链接必需，除非服务端允许配置回退）</label>
-          <input id="bearerToken" placeholder="可通过 go run ./cmd/cli token 获取 access_token" />
-        </div>
-        <div style="margin-top:10px;">
-          <label for="query">搜索关键词</label>
-          <input id="query" placeholder="输入文件名关键词" />
-        </div>
-        <p id="status" class="status"></p>
-      </div>
 
-      <div class="panel">
-        <div class="toolbar" style="margin-bottom:8px;">
-          <button id="selectAllBtn">勾选全部文件</button>
-          <button id="clearSelBtn">清空选择</button>
-          <button id="genLinksBtn" class="primary">为已选文件生成链接</button>
-          <button id="copyLinksBtn">复制链接</button>
-        </div>
-        <div style="overflow:auto;">
-          <table>
-            <thead>
-              <tr>
-                <th style="width:40px;">选</th>
-                <th style="width:120px;">类型</th>
-                <th>名称</th>
-                <th style="width:130px;">source_id</th>
-                <th style="width:180px;">操作</th>
-              </tr>
-            </thead>
-            <tbody id="resultBody">
-              <tr><td colspan="5" class="muted">暂无数据，请先搜索。</td></tr>
-            </tbody>
-          </table>
+          <p id="status" class="mt-3 min-h-5 text-xs text-slate-500">
+            请输入关键词开始搜索
+          </p>
         </div>
       </div>
+    </header>
 
-      <div class="panel">
-        <label for="linksOutput">下载链接输出</label>
-        <textarea id="linksOutput" class="links" placeholder="生成后会在这里显示，每行一个链接"></textarea>
-      </div>
-    </div>
+    <main class="mx-auto max-w-3xl px-4 pb-16 sm:px-6 lg:px-8">
+      <section id="resultsWrap" class="results-wrap mt-2">
+        <div class="mb-3 flex items-center justify-between">
+          <p class="text-sm text-slate-500">结果列表</p>
+          <p id="counter" class="text-sm font-medium text-slate-600">0 / 0</p>
+        </div>
+
+        <div
+          id="list"
+          class="thin-scrollbar space-y-3"
+          style="view-transition-name: results-list"
+          aria-live="polite"
+        ></div>
+        <div id="sentinel" class="h-2"></div>
+      </section>
+    </main>
 
     <script>
       const state = {
+        query: "",
         items: [],
-        linksByFileId: new Map(),
-        selected: new Set()
+        page: 1,
+        pageSize: 24,
+        total: 0,
+        loading: false,
+        hasMore: false,
+        requestSeq: 0,
+        debounceTimer: null,
+        linkCache: new Map(),
+        docked: false,
       };
 
       const el = {
-        baseUrl: document.getElementById("baseUrl"),
-        apiKey: document.getElementById("apiKey"),
-        bearerToken: document.getElementById("bearerToken"),
-        pageSize: document.getElementById("pageSize"),
-        query: document.getElementById("query"),
+        queryInput: document.getElementById("queryInput"),
         searchBtn: document.getElementById("searchBtn"),
-        selectAllBtn: document.getElementById("selectAllBtn"),
-        clearSelBtn: document.getElementById("clearSelBtn"),
-        genLinksBtn: document.getElementById("genLinksBtn"),
-        copyLinksBtn: document.getElementById("copyLinksBtn"),
-        resultBody: document.getElementById("resultBody"),
-        linksOutput: document.getElementById("linksOutput"),
-        status: document.getElementById("status")
+        status: document.getElementById("status"),
+        counter: document.getElementById("counter"),
+        list: document.getElementById("list"),
+        sentinel: document.getElementById("sentinel"),
+        resultsWrap: document.getElementById("resultsWrap"),
       };
-
-      el.baseUrl.value = window.location.origin;
 
       function setStatus(text, isError) {
         el.status.textContent = text || "";
-        el.status.classList.toggle("error", !!isError);
+        el.status.className =
+          "mt-3 min-h-5 text-xs " +
+          (isError ? "text-rose-600" : "text-slate-500");
       }
 
-      function getHeaders() {
-        const headers = {};
-        const apiKey = el.apiKey.value.trim();
-        const bearerToken = el.bearerToken.value.trim();
-        if (apiKey) {
-          headers["X-API-Key"] = apiKey;
+      function runViewTransition(update) {
+        if (!document.startViewTransition) {
+          update();
+          return Promise.resolve();
         }
-        if (bearerToken) {
-          headers["Authorization"] = "Bearer " + bearerToken;
-        }
-        return headers;
+        const tx = document.startViewTransition(update);
+        return tx.finished.catch(() => undefined);
       }
 
-      async function requestJSON(path, params) {
-        const base = el.baseUrl.value.trim().replace(/\/$/, "");
-        const url = new URL(base + path);
-        if (params) {
-          Object.keys(params).forEach((key) => {
-            const value = params[key];
-            if (value !== undefined && value !== null && value !== "") {
-              url.searchParams.set(key, String(value));
-            }
-          });
+      async function applyMode(docked) {
+        if (state.docked === docked) {
+          return;
         }
-
-        const resp = await fetch(url.toString(), {
-          method: "GET",
-          headers: getHeaders()
+        state.docked = docked;
+        await runViewTransition(() => {
+          document.body.classList.toggle("mode-docked", docked);
+          document.body.classList.toggle("mode-hero", !docked);
         });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) {
-          throw new Error(data.error || "请求失败: HTTP " + resp.status);
-        }
-        return data;
+      }
+
+      function requestJSON(path, params) {
+        const url = new URL(path, window.location.origin);
+        Object.keys(params || {}).forEach((key) => {
+          const val = params[key];
+          if (val !== undefined && val !== null && val !== "") {
+            url.searchParams.set(key, String(val));
+          }
+        });
+        return fetch(url.toString(), { method: "GET" }).then(async (resp) => {
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            throw new Error(data.error || "请求失败: HTTP " + resp.status);
+          }
+          return data;
+        });
       }
 
       function escapeHTML(value) {
@@ -272,188 +288,241 @@
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;")
-          .replaceAll("\"", "&quot;")
+          .replaceAll('"', "&quot;")
           .replaceAll("'", "&#39;");
       }
 
-      function getSelectedFileIds() {
-        return Array.from(state.selected).filter((id) => {
-          return state.items.some((item) => item.type === "file" && item.source_id === id);
-        });
+      function formatTime(ts) {
+        const raw = Number(ts || 0);
+        if (!raw) {
+          return "-";
+        }
+        const millis = raw > 1_000_000_000_000 ? raw : raw * 1000;
+        const d = new Date(millis);
+        if (Number.isNaN(d.getTime())) {
+          return "-";
+        }
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        return y + "-" + m + "-" + day + " " + hh + ":" + mm;
       }
 
-      function renderRows() {
-        if (!state.items.length) {
-          el.resultBody.innerHTML = '<tr><td colspan="5" class="muted">无结果。</td></tr>';
-          return;
+      function formatBytes(size) {
+        const value = Number(size || 0);
+        if (!value) {
+          return "-";
         }
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let idx = 0;
+        let num = value;
+        while (num >= 1024 && idx < units.length - 1) {
+          num /= 1024;
+          idx += 1;
+        }
+        return num.toFixed(num >= 10 || idx === 0 ? 0 : 1) + " " + units[idx];
+      }
 
-        const rows = state.items.map((item) => {
-          const isFile = item.type === "file";
-          const checked = isFile && state.selected.has(item.source_id) ? "checked" : "";
-          const safeName = escapeHTML(item.name || "");
-          const safeType = escapeHTML(item.type || "");
-          const sourceID = Number(item.source_id || 0);
-          const link = state.linksByFileId.get(sourceID) || "";
-          const actionButtons = isFile
-            ? '<button data-action="single-link" data-id="' + sourceID + '">生成链接</button>' +
-              (link ? ' <a href="' + escapeHTML(link) + '" target="_blank" rel="noreferrer">直接下载</a>' : "")
-            : '<span class="muted">文件夹不可下载</span>';
+      function cardHTML(item) {
+        const id = Number(item.source_id || 0);
+        const name = String(item.name || "");
+        const pathText = String(item.path_text || "-");
+        const modifiedAt = formatTime(item.modified_at);
+        const size = formatBytes(item.size);
 
-          return (
-            "<tr>" +
-            '<td><input type="checkbox" data-action="toggle" data-id="' + sourceID + '" ' + checked + " " + (isFile ? "" : "disabled") + " /></td>" +
-            "<td>" + safeType + "</td>" +
-            "<td>" + safeName + "</td>" +
-            '<td class="mono">' + sourceID + "</td>" +
-            "<td>" + actionButtons + "</td>" +
-            "</tr>"
+        return (
+          '<article class="group rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:px-5" style="view-transition-name: result-card;">' +
+          '<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">' +
+          '<div class="min-w-0">' +
+          '<h3 class="truncate text-[15px] font-semibold text-slate-900">' +
+          escapeHTML(name) +
+          "</h3>" +
+          '<p class="mt-1 truncate text-xs text-slate-500">' +
+          escapeHTML(pathText) +
+          "</p>" +
+          '<p class="mt-2 text-xs text-slate-400">ID: ' +
+          id +
+          " · 大小: " +
+          size +
+          " · 更新时间: " +
+          modifiedAt +
+          "</p>" +
+          "</div>" +
+          '<button data-action="download" data-id="' +
+          id +
+          '" class="h-10 shrink-0 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">下载</button>' +
+          "</div>" +
+          "</article>"
+        );
+      }
+
+      function renderSkeleton(count) {
+        const blocks = [];
+        for (let i = 0; i < count; i += 1) {
+          blocks.push(
+            '<div class="animate-pulse rounded-2xl border border-slate-200 bg-white px-4 py-4 sm:px-5">' +
+              '<div class="h-4 w-2/3 rounded bg-slate-200"></div>' +
+              '<div class="mt-2 h-3 w-5/6 rounded bg-slate-100"></div>' +
+              '<div class="mt-3 h-3 w-1/2 rounded bg-slate-100"></div>' +
+              "</div>",
           );
-        });
-
-        el.resultBody.innerHTML = rows.join("");
+        }
+        return blocks.join("");
       }
 
-      function syncOutput() {
-        const links = getSelectedFileIds()
-          .map((id) => state.linksByFileId.get(id))
-          .filter(Boolean);
-        el.linksOutput.value = links.join("\n");
-      }
-
-      async function search() {
-        const query = el.query.value.trim();
-        if (!query) {
-          setStatus("请输入关键词", true);
+      function renderList() {
+        el.counter.textContent = state.items.length + " / " + state.total;
+        if (!state.items.length) {
+          el.list.innerHTML =
+            '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">没有匹配结果，试试更短或更常见的关键词。</div>';
           return;
         }
-        setStatus("搜索中...");
+        el.list.innerHTML = state.items.map(cardHTML).join("");
+      }
+
+      function resetSearch(query) {
+        state.requestSeq += 1;
+        state.query = query;
+        state.items = [];
+        state.page = 1;
+        state.total = 0;
+        state.hasMore = false;
+        state.linkCache.clear();
+      }
+
+      async function fetchPage(page, replaceMode) {
+        if (state.loading || !state.query) {
+          return;
+        }
+        if (!replaceMode && !state.hasMore) {
+          return;
+        }
+
+        const seq = state.requestSeq;
+        state.loading = true;
+        setStatus(replaceMode ? "搜索中..." : "正在加载更多...");
+        if (replaceMode) {
+          await runViewTransition(() => {
+            el.list.innerHTML = renderSkeleton(5);
+            el.counter.textContent = "0 / 0";
+          });
+        }
 
         try {
-          const data = await requestJSON("/api/v1/search/local", {
-            query,
-            page: 1,
-            page_size: Number(el.pageSize.value) || 20,
-            type: "all",
-            include_deleted: false
+          const data = await requestJSON("/api/v1/demo/search", {
+            query: state.query,
+            page,
+            page_size: state.pageSize,
           });
-          state.items = Array.isArray(data.items) ? data.items : [];
-          state.selected.clear();
-          state.linksByFileId.clear();
-          renderRows();
-          syncOutput();
-          setStatus("搜索完成，共 " + (data.total || state.items.length) + " 条");
+
+          if (seq !== state.requestSeq) {
+            return;
+          }
+
+          const incoming = Array.isArray(data.items) ? data.items : [];
+          state.total = Number(data.total || 0);
+          state.page = page;
+
+          if (replaceMode) {
+            state.items = incoming;
+          } else {
+            const seen = new Set(state.items.map((x) => Number(x.source_id)));
+            for (const item of incoming) {
+              const id = Number(item.source_id || 0);
+              if (!seen.has(id)) {
+                seen.add(id);
+                state.items.push(item);
+              }
+            }
+          }
+
+          state.hasMore =
+            state.items.length < state.total && incoming.length > 0;
+          await applyMode(state.items.length > 0);
+          await runViewTransition(() => {
+            renderList();
+          });
+          setStatus(
+            "已加载 " + state.items.length + " / " + state.total + " 个文件",
+          );
         } catch (error) {
           setStatus(error.message || String(error), true);
-        }
-      }
-
-      async function generateLink(fileID) {
-        const data = await requestJSON("/api/v1/download-url", { file_id: fileID });
-        state.linksByFileId.set(fileID, data.download_url || "");
-      }
-
-      async function generateLinksForSelection() {
-        const ids = getSelectedFileIds();
-        if (!ids.length) {
-          setStatus("请先勾选至少一个文件", true);
-          return;
-        }
-
-        setStatus("生成链接中...（" + ids.length + "）");
-        let ok = 0;
-        let failed = 0;
-        for (const id of ids) {
-          try {
-            await generateLink(id);
-            ok += 1;
-          } catch (error) {
-            failed += 1;
+          if (!state.items.length) {
+            await applyMode(false);
+            await runViewTransition(() => {
+              renderList();
+            });
           }
-        }
-        renderRows();
-        syncOutput();
-        if (failed > 0 && !el.bearerToken.value.trim()) {
-          setStatus("生成完成：成功 " + ok + "，失败 " + failed + "。请填写 Bearer Token 后重试。", true);
-          return;
-        }
-        setStatus("生成完成：成功 " + ok + "，失败 " + failed + (failed ? "（可重试）" : ""));
-      }
-
-      async function copyLinks() {
-        const text = el.linksOutput.value.trim();
-        if (!text) {
-          setStatus("没有可复制的链接", true);
-          return;
-        }
-
-        try {
-          await navigator.clipboard.writeText(text);
-          setStatus("已复制到剪贴板");
-        } catch (error) {
-          el.linksOutput.focus();
-          el.linksOutput.select();
-          setStatus("浏览器限制复制，请手动 Ctrl/Cmd + C", true);
+        } finally {
+          state.loading = false;
         }
       }
 
-      el.searchBtn.addEventListener("click", search);
-      el.query.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          search();
+      async function triggerSearch() {
+        const query = el.queryInput.value.trim();
+        if (!query) {
+          resetSearch("");
+          await applyMode(false);
+          await runViewTransition(() => {
+            el.list.innerHTML =
+              '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">请输入关键词开始搜索。</div>';
+            el.counter.textContent = "0 / 0";
+          });
+          setStatus("请输入关键词开始搜索");
+          return;
         }
-      });
 
-      el.selectAllBtn.addEventListener("click", () => {
-        state.items.forEach((item) => {
-          if (item.type === "file") {
-            state.selected.add(item.source_id);
-          }
+        resetSearch(query);
+        await fetchPage(1, true);
+      }
+
+      async function getDownloadURL(fileID) {
+        if (state.linkCache.has(fileID)) {
+          return state.linkCache.get(fileID);
+        }
+        const data = await requestJSON("/api/v1/demo/download-url", {
+          file_id: fileID,
         });
-        renderRows();
-        syncOutput();
+        const url = String(data.download_url || "");
+        if (!url) {
+          throw new Error("下载链接为空");
+        }
+        state.linkCache.set(fileID, url);
+        return url;
+      }
+
+      el.searchBtn.addEventListener("click", () => {
+        triggerSearch();
       });
 
-      el.clearSelBtn.addEventListener("click", () => {
-        state.selected.clear();
-        syncOutput();
-        renderRows();
+      el.queryInput.addEventListener("input", () => {
+        if (state.debounceTimer) {
+          window.clearTimeout(state.debounceTimer);
+        }
+        state.debounceTimer = window.setTimeout(() => {
+          triggerSearch();
+        }, 280);
       });
 
-      el.genLinksBtn.addEventListener("click", generateLinksForSelection);
-      el.copyLinksBtn.addEventListener("click", copyLinks);
+      el.queryInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+        event.preventDefault();
+        if (state.debounceTimer) {
+          window.clearTimeout(state.debounceTimer);
+        }
+        triggerSearch();
+      });
 
-      el.resultBody.addEventListener("click", async (event) => {
+      el.list.addEventListener("click", async (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) {
           return;
         }
-        const action = target.getAttribute("data-action");
-        const id = Number(target.getAttribute("data-id") || 0);
-        if (!action || !id) {
-          return;
-        }
-
-        if (action === "single-link") {
-          try {
-            setStatus("生成链接中...");
-            await generateLink(id);
-            renderRows();
-            syncOutput();
-            setStatus("已生成文件 " + id + " 的下载链接");
-          } catch (error) {
-            setStatus(error.message || String(error), true);
-          }
-          return;
-        }
-      });
-
-      el.resultBody.addEventListener("change", (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLInputElement)) {
-          return;
-        }
-        if (target.getAttribute("data-action") !== "toggle") {
+        if (target.getAttribute("data-action") !== "download") {
           return;
         }
 
@@ -462,13 +531,37 @@
           return;
         }
 
-        if (target.checked) {
-          state.selected.add(id);
-        } else {
-          state.selected.delete(id);
+        try {
+          target.setAttribute("disabled", "disabled");
+          setStatus("正在生成下载链接...");
+          const url = await getDownloadURL(id);
+          window.open(url, "_blank", "noopener,noreferrer");
+          setStatus("已打开下载链接");
+        } catch (error) {
+          setStatus(error.message || String(error), true);
+        } finally {
+          target.removeAttribute("disabled");
         }
-        syncOutput();
       });
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) {
+              continue;
+            }
+            if (!state.query || state.loading || !state.hasMore) {
+              continue;
+            }
+            fetchPage(state.page + 1, false);
+          }
+        },
+        { root: null, rootMargin: "180px 0px", threshold: 0.01 },
+      );
+      observer.observe(el.sentinel);
+
+      el.list.innerHTML =
+        '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">请输入关键词开始搜索。</div>';
     </script>
   </body>
 </html>
