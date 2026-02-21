@@ -26,6 +26,7 @@ export const SyncProgressSchema = z.object({
   startedAt: z.number(),
   updatedAt: z.number(),
   roots: z.array(z.number()),
+  rootNames: z.record(z.string(), z.string()).optional().default({}),
   completedRoots: z.array(z.number()),
   activeRoot: z.number().nullable().optional(),
   aggregateStats: CrawlStatsSchema,

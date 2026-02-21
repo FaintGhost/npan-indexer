@@ -13,6 +13,7 @@ func TestCreateInitialProgress_IncludesEstimatedTotalDocs(t *testing.T) {
 		Roots              []int64
 		RootCheckpointMap  map[int64]string
 		RootEstimateMap    map[int64]int64
+		RootNameMap        map[int64]string
 		StartedAt          int64
 		MeiliHost          string
 		MeiliIndex         string
@@ -61,6 +62,7 @@ func TestRestoreProgress_RefreshesEstimatedTotalDocs(t *testing.T) {
 		[]int64{1001},
 		map[int64]string{1001: "/tmp/1001.json"},
 		map[int64]int64{1001: 333},
+		nil,
 	)
 
 	rp := restored.RootProgress["1001"]

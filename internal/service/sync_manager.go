@@ -155,9 +155,10 @@ func uniqueSorted(values []int64) []int64 {
 	return result
 }
 
-func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, request SyncStartRequest) ([]int64, map[int64]int64, error) {
+func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, request SyncStartRequest) ([]int64, map[int64]int64, map[int64]string, error) {
 	roots := append([]int64{}, request.RootFolderIDs...)
 	rootEstimateMap := map[int64]int64{}
+	rootNameMap := map[int64]string{}
 
 	includeDepartments := request.IncludeDepartments == nil || *request.IncludeDepartments
 	if includeDepartments {
@@ -165,7 +166,7 @@ func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, req
 		if len(departmentIDs) == 0 {
 			deps, err := api.ListUserDepartments(ctx)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			for _, dep := range deps {
 				departmentIDs = append(departmentIDs, dep.ID)
@@ -175,10 +176,13 @@ func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, req
 		for _, departmentID := range departmentIDs {
 			folders, err := api.ListDepartmentFolders(ctx, departmentID)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			for _, folder := range folders {
 				roots = append(roots, folder.ID)
+				if folder.Name != "" {
+					rootNameMap[folder.ID] = folder.Name
+				}
 				estimate := folder.ItemCount + 1
 				if estimate <= 0 {
 					continue
@@ -190,13 +194,14 @@ func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, req
 		}
 	}
 
-	return uniqueSorted(roots), rootEstimateMap, nil
+	return uniqueSorted(roots), rootEstimateMap, rootNameMap, nil
 }
 
 func createInitialProgress(args struct {
 	Roots              []int64
 	RootCheckpointMap  map[int64]string
 	RootEstimateMap    map[int64]int64
+	RootNameMap        map[int64]string
 	StartedAt          int64
 	MeiliHost          string
 	MeiliIndex         string
@@ -228,6 +233,7 @@ func createInitialProgress(args struct {
 		MeiliIndex:         args.MeiliIndex,
 		CheckpointTemplate: args.CheckpointTemplate,
 		Roots:              append([]int64{}, args.Roots...),
+		RootNames:          args.RootNameMap,
 		CompletedRoots:     []int64{},
 		AggregateStats: models.CrawlStats{
 			StartedAt: args.StartedAt,
@@ -258,7 +264,7 @@ func updateAggregateFromRoots(progress *models.SyncProgressState) {
 	progress.UpdatedAt = time.Now().UnixMilli()
 }
 
-func restoreProgress(existing *models.SyncProgressState, roots []int64, rootCheckpointMap map[int64]string, rootEstimateMap map[int64]int64) *models.SyncProgressState {
+func restoreProgress(existing *models.SyncProgressState, roots []int64, rootCheckpointMap map[int64]string, rootEstimateMap map[int64]int64, rootNameMap map[int64]string) *models.SyncProgressState {
 	now := time.Now().UnixMilli()
 	restored := *existing
 	restored.Status = "running"
@@ -266,6 +272,7 @@ func restoreProgress(existing *models.SyncProgressState, roots []int64, rootChec
 	restored.ActiveRoot = nil
 	restored.LastError = ""
 	restored.Roots = append([]int64{}, roots...)
+	restored.RootNames = rootNameMap
 	restored.CompletedRoots = []int64{}
 	if restored.RootProgress == nil {
 		restored.RootProgress = map[string]*models.RootSyncProgress{}
@@ -431,7 +438,7 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 }
 
 func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRequest) error {
-	roots, rootEstimateMap, err := m.discoverRootFolders(ctx, api, request)
+	roots, rootEstimateMap, rootNameMap, err := m.discoverRootFolders(ctx, api, request)
 	if err != nil {
 		return err
 	}
@@ -461,13 +468,14 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 
 	var progress *models.SyncProgressState
 	if resume && existing != nil {
-		progress = restoreProgress(existing, roots, rootCheckpointMap, rootEstimateMap)
+		progress = restoreProgress(existing, roots, rootCheckpointMap, rootEstimateMap, rootNameMap)
 	} else {
 		startedAt := time.Now().UnixMilli()
 		progress = createInitialProgress(struct {
 			Roots              []int64
 			RootCheckpointMap  map[int64]string
 			RootEstimateMap    map[int64]int64
+			RootNameMap        map[int64]string
 			StartedAt          int64
 			MeiliHost          string
 			MeiliIndex         string
@@ -476,6 +484,7 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 			Roots:              roots,
 			RootCheckpointMap:  rootCheckpointMap,
 			RootEstimateMap:    rootEstimateMap,
+			RootNameMap:        rootNameMap,
 			StartedAt:          startedAt,
 			MeiliHost:          m.meiliHost,
 			MeiliIndex:         m.meiliIndex,

@@ -8,6 +8,7 @@ const baseProgress: SyncProgress = {
   startedAt: 1700000000,
   updatedAt: 1700000500,
   roots: [100, 200],
+  rootNames: {},
   completedRoots: [100],
   activeRoot: 200,
   aggregateStats: {

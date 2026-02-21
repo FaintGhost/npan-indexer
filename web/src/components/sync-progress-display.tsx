@@ -65,7 +65,7 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
           </div>
           {progress.activeRoot != null && isRunning && (
             <p className="mt-2 text-xs text-slate-400">
-              当前根目录: <span className="font-mono">{progress.activeRoot}</span>
+              当前根目录: <span className="font-mono">{progress.rootNames?.[String(progress.activeRoot)] || progress.activeRoot}</span>
             </p>
           )}
         </div>
@@ -103,7 +103,7 @@ function ElapsedTime({
   endedAt: number
   isRunning: boolean
 }) {
-  const [now, setNow] = useState(Date.now())
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     if (!isRunning) return
@@ -159,10 +159,18 @@ function RootDetails({ progress }: { progress: SyncProgress }) {
                   ? 'text-rose-600'
                   : 'text-slate-500'
 
+            const rootName = progress.rootNames?.[key]
+
             return (
               <div key={key} className="px-4 py-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-sm text-slate-700">{root.rootFolderId}</span>
+                  <span className="text-sm text-slate-700">
+                    {rootName ? (
+                      <><span className="font-medium">{rootName}</span> <span className="font-mono text-xs text-slate-400">({root.rootFolderId})</span></>
+                    ) : (
+                      <span className="font-mono">{root.rootFolderId}</span>
+                    )}
+                  </span>
                   <span className={`text-xs font-medium ${rootStatus}`}>{root.status}</span>
                 </div>
                 <div className="mt-1 flex gap-4 text-xs text-slate-400">

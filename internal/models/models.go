@@ -102,6 +102,7 @@ type SyncProgressState struct {
 	MeiliIndex         string                       `json:"meiliIndex"`
 	CheckpointTemplate string                       `json:"checkpointTemplate"`
 	Roots              []int64                      `json:"roots"`
+	RootNames          map[int64]string             `json:"rootNames,omitempty"`
 	CompletedRoots     []int64                      `json:"completedRoots"`
 	ActiveRoot         *int64                       `json:"activeRoot,omitempty"`
 	AggregateStats     CrawlStats                   `json:"aggregateStats"`

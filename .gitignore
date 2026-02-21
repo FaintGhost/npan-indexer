@@ -41,6 +41,7 @@ data/instance-uid
 
 # Generated files
 web/src/routeTree.gen.ts
+web/tsconfig.tsbuildinfo
 web/node_modules/
 web/dist/
 
