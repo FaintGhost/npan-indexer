@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useAdminAuth } from '@/hooks/use-admin-auth'
 import { useSyncProgress } from '@/hooks/use-sync-progress'
 import { ApiKeyDialog } from '@/components/api-key-dialog'
@@ -6,15 +7,27 @@ import { SyncProgressDisplay } from '@/components/sync-progress-display'
 export function AdminSyncPage() {
   const auth = useAdminAuth()
   const sync = useSyncProgress(auth.getHeaders())
+  const [message, setMessage] = useState<string | null>(null)
+
+  const isRunning = sync.progress?.status === 'running'
+  const isBusy = sync.loading || isRunning
 
   const handleStartSync = async () => {
-    // Use empty array to let server use defaults
+    setMessage(null)
     await sync.startSync([])
+    if (!sync.error) {
+      setMessage('同步任务已启动')
+      setTimeout(() => setMessage(null), 4000)
+    }
   }
 
   const handleCancelSync = async () => {
-    if (window.confirm('确认取消同步？')) {
-      await sync.cancelSync()
+    if (!window.confirm('确认取消同步？')) return
+    setMessage(null)
+    await sync.cancelSync()
+    if (!sync.error) {
+      setMessage('已发送取消请求')
+      setTimeout(() => setMessage(null), 4000)
     }
   }
 
@@ -46,23 +59,40 @@ export function AdminSyncPage() {
         <button
           type="button"
           onClick={handleStartSync}
-          disabled={sync.loading || sync.progress?.status === 'running'}
-          className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-60"
+          disabled={isBusy}
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          启动全量同步
+          {sync.loading && !isRunning && (
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          )}
+          {isRunning && (
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+          )}
+          {sync.loading && !isRunning
+            ? '启动中...'
+            : isRunning
+              ? '同步进行中'
+              : '启动全量同步'}
         </button>
 
-        {sync.progress?.status === 'running' && (
+        {isRunning && (
           <button
             type="button"
             onClick={handleCancelSync}
             disabled={sync.loading}
-            className="rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-60"
+            className="rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             取消同步
           </button>
         )}
       </div>
+
+      {/* Success message */}
+      {message && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-sm text-emerald-700">{message}</p>
+        </div>
+      )}
 
       {/* Error message */}
       {sync.error && (
