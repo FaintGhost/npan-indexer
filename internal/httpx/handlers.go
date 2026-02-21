@@ -1,7 +1,7 @@
 package httpx
 
 import (
-	"crypto/subtle"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,9 +15,15 @@ import (
 	"npan/internal/service"
 )
 
+// searchService 定义 handler 层对搜索服务的依赖。
+type searchService interface {
+	Query(models.LocalSearchParams) (search.QueryResult, error)
+	Ping() error
+}
+
 type Handlers struct {
 	cfg          config.Config
-	queryService *search.QueryService
+	queryService searchService
 	syncManager  *service.SyncManager
 }
 
@@ -27,12 +33,6 @@ func NewHandlers(cfg config.Config, queryService *search.QueryService, syncManag
 		queryService: queryService,
 		syncManager:  syncManager,
 	}
-}
-
-func writeError(c *echo.Context, status int, message string) error {
-	return c.JSON(status, map[string]any{
-		"error": message,
-	})
 }
 
 func parseInt64Pointer(raw string) (*int64, error) {
@@ -56,36 +56,6 @@ func parseBool(raw string, fallback bool) bool {
 	return value == "1" || value == "true" || value == "yes"
 }
 
-func parseBearerHeader(header string) string {
-	value := strings.TrimSpace(header)
-	if len(value) < 7 {
-		return ""
-	}
-	if strings.ToLower(value[:7]) != "bearer " {
-		return ""
-	}
-	return strings.TrimSpace(value[7:])
-}
-
-func (h *Handlers) requireAPIAccess(c *echo.Context) bool {
-	expected := strings.TrimSpace(h.cfg.AdminAPIKey)
-	if expected == "" {
-		return true
-	}
-
-	provided := strings.TrimSpace(c.Request().Header.Get("X-API-Key"))
-	if provided == "" {
-		provided = parseBearerHeader(c.Request().Header.Get("Authorization"))
-	}
-
-	if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
-		_ = writeError(c, http.StatusUnauthorized, "未授权")
-		return false
-	}
-
-	return true
-}
-
 type authPayload struct {
 	Token        string `json:"token"`
 	ClientID     string `json:"client_id"`
@@ -95,8 +65,18 @@ type authPayload struct {
 	OAuthHost    string `json:"oauth_host"`
 }
 
-func (h *Handlers) resolveAuthOptions(c *echo.Context, payload authPayload, allowConfigFallback bool) npan.AuthResolverOptions {
-	tokenFromHeader := parseBearerHeader(c.Request().Header.Get("Authorization"))
+// allowConfigFallback 从 echo 上下文中读取 allow_config_fallback 标记。
+// 若 EmbeddedAuth 中间件已设置该值则使用；否则使用全局配置。
+func (h *Handlers) allowConfigFallback(c *echo.Context) bool {
+	if v, ok := c.Get("allow_config_fallback").(bool); ok {
+		return v
+	}
+	return h.cfg.AllowConfigAuthFallback
+}
+
+func (h *Handlers) resolveAuthOptions(c *echo.Context, payload authPayload) npan.AuthResolverOptions {
+	tokenFromHeader := parseBearerHeaderValue(c.Request().Header.Get("Authorization"))
+	fallback := h.allowConfigFallback(c)
 
 	tokenCandidates := []string{
 		payload.Token,
@@ -108,7 +88,7 @@ func (h *Handlers) resolveAuthOptions(c *echo.Context, payload authPayload, allo
 	subIDCandidates := []int64{payload.SubID}
 	oauthHostCandidates := []string{payload.OAuthHost}
 
-	if allowConfigFallback {
+	if fallback {
 		tokenCandidates = append(tokenCandidates, h.cfg.Token)
 		clientIDCandidates = append(clientIDCandidates, h.cfg.ClientID)
 		clientSecretCandidates = append(clientSecretCandidates, h.cfg.ClientSecret)
@@ -117,7 +97,7 @@ func (h *Handlers) resolveAuthOptions(c *echo.Context, payload authPayload, allo
 	}
 
 	subType := npan.TokenSubjectType(payload.SubType)
-	if subType == "" && allowConfigFallback {
+	if subType == "" && fallback {
 		subType = h.cfg.SubType
 	}
 	if subType == "" {
@@ -139,8 +119,8 @@ func (h *Handlers) resolveAuthOptions(c *echo.Context, payload authPayload, allo
 	}
 }
 
-func (h *Handlers) resolveToken(c *echo.Context, payload authPayload, allowConfigFallback bool) (string, npan.AuthResolverOptions, error) {
-	authOptions := h.resolveAuthOptions(c, payload, allowConfigFallback)
+func (h *Handlers) resolveToken(c *echo.Context, payload authPayload) (string, npan.AuthResolverOptions, error) {
+	authOptions := h.resolveAuthOptions(c, payload)
 	token, err := npan.ResolveBearerToken(c.Request().Context(), nil, authOptions)
 	if err != nil {
 		return "", authOptions, err
@@ -183,18 +163,14 @@ func (h *Handlers) Health(c *echo.Context) error {
 }
 
 func (h *Handlers) Token(c *echo.Context) error {
-	if !h.requireAPIAccess(c) {
-		return nil
-	}
-
 	var payload authPayload
 	if err := c.Bind(&payload); err != nil {
-		return writeError(c, http.StatusBadRequest, "请求体格式错误")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "请求体格式错误")
 	}
 
-	authOptions := h.resolveAuthOptions(c, payload, h.cfg.AllowConfigAuthFallback)
+	authOptions := h.resolveAuthOptions(c, payload)
 	if authOptions.ClientID == "" || authOptions.ClientSecret == "" || authOptions.SubID <= 0 {
-		return writeError(c, http.StatusBadRequest, "缺少认证参数: client_id/client_secret/sub_id")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "缺少认证参数: client_id/client_secret/sub_id")
 	}
 
 	token, err := npan.RequestAccessToken(c.Request().Context(), nil, npan.TokenRequestOptions{
@@ -205,42 +181,40 @@ func (h *Handlers) Token(c *echo.Context) error {
 		SubType:      authOptions.SubType,
 	})
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("获取 token 失败", "error", err, "handler", "Token")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "认证失败，请检查凭据")
 	}
 
 	return c.JSON(http.StatusOK, token)
 }
 
 func (h *Handlers) RemoteSearch(c *echo.Context) error {
-	if !h.requireAPIAccess(c) {
-		return nil
-	}
-
 	queryWords := strings.TrimSpace(c.QueryParam("query"))
 	if queryWords == "" {
 		queryWords = strings.TrimSpace(c.QueryParam("q"))
 	}
 	if queryWords == "" {
-		return writeError(c, http.StatusBadRequest, "缺少 query 参数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "缺少 query 参数")
 	}
 
-	token, authOptions, err := h.resolveToken(c, authPayload{}, h.cfg.AllowConfigAuthFallback)
+	token, authOptions, err := h.resolveToken(c, authPayload{})
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("解析 token 失败", "error", err, "handler", "RemoteSearch")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "搜索请求失败，请稍后重试")
 	}
 
 	pageID := int64(0)
 	if raw := strings.TrimSpace(c.QueryParam("page_id")); raw != "" {
 		parsed, parseErr := strconv.ParseInt(raw, 10, 64)
 		if parseErr != nil || parsed < 0 {
-			return writeError(c, http.StatusBadRequest, "page_id 必须是 >= 0 的整数")
+			return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "page_id 必须是 >= 0 的整数")
 		}
 		pageID = parsed
 	}
 
 	searchInFolder, err := parseInt64Pointer(c.QueryParam("search_in_folder"))
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "search_in_folder 必须是整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "search_in_folder 必须是整数")
 	}
 
 	api := h.newAPIClient(token, authOptions)
@@ -253,42 +227,41 @@ func (h *Handlers) RemoteSearch(c *echo.Context) error {
 		UpdatedTimeRange: strings.TrimSpace(c.QueryParam("updated_time_range")),
 	})
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("远程搜索失败", "error", err, "handler", "RemoteSearch")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "搜索请求失败，请稍后重试")
 	}
 
 	return c.JSON(http.StatusOK, result)
 }
 
 func (h *Handlers) DownloadURL(c *echo.Context) error {
-	if !h.requireAPIAccess(c) {
-		return nil
-	}
-
 	fileIDRaw := strings.TrimSpace(c.QueryParam("file_id"))
 	if fileIDRaw == "" {
-		return writeError(c, http.StatusBadRequest, "缺少 file_id 参数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "缺少 file_id 参数")
 	}
 
 	fileID, err := strconv.ParseInt(fileIDRaw, 10, 64)
 	if err != nil || fileID <= 0 {
-		return writeError(c, http.StatusBadRequest, "file_id 必须是正整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "file_id 必须是正整数")
 	}
 
 	validPeriod, err := parseInt64Pointer(c.QueryParam("valid_period"))
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "valid_period 必须是整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "valid_period 必须是整数")
 	}
 
-	token, authOptions, err := h.resolveToken(c, authPayload{}, h.cfg.AllowConfigAuthFallback)
+	token, authOptions, err := h.resolveToken(c, authPayload{})
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("解析 token 失败", "error", err, "handler", "DownloadURL")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "获取下载链接失败")
 	}
 
 	api := h.newAPIClient(token, authOptions)
 	downloadService := service.NewDownloadURLService(api)
 	downloadURL, err := downloadService.GetDownloadURL(c.Request().Context(), fileID, validPeriod)
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("获取下载链接失败", "error", err, "handler", "DownloadURL")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "获取下载链接失败")
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -298,23 +271,19 @@ func (h *Handlers) DownloadURL(c *echo.Context) error {
 }
 
 func (h *Handlers) LocalSearch(c *echo.Context) error {
-	if !h.requireAPIAccess(c) {
-		return nil
-	}
-
 	query := strings.TrimSpace(c.QueryParam("query"))
 	if query == "" {
 		query = strings.TrimSpace(c.QueryParam("q"))
 	}
 	if query == "" {
-		return writeError(c, http.StatusBadRequest, "缺少 query 参数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "缺少 query 参数")
 	}
 
 	page := int64(1)
 	if raw := strings.TrimSpace(c.QueryParam("page")); raw != "" {
 		parsed, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || parsed <= 0 {
-			return writeError(c, http.StatusBadRequest, "page 必须是正整数")
+			return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "page 必须是正整数")
 		}
 		page = parsed
 	}
@@ -323,24 +292,24 @@ func (h *Handlers) LocalSearch(c *echo.Context) error {
 	if raw := strings.TrimSpace(c.QueryParam("page_size")); raw != "" {
 		parsed, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || parsed <= 0 {
-			return writeError(c, http.StatusBadRequest, "page_size 必须是正整数")
+			return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "page_size 必须是正整数")
 		}
 		pageSize = parsed
 	}
 
 	parentID, err := parseInt64Pointer(c.QueryParam("parent_id"))
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "parent_id 必须是整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "parent_id 必须是整数")
 	}
 
 	updatedAfter, err := parseInt64Pointer(c.QueryParam("updated_after"))
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "updated_after 必须是整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "updated_after 必须是整数")
 	}
 
 	updatedBefore, err := parseInt64Pointer(c.QueryParam("updated_before"))
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "updated_before 必须是整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "updated_before 必须是整数")
 	}
 
 	result, err := h.queryService.Query(models.LocalSearchParams{
@@ -354,26 +323,27 @@ func (h *Handlers) LocalSearch(c *echo.Context) error {
 		IncludeDeleted: parseBool(c.QueryParam("include_deleted"), false),
 	})
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("本地搜索失败", "error", err, "handler", "LocalSearch")
+		return writeErrorResponse(c, http.StatusInternalServerError, ErrCodeInternalError, "搜索服务暂不可用")
 	}
 
 	return c.JSON(http.StatusOK, result)
 }
 
-func (h *Handlers) DemoSearch(c *echo.Context) error {
+func (h *Handlers) AppSearch(c *echo.Context) error {
 	query := strings.TrimSpace(c.QueryParam("query"))
 	if query == "" {
 		query = strings.TrimSpace(c.QueryParam("q"))
 	}
 	if query == "" {
-		return writeError(c, http.StatusBadRequest, "缺少 query 参数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "缺少 query 参数")
 	}
 
 	page := int64(1)
 	if raw := strings.TrimSpace(c.QueryParam("page")); raw != "" {
 		parsed, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || parsed <= 0 {
-			return writeError(c, http.StatusBadRequest, "page 必须是正整数")
+			return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "page 必须是正整数")
 		}
 		page = parsed
 	}
@@ -382,7 +352,7 @@ func (h *Handlers) DemoSearch(c *echo.Context) error {
 	if raw := strings.TrimSpace(c.QueryParam("page_size")); raw != "" {
 		parsed, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || parsed <= 0 {
-			return writeError(c, http.StatusBadRequest, "page_size 必须是正整数")
+			return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "page_size 必须是正整数")
 		}
 		pageSize = parsed
 	}
@@ -395,38 +365,39 @@ func (h *Handlers) DemoSearch(c *echo.Context) error {
 		IncludeDeleted: false,
 	})
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("应用搜索失败", "error", err, "handler", "AppSearch")
+		return writeErrorResponse(c, http.StatusInternalServerError, ErrCodeInternalError, "搜索服务暂不可用")
 	}
 
 	return c.JSON(http.StatusOK, result)
 }
 
-func (h *Handlers) DemoDownloadURL(c *echo.Context) error {
+func (h *Handlers) AppDownloadURL(c *echo.Context) error {
 	fileIDRaw := strings.TrimSpace(c.QueryParam("file_id"))
 	if fileIDRaw == "" {
-		return writeError(c, http.StatusBadRequest, "缺少 file_id 参数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "缺少 file_id 参数")
 	}
 
 	fileID, err := strconv.ParseInt(fileIDRaw, 10, 64)
 	if err != nil || fileID <= 0 {
-		return writeError(c, http.StatusBadRequest, "file_id 必须是正整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "file_id 必须是正整数")
 	}
 
 	validPeriod, err := parseInt64Pointer(c.QueryParam("valid_period"))
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "valid_period 必须是整数")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "valid_period 必须是整数")
 	}
 
-	token, authOptions, err := h.resolveToken(c, authPayload{}, true)
+	token, authOptions, err := h.resolveToken(c, authPayload{})
 	if err != nil {
-		return writeError(c, http.StatusServiceUnavailable, "下载服务暂不可用，请联系管理员检查服务端凭据")
+		return writeErrorResponse(c, http.StatusServiceUnavailable, ErrCodeInternalError, "下载服务暂不可用，请联系管理员检查服务端凭据")
 	}
 
 	api := h.newAPIClient(token, authOptions)
 	downloadService := service.NewDownloadURLService(api)
 	downloadURL, err := downloadService.GetDownloadURL(c.Request().Context(), fileID, validPeriod)
 	if err != nil {
-		return writeError(c, http.StatusBadGateway, "生成下载链接失败，请稍后重试")
+		return writeErrorResponse(c, http.StatusBadGateway, ErrCodeInternalError, "生成下载链接失败，请稍后重试")
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -447,18 +418,15 @@ type syncStartPayload struct {
 }
 
 func (h *Handlers) StartFullSync(c *echo.Context) error {
-	if !h.requireAPIAccess(c) {
-		return nil
-	}
-
 	var payload syncStartPayload
 	if err := c.Bind(&payload); err != nil {
-		return writeError(c, http.StatusBadRequest, "请求体格式错误")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "请求体格式错误")
 	}
 
-	token, authOptions, err := h.resolveToken(c, payload.authPayload, h.cfg.AllowConfigAuthFallback)
+	token, authOptions, err := h.resolveToken(c, payload.authPayload)
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, err.Error())
+		slog.Error("解析 token 失败", "error", err, "handler", "StartFullSync")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "启动同步失败")
 	}
 
 	api := h.newAPIClient(token, authOptions)
@@ -472,7 +440,8 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 		CheckpointTemplate: payload.CheckpointTemplate,
 	})
 	if err != nil {
-		return writeError(c, http.StatusConflict, err.Error())
+		slog.Error("启动同步失败", "error", err, "handler", "StartFullSync")
+		return writeErrorResponse(c, http.StatusConflict, ErrCodeConflict, "启动同步失败")
 	}
 
 	return c.JSON(http.StatusAccepted, map[string]any{
@@ -481,31 +450,37 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 }
 
 func (h *Handlers) GetFullSyncProgress(c *echo.Context) error {
-	if !h.requireAPIAccess(c) {
-		return nil
-	}
-
 	progress, err := h.syncManager.GetProgress()
 	if err != nil {
-		return writeError(c, http.StatusInternalServerError, err.Error())
+		slog.Error("获取同步进度失败", "error", err, "handler", "GetFullSyncProgress")
+		return writeErrorResponse(c, http.StatusInternalServerError, ErrCodeInternalError, "无法读取同步进度")
 	}
 	if progress == nil {
-		return writeError(c, http.StatusNotFound, "未找到同步进度")
+		return writeErrorResponse(c, http.StatusNotFound, ErrCodeNotFound, "未找到同步进度")
 	}
 
 	return c.JSON(http.StatusOK, progress)
 }
 
 func (h *Handlers) CancelFullSync(c *echo.Context) error {
-	if !h.requireAPIAccess(c) {
-		return nil
-	}
-
 	if !h.syncManager.Cancel() {
-		return writeError(c, http.StatusConflict, "当前没有运行中的同步任务")
+		return writeErrorResponse(c, http.StatusConflict, ErrCodeConflict, "当前没有运行中的同步任务")
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"message": "同步取消信号已发送",
+	})
+}
+
+// Readyz 就绪检查端点，检测 Meilisearch 连通性。
+func (h *Handlers) Readyz(c *echo.Context) error {
+	if err := h.queryService.Ping(); err != nil {
+		return c.JSON(http.StatusServiceUnavailable, map[string]any{
+			"status": "not_ready",
+			"meili":  "unreachable",
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"status": "ready",
 	})
 }

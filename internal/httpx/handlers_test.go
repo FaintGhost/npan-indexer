@@ -28,8 +28,9 @@ func TestResolveAuthOptions_NoConfigFallback(t *testing.T) {
 		OAuthHost:    "https://oauth.example.com",
 	}}
 
-	c := newTestContext(http.MethodGet, "/api/v1/npan/search")
-	opts := h.resolveAuthOptions(c, authPayload{}, false)
+	c := newTestContext(http.MethodGet, "/api/v1/search/remote")
+	// No allow_config_fallback set in context, and config default is false
+	opts := h.resolveAuthOptions(c, authPayload{})
 
 	if opts.Token != "" {
 		t.Fatalf("expected empty token, got %q", opts.Token)
@@ -58,8 +59,10 @@ func TestResolveAuthOptions_WithConfigFallback(t *testing.T) {
 		OAuthHost:    "https://oauth.example.com",
 	}}
 
-	c := newTestContext(http.MethodGet, "/api/v1/npan/search")
-	opts := h.resolveAuthOptions(c, authPayload{}, true)
+	c := newTestContext(http.MethodGet, "/api/v1/app/search")
+	// Simulate EmbeddedAuth middleware setting the context value
+	c.Set("allow_config_fallback", true)
+	opts := h.resolveAuthOptions(c, authPayload{})
 
 	if opts.Token != "server-token" {
 		t.Fatalf("expected fallback token, got %q", opts.Token)
@@ -78,17 +81,17 @@ func TestResolveAuthOptions_WithConfigFallback(t *testing.T) {
 	}
 }
 
-func TestRequireAPIAccess(t *testing.T) {
-	h := &Handlers{cfg: config.Config{AdminAPIKey: "secret-key"}}
+func TestResolveAuthOptions_GlobalConfigFallback(t *testing.T) {
+	h := &Handlers{cfg: config.Config{
+		Token:                    "server-token",
+		AllowConfigAuthFallback: true,
+	}}
 
-	denied := newTestContext(http.MethodGet, "/api/v1/search/local")
-	if ok := h.requireAPIAccess(denied); ok {
-		t.Fatal("expected unauthorized result without API key")
-	}
+	c := newTestContext(http.MethodGet, "/api/v1/search/local")
+	// No context value set — should use h.cfg.AllowConfigAuthFallback
+	opts := h.resolveAuthOptions(c, authPayload{})
 
-	allowed := newTestContext(http.MethodGet, "/api/v1/search/local")
-	allowed.Request().Header.Set("X-API-Key", "secret-key")
-	if ok := h.requireAPIAccess(allowed); !ok {
-		t.Fatal("expected API key pass")
+	if opts.Token != "server-token" {
+		t.Fatalf("expected fallback token from global config, got %q", opts.Token)
 	}
 }

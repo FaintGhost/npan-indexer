@@ -23,6 +23,9 @@ func (s *QueryService) Query(params models.LocalSearchParams) (QueryResult, erro
 	if normalized.PageSize <= 0 {
 		normalized.PageSize = 20
 	}
+	if normalized.PageSize > 100 {
+		normalized.PageSize = 100
+	}
 
 	items, total, err := s.index.Search(normalized)
 	if err != nil {
@@ -30,4 +33,9 @@ func (s *QueryService) Query(params models.LocalSearchParams) (QueryResult, erro
 	}
 
 	return QueryResult{Items: items, Total: total}, nil
+}
+
+// Ping 委托给底层 MeiliIndex 检查连通性。
+func (s *QueryService) Ping() error {
+	return s.index.Ping()
 }

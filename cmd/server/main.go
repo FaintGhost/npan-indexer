@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"npan/internal/config"
 	"npan/internal/httpx"
@@ -18,6 +22,11 @@ func main() {
 	slog.SetDefault(logger)
 
 	cfg := config.Load()
+
+	if err := cfg.Validate(); err != nil {
+		slog.Error("配置验证失败", "error", err)
+		os.Exit(1)
+	}
 
 	meiliIndex := search.NewMeiliIndex(cfg.MeiliHost, cfg.MeiliAPIKey, cfg.MeiliIndex)
 	if err := meiliIndex.EnsureSettings(context.Background()); err != nil {
@@ -41,11 +50,31 @@ func main() {
 	})
 
 	handlers := httpx.NewHandlers(cfg, queryService, syncManager)
-	server := httpx.NewServer(handlers)
+	e := httpx.NewServer(handlers, cfg.AdminAPIKey)
 
-	logger.Info("Echo 服务启动", "addr", cfg.ServerAddr)
-	if err := server.Start(cfg.ServerAddr); err != nil {
-		logger.Error("服务启动失败", "error", err)
-		os.Exit(1)
+	httpServer := &http.Server{
+		Addr:    cfg.ServerAddr,
+		Handler: e,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		logger.Info("服务启动", "addr", cfg.ServerAddr)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("服务启动失败", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("收到停机信号，开始优雅关闭...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("优雅关闭失败", "error", err)
 	}
 }

@@ -89,7 +89,7 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 	filters := make([]string, 0, 8)
 
 	if params.Type != "" && params.Type != "all" {
-		filters = append(filters, fmt.Sprintf("type = %s", params.Type))
+		filters = append(filters, fmt.Sprintf("type = '%s'", params.Type))
 	}
 	if params.ParentID != nil {
 		filters = append(filters, fmt.Sprintf("parent_id = %d", *params.ParentID))
@@ -140,4 +140,10 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 	}
 
 	return docs, total, nil
+}
+
+// Ping 检查 Meilisearch 索引连通性。
+func (m *MeiliIndex) Ping() error {
+	_, err := m.index.GetStats()
+	return err
 }

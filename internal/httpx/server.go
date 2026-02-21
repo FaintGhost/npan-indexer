@@ -11,11 +11,11 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 )
 
-func resolveDemoHTMLPath() string {
+func resolveAppHTMLPath() string {
 	candidates := []string{
-		filepath.Join("web", "demo", "index.html"),
-		filepath.Join("..", "web", "demo", "index.html"),
-		filepath.Join("..", "..", "web", "demo", "index.html"),
+		filepath.Join("web", "app", "index.html"),
+		filepath.Join("..", "web", "app", "index.html"),
+		filepath.Join("..", "..", "web", "app", "index.html"),
 	}
 
 	_, file, _, ok := runtime.Caller(0)
@@ -23,7 +23,7 @@ func resolveDemoHTMLPath() string {
 		return candidates[0]
 	}
 	candidates = append([]string{
-		filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "web", "demo", "index.html")),
+		filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "web", "app", "index.html")),
 	}, candidates...)
 
 	for _, candidate := range candidates {
@@ -41,33 +41,42 @@ func resolveDemoHTMLPath() string {
 	return candidates[0]
 }
 
-func NewServer(handlers *Handlers) *echo.Echo {
+func NewServer(handlers *Handlers, adminAPIKey string) *echo.Echo {
 	e := echo.New()
 	e.Logger = slog.Default()
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestLogger())
 
+	// Public endpoints (no auth)
 	e.GET("/healthz", handlers.Health)
-	demoHTMLPath := resolveDemoHTMLPath()
-	demoFSPath := strings.TrimPrefix(filepath.ToSlash(demoHTMLPath), "/")
-	e.GET("/demo", func(c *echo.Context) error {
-		return c.FileFS(demoFSPath, os.DirFS("/"))
+	e.GET("/readyz", handlers.Readyz)
+	appHTMLPath := resolveAppHTMLPath()
+	appFSPath := strings.TrimPrefix(filepath.ToSlash(appHTMLPath), "/")
+	e.GET("/app", func(c *echo.Context) error {
+		return c.FileFS(appFSPath, os.DirFS("/"))
 	})
-	e.GET("/demo/", func(c *echo.Context) error {
-		return c.FileFS(demoFSPath, os.DirFS("/"))
+	e.GET("/app/", func(c *echo.Context) error {
+		return c.FileFS(appFSPath, os.DirFS("/"))
 	})
 
-	api := e.Group("/api/v1")
+	// App API (embedded auth — config fallback always enabled)
+	appAPI := e.Group("/api/v1/app", EmbeddedAuth())
+	appAPI.GET("/search", handlers.AppSearch)
+	appAPI.GET("/download-url", handlers.AppDownloadURL)
+
+	// API (requires API key)
+	api := e.Group("/api/v1", APIKeyAuth(adminAPIKey))
 	api.POST("/token", handlers.Token)
-	api.GET("/npan/search", handlers.RemoteSearch)
-	api.GET("/download-url", handlers.DownloadURL)
+	api.GET("/search/remote", handlers.RemoteSearch)
 	api.GET("/search/local", handlers.LocalSearch)
-	api.GET("/demo/search", handlers.DemoSearch)
-	api.GET("/demo/download-url", handlers.DemoDownloadURL)
-	api.POST("/sync/full/start", handlers.StartFullSync)
-	api.GET("/sync/full/progress", handlers.GetFullSyncProgress)
-	api.POST("/sync/full/cancel", handlers.CancelFullSync)
+	api.GET("/download-url", handlers.DownloadURL)
+
+	// Admin (requires API key)
+	admin := e.Group("/api/v1/admin", APIKeyAuth(adminAPIKey))
+	admin.POST("/sync/full", handlers.StartFullSync)
+	admin.GET("/sync/full/progress", handlers.GetFullSyncProgress)
+	admin.POST("/sync/full/cancel", handlers.CancelFullSync)
 
 	return e
 }

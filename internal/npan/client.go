@@ -83,7 +83,7 @@ func (c *HTTPClient) refreshToken(ctx context.Context, staleToken string) (strin
 }
 
 func readStatusError(resp *http.Response, fallback string) error {
-	body, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	message := strings.TrimSpace(string(body))
 	if message == "" {
 		message = fallback
@@ -166,7 +166,7 @@ func (c *HTTPClient) request(ctx context.Context, method string, path string, qu
 		if out == nil {
 			return nil
 		}
-		return json.NewDecoder(resp.Body).Decode(out)
+		return json.NewDecoder(io.LimitReader(resp.Body, 10*1024*1024)).Decode(out)
 	}
 }
 

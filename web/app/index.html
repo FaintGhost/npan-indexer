@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Npan Search Demo</title>
-    <meta name="description" content="Npan 文件搜索与直接下载 Demo" />
+    <title>Npan Search</title>
+    <meta name="description" content="Npan 文件搜索与直接下载" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+XiaoWei&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Outfit:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -30,8 +30,9 @@
         background-attachment: fixed;
       }
 
+      /* 替换为新引入的 Outfit 非衬线字体 */
       .font-display {
-        font-family: "ZCOOL XiaoWei", serif;
+        font-family: "Outfit", system-ui, sans-serif;
       }
 
       .search-stage {
@@ -159,7 +160,7 @@
           >
             <div>
               <h1
-                class="font-display text-4xl leading-tight tracking-wide text-slate-900"
+                class="font-display text-4xl font-semibold leading-tight tracking-tight text-slate-900"
               >
                 Npan Search
               </h1>
@@ -347,7 +348,7 @@
         toggleClearBtn();
         el.queryInput.focus();
         resetSearch("");
-        await applyMode(false); // 点击清空后，重置为全屏居中 (Hero) 模式
+        await applyMode(false);
         await runViewTransition(() => {
           el.list.innerHTML = UIStates.INITIAL;
           el.counter.textContent = "0 / 0";
@@ -612,7 +613,7 @@
 
         try {
           const data = await requestJSON(
-            "/api/v1/demo/search",
+            "/api/v1/app/search",
             {
               query: state.query,
               page,
@@ -642,8 +643,6 @@
 
           state.hasMore =
             state.items.length < state.total && incoming.length > 0;
-
-          // 【修复部分】：只要点击了搜索，无论有没有结果，都强制停留在吸顶模式
           await applyMode(true);
 
           await runViewTransition(() => {
@@ -667,7 +666,6 @@
           if (error && error.name === "AbortError") return;
           setStatus(error.message || String(error), true);
           if (!state.items.length) {
-            // 【修复部分】：如果报错了，同样强制进入吸顶模式，以便展示红色的 Error 面板
             await applyMode(true);
             await runViewTransition(() => {
               el.list.classList.remove("opacity-50", "pointer-events-none");
@@ -700,7 +698,7 @@
 
       async function getDownloadURL(fileID) {
         if (state.linkCache.has(fileID)) return state.linkCache.get(fileID);
-        const data = await requestJSON("/api/v1/demo/download-url", {
+        const data = await requestJSON("/api/v1/app/download-url", {
           file_id: fileID,
         });
         const url = String(data.download_url || "");
