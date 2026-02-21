@@ -18,6 +18,8 @@ const baseProgress: SyncProgress = {
     failedRequests: 2,
     startedAt: 1700000000,
     endedAt: 0,
+    filesDiscovered: 300,
+    skippedFiles: 0,
   },
   rootProgress: {},
   lastError: '',
@@ -36,7 +38,7 @@ describe('SyncProgressDisplay', () => {
 
   it('shows aggregate stats', () => {
     render(<SyncProgressDisplay progress={baseProgress} />)
-    expect(screen.getByText(/300/)).toBeInTheDocument() // filesIndexed
+    expect(screen.getByText('已索引文件').closest('div')).toHaveTextContent('300') // filesIndexed
     expect(screen.getByText(/60/)).toBeInTheDocument() // pagesFetched
   })
 
@@ -65,5 +67,53 @@ describe('SyncProgressDisplay', () => {
     expect(screen.getByText('失败请求')).toBeInTheDocument()
     const failedCard = screen.getByText('失败请求').closest('div')!
     expect(failedCard).toHaveTextContent('2')
+  })
+
+  it('shows filesDiscovered stat', () => {
+    const progress = {
+      ...baseProgress,
+      aggregateStats: { ...baseProgress.aggregateStats, filesDiscovered: 50 },
+    }
+    render(<SyncProgressDisplay progress={progress} />)
+    expect(screen.getByText('已发现')).toBeInTheDocument()
+  })
+
+  it('shows verification success', () => {
+    const progress: SyncProgress = {
+      ...baseProgress,
+      status: 'done',
+      verification: {
+        meiliDocCount: 120,
+        crawledDocCount: 120,
+        discoveredDocCount: 120,
+        skippedCount: 0,
+        verified: true,
+        warnings: [],
+      },
+    }
+    render(<SyncProgressDisplay progress={progress} />)
+    expect(screen.getByText('验证通过')).toBeInTheDocument()
+  })
+
+  it('shows verification warnings', () => {
+    const progress: SyncProgress = {
+      ...baseProgress,
+      status: 'done',
+      verification: {
+        meiliDocCount: 110,
+        crawledDocCount: 120,
+        discoveredDocCount: 120,
+        skippedCount: 0,
+        verified: false,
+        warnings: ['MeiliSearch 文档数(110) < 爬取写入数(120)'],
+      },
+    }
+    render(<SyncProgressDisplay progress={progress} />)
+    expect(screen.getByText('MeiliSearch 文档数(110) < 爬取写入数(120)')).toBeInTheDocument()
+  })
+
+  it('hides verification when null', () => {
+    render(<SyncProgressDisplay progress={baseProgress} />)
+    expect(screen.queryByText('验证通过')).not.toBeInTheDocument()
   })
 })

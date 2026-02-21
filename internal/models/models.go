@@ -55,12 +55,14 @@ type IndexDocument struct {
 }
 
 type CrawlStats struct {
-	FoldersVisited int64 `json:"foldersVisited"`
-	FilesIndexed   int64 `json:"filesIndexed"`
-	PagesFetched   int64 `json:"pagesFetched"`
-	FailedRequests int64 `json:"failedRequests"`
-	StartedAt      int64 `json:"startedAt"`
-	EndedAt        int64 `json:"endedAt"`
+	FoldersVisited  int64 `json:"foldersVisited"`
+	FilesIndexed    int64 `json:"filesIndexed"`
+	FilesDiscovered int64 `json:"filesDiscovered"`
+	SkippedFiles    int64 `json:"skippedFiles"`
+	PagesFetched    int64 `json:"pagesFetched"`
+	FailedRequests  int64 `json:"failedRequests"`
+	StartedAt       int64 `json:"startedAt"`
+	EndedAt         int64 `json:"endedAt"`
 }
 
 type RetryPolicyOptions struct {
@@ -94,6 +96,15 @@ type RootSyncProgress struct {
 	Error              string     `json:"error,omitempty"`
 }
 
+type SyncVerification struct {
+	MeiliDocCount      int64    `json:"meiliDocCount"`
+	CrawledDocCount    int64    `json:"crawledDocCount"`
+	DiscoveredDocCount int64    `json:"discoveredDocCount"`
+	SkippedCount       int64    `json:"skippedCount"`
+	Verified           bool     `json:"verified"`
+	Warnings           []string `json:"warnings,omitempty"`
+}
+
 type SyncProgressState struct {
 	Status             string                       `json:"status"`
 	StartedAt          int64                        `json:"startedAt"`
@@ -108,6 +119,7 @@ type SyncProgressState struct {
 	AggregateStats     CrawlStats                   `json:"aggregateStats"`
 	RootProgress       map[string]*RootSyncProgress `json:"rootProgress"`
 	LastError          string                       `json:"lastError,omitempty"`
+	Verification       *SyncVerification            `json:"verification,omitempty"`
 }
 
 type CrawlCheckpoint struct {

@@ -596,6 +596,12 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	progress.LastError = ""
 	progress.ActiveRoot = nil
 	updateAggregateFromRoots(progress)
+
+	meiliCount, err := m.index.DocumentCount(ctx)
+	if err == nil {
+		progress.Verification = buildVerification(meiliCount, progress.AggregateStats)
+	}
+
 	return m.progressStore.Save(progress)
 }
 
@@ -605,4 +611,28 @@ type meiliIndexWriter struct {
 
 func (w *meiliIndexWriter) UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error {
 	return w.index.UpsertDocuments(ctx, docs)
+}
+
+func buildVerification(meiliCount int64, stats models.CrawlStats) *models.SyncVerification {
+	crawled := stats.FilesIndexed + stats.FoldersVisited
+	discovered := stats.FilesDiscovered + stats.FoldersVisited
+
+	v := &models.SyncVerification{
+		MeiliDocCount:      meiliCount,
+		CrawledDocCount:    crawled,
+		DiscoveredDocCount: discovered,
+		SkippedCount:       stats.SkippedFiles,
+		Verified:           true,
+	}
+
+	if meiliCount < crawled {
+		v.Warnings = append(v.Warnings,
+			fmt.Sprintf("MeiliSearch 文档数(%d) < 爬取写入数(%d)", meiliCount, crawled))
+	}
+	if discovered > 0 && crawled < discovered {
+		v.Warnings = append(v.Warnings,
+			fmt.Sprintf("已索引(%d) < 已发现(%d), 跳过(%d)", crawled, discovered, stats.SkippedFiles))
+	}
+
+	return v
 }

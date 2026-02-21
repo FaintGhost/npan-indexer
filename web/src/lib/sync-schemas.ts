@@ -7,6 +7,8 @@ export const CrawlStatsSchema = z.object({
   failedRequests: z.number(),
   startedAt: z.number(),
   endedAt: z.number(),
+  filesDiscovered: z.number().optional().default(0),
+  skippedFiles: z.number().optional().default(0),
 })
 
 export type CrawlStats = z.infer<typeof CrawlStatsSchema>
@@ -32,6 +34,17 @@ export const SyncProgressSchema = z.object({
   aggregateStats: CrawlStatsSchema,
   rootProgress: z.record(z.string(), RootProgressSchema),
   lastError: z.string().optional().default(''),
+  verification: z
+    .object({
+      meiliDocCount: z.number(),
+      crawledDocCount: z.number(),
+      discoveredDocCount: z.number(),
+      skippedCount: z.number(),
+      verified: z.boolean(),
+      warnings: z.array(z.string()).optional().default([]),
+    })
+    .optional()
+    .nullable(),
 })
 
 export type SyncProgress = z.infer<typeof SyncProgressSchema>

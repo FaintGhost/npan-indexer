@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/meilisearch/meilisearch-go"
+
 	"npan/internal/models"
 	"npan/internal/npan"
 )
@@ -26,12 +28,25 @@ func isRetriable(err error) bool {
 	}
 
 	var statusErr *npan.StatusError
-	if !errors.As(err, &statusErr) {
-		return false
+	if errors.As(err, &statusErr) {
+		status := statusErr.Status
+		return status == 429 || (status >= 500 && status <= 599)
 	}
 
-	status := statusErr.Status
-	return status == 429 || (status >= 500 && status <= 599)
+	var meiliErr *meilisearch.Error
+	if errors.As(err, &meiliErr) {
+		switch meiliErr.ErrCode {
+		case meilisearch.MeilisearchTimeoutError,
+			meilisearch.MeilisearchCommunicationError:
+			return true
+		case meilisearch.MeilisearchApiError,
+			meilisearch.MeilisearchApiErrorWithoutMessage:
+			return meiliErr.StatusCode == 429 ||
+				(meiliErr.StatusCode >= 500 && meiliErr.StatusCode <= 599)
+		}
+	}
+
+	return false
 }
 
 func isRetriableNetworkError(err error) bool {
@@ -128,4 +143,11 @@ func WithRetry[T any](ctx context.Context, operation func() (T, error), opts mod
 		case <-timer.C:
 		}
 	}
+}
+
+func WithRetryVoid(ctx context.Context, operation func() error, opts models.RetryPolicyOptions) error {
+	_, err := WithRetry(ctx, func() (struct{}, error) {
+		return struct{}{}, operation()
+	}, opts)
+	return err
 }

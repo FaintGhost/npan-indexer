@@ -76,10 +76,37 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
         <StatCard label="已索引文件" value={stats.filesIndexed} />
         <StatCard label="已抓取页" value={stats.pagesFetched} />
         <StatCard label="已访问文件夹" value={stats.foldersVisited} />
+        {(stats.filesDiscovered ?? 0) > 0 && (
+          <StatCard label="已发现" value={stats.filesDiscovered ?? 0} />
+        )}
+        {(stats.skippedFiles ?? 0) > 0 && (
+          <StatCard label="已跳过" value={stats.skippedFiles ?? 0} skipped />
+        )}
         {stats.failedRequests > 0 && (
           <StatCard label="失败请求" value={stats.failedRequests} error />
         )}
       </div>
+
+      {/* Verification result */}
+      {progress.verification != null && (
+        progress.verification.warnings == null || progress.verification.warnings.length === 0 ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+            <p className="text-sm font-medium text-emerald-700">验证通过</p>
+            <p className="mt-1 text-xs text-emerald-600">
+              MeiliSearch 文档数: {progress.verification.meiliDocCount.toLocaleString()}
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-medium text-amber-800">验证警告</p>
+            <ul className="mt-1 list-disc pl-4">
+              {progress.verification.warnings.map((w, i) => (
+                <li key={i} className="text-xs text-amber-800">{w}</li>
+              ))}
+            </ul>
+          </div>
+        )
+      )}
 
       {/* Per-root details (collapsed by default, expandable) */}
       {rootsTotal > 0 && <RootDetails progress={progress} />}
@@ -194,15 +221,19 @@ function StatCard({
   label,
   value,
   error = false,
+  skipped = false,
 }: {
   label: string
   value: number
   error?: boolean
+  skipped?: boolean
 }) {
+  const bgClass = skipped ? 'bg-rose-50' : 'bg-white'
+  const valueClass = error || skipped ? 'text-rose-600' : 'text-slate-900'
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <div className={`rounded-xl border border-slate-200 ${bgClass} p-3`}>
       <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-semibold tabular-nums ${error ? 'text-rose-600' : 'text-slate-900'}`}>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${valueClass}`}>
         {value.toLocaleString()}
       </p>
     </div>

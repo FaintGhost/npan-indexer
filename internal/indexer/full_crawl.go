@@ -128,12 +128,23 @@ func RunFullCrawl(ctx context.Context, deps FullCrawlDeps) (models.CrawlStats, e
 				docs = append(docs, search.MapFileToIndexDoc(file, fmt.Sprintf("file/%d/%s", file.ID, file.Name)))
 			}
 
-			stats.FilesIndexed += int64(len(page.Files))
+			stats.FilesDiscovered += int64(len(page.Files))
+			filesInBatch := int64(len(page.Files))
 			if len(docs) > 0 {
-				if err := deps.IndexWriter.UpsertDocuments(ctx, docs); err != nil {
+				err := WithRetryVoid(ctx, func() error {
+					return deps.IndexWriter.UpsertDocuments(ctx, docs)
+				}, deps.Retry)
+				if err != nil {
 					stats.FailedRequests++
-					return stats, err
+					stats.SkippedFiles += filesInBatch
+					if ctx.Err() != nil {
+						return stats, ctx.Err()
+					}
+				} else {
+					stats.FilesIndexed += filesInBatch
 				}
+			} else {
+				stats.FilesIndexed += filesInBatch
 			}
 
 			if deps.OnProgress != nil {

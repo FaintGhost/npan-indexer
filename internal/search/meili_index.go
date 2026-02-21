@@ -228,3 +228,12 @@ func (m *MeiliIndex) Ping() error {
 	_, err := m.index.GetStats()
 	return err
 }
+
+// DocumentCount 返回索引中的文档总数。
+func (m *MeiliIndex) DocumentCount(ctx context.Context) (int64, error) {
+	stats, err := m.index.GetStatsWithContext(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return stats.NumberOfDocuments, nil
+}
