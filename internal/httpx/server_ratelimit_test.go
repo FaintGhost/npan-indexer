@@ -1,16 +1,25 @@
 package httpx
 
 import (
+  "io/fs"
   "net/http"
   "net/http/httptest"
   "path/filepath"
   "sync"
   "testing"
+  "testing/fstest"
 
   "npan/internal/config"
   "npan/internal/service"
   "npan/internal/storage"
 )
+
+// testDistFS returns a minimal in-memory FS for testing the SPA handler.
+func testDistFS() fs.FS {
+  return fstest.MapFS{
+    "index.html": &fstest.MapFile{Data: []byte("<!doctype html><html><body>test</body></html>")},
+  }
+}
 
 // newTestHandlers 构造测试用的最小 Handlers 实例。
 func newTestHandlers(t *testing.T) *Handlers {
@@ -32,7 +41,7 @@ func newTestHandlers(t *testing.T) *Handlers {
 func TestNewServer_RateLimitOnSearchEndpoint(t *testing.T) {
   const adminAPIKey = "test-admin-key"
   handlers := newTestHandlers(t)
-  e := NewServer(handlers, adminAPIKey)
+  e := NewServer(handlers, adminAPIKey, testDistFS())
 
   const totalRequests = 50
   type result struct {
@@ -88,7 +97,7 @@ func TestNewServer_RateLimitOnSearchEndpoint(t *testing.T) {
 func TestNewServer_RateLimitOnAdminEndpoint(t *testing.T) {
   const adminAPIKey = "test-admin-key"
   handlers := newTestHandlers(t)
-  e := NewServer(handlers, adminAPIKey)
+  e := NewServer(handlers, adminAPIKey, testDistFS())
 
   const totalRequests = 50
   type result struct {

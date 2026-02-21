@@ -1,47 +1,44 @@
 package httpx
 
 import (
+	"io/fs"
 	"log/slog"
-	"os"
-	"path/filepath"
-	"runtime"
+	"path"
 	"strings"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )
 
-func resolveAppHTMLPath() string {
-	candidates := []string{
-		filepath.Join("web", "app", "index.html"),
-		filepath.Join("..", "web", "app", "index.html"),
-		filepath.Join("..", "..", "web", "app", "index.html"),
-	}
-
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		return candidates[0]
-	}
-	candidates = append([]string{
-		filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "web", "app", "index.html")),
-	}, candidates...)
-
-	for _, candidate := range candidates {
-		info, err := os.Stat(candidate)
-		if err != nil || info.IsDir() {
-			continue
+// spaHandler serves the Vite build output with SPA fallback.
+// - Requests for /app/assets/* are served with immutable cache headers.
+// - Any unknown /app/* path falls back to index.html (SPA routing).
+func spaHandler(distFS fs.FS) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		p := c.Param("*")
+		if p == "" {
+			p = "index.html"
 		}
-		absCandidate, absErr := filepath.Abs(candidate)
-		if absErr == nil {
-			return absCandidate
-		}
-		return candidate
-	}
+		p = path.Clean(p)
 
-	return candidates[0]
+		// Try to open the file from embedded FS.
+		f, err := distFS.Open(p)
+		if err == nil {
+			f.Close()
+			// Set cache headers based on path.
+			if strings.HasPrefix(p, "assets/") {
+				c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			}
+			return c.FileFS(p, distFS)
+		}
+
+		// SPA fallback: serve index.html with no-cache.
+		c.Response().Header().Set("Cache-Control", "no-cache")
+		return c.FileFS("index.html", distFS)
+	}
 }
 
-func NewServer(handlers *Handlers, adminAPIKey string) *echo.Echo {
+func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS) *echo.Echo {
 	e := echo.New()
 	e.Logger = slog.Default()
 	e.Use(middleware.RequestID())
@@ -52,14 +49,14 @@ func NewServer(handlers *Handlers, adminAPIKey string) *echo.Echo {
 	// Public endpoints (no auth)
 	e.GET("/healthz", handlers.Health)
 	e.GET("/readyz", handlers.Readyz)
-	appHTMLPath := resolveAppHTMLPath()
-	appFSPath := strings.TrimPrefix(filepath.ToSlash(appHTMLPath), "/")
+
+	// SPA frontend served from embedded Vite build output
+	spa := spaHandler(distFS)
 	e.GET("/app", func(c *echo.Context) error {
-		return c.FileFS(appFSPath, os.DirFS("/"))
+		c.Response().Header().Set("Cache-Control", "no-cache")
+		return c.FileFS("index.html", distFS)
 	})
-	e.GET("/app/", func(c *echo.Context) error {
-		return c.FileFS(appFSPath, os.DirFS("/"))
-	})
+	e.GET("/app/*", spa)
 
 	// App API (embedded auth — config fallback always enabled)
 	appAPI := e.Group("/api/v1/app", EmbeddedAuth())

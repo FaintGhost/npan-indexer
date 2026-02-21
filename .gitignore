@@ -39,6 +39,11 @@ data/update_files/
 data/VERSION
 data/instance-uid
 
+# Generated files
+web/src/routeTree.gen.ts
+web/node_modules/
+web/dist/
+
 # Temporary caches
 .cache/
 tmp/

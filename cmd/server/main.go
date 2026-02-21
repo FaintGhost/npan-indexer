@@ -15,6 +15,9 @@ import (
 	"npan/internal/search"
 	"npan/internal/service"
 	"npan/internal/storage"
+	"npan/web"
+
+	"github.com/labstack/echo/v5"
 )
 
 func main() {
@@ -53,7 +56,8 @@ func main() {
 	})
 
 	handlers := httpx.NewHandlers(cfg, cachedService, syncManager)
-	e := httpx.NewServer(handlers, cfg.AdminAPIKey)
+	distFS := echo.MustSubFS(web.DistFS, "dist")
+	e := httpx.NewServer(handlers, cfg.AdminAPIKey, distFS)
 
 	httpServer := &http.Server{
 		Addr:              cfg.ServerAddr,

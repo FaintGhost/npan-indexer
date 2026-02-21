@@ -11,7 +11,7 @@ const testAdminKey = "test-admin-key-1234567890"
 func TestRoutes_PublicEndpoints_NoAuthRequired(t *testing.T) {
   t.Parallel()
 
-  e := NewServer(&Handlers{}, testAdminKey)
+  e := NewServer(&Handlers{}, testAdminKey, testDistFS())
   endpoints := []struct {
     method string
     path   string
@@ -37,7 +37,7 @@ func TestRoutes_PublicEndpoints_NoAuthRequired(t *testing.T) {
 func TestRoutes_APIEndpoints_RequireAuth(t *testing.T) {
   t.Parallel()
 
-  e := NewServer(&Handlers{}, testAdminKey)
+  e := NewServer(&Handlers{}, testAdminKey, testDistFS())
   endpoints := []struct {
     method string
     path   string
@@ -63,7 +63,7 @@ func TestRoutes_APIEndpoints_RequireAuth(t *testing.T) {
 func TestRoutes_AdminEndpoints_RequireAuth(t *testing.T) {
   t.Parallel()
 
-  e := NewServer(&Handlers{}, testAdminKey)
+  e := NewServer(&Handlers{}, testAdminKey, testDistFS())
   endpoints := []struct {
     method string
     path   string
@@ -88,7 +88,7 @@ func TestRoutes_AdminEndpoints_RequireAuth(t *testing.T) {
 func TestRoutes_APIEndpoints_WithKey_Pass(t *testing.T) {
   t.Parallel()
 
-  e := NewServer(&Handlers{}, testAdminKey)
+  e := NewServer(&Handlers{}, testAdminKey, testDistFS())
   endpoints := []struct {
     method string
     path   string

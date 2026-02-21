@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-paper: #f3f6fd;
+  --color-paper-dark: #e9eefb;
+  --font-display: 'Outfit', system-ui, sans-serif;
+  --font-body: 'Noto Sans SC', sans-serif;
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body {
+  font-family: var(--font-body);
+  background:
+    radial-gradient(1200px 560px at 50% -260px, #dae6ff 0%, transparent 72%),
+    linear-gradient(180deg, #f9fbff 0%, #f3f6fd 100%);
+  background-attachment: fixed;
+}
+
+mark {
+  background-color: #fef08a;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+@keyframes softPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-soft-pulse {
+  animation: softPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@layer components {
+  .vt-card {
+    view-transition-name: var(--vt-name);
+  }
+
+  ::view-transition-old(.vt-card) {
+    animation: 0.25s var(--ease-smooth) both fade-out;
+  }
+
+  ::view-transition-new(.vt-card) {
+    animation: 0.25s var(--ease-smooth) both fade-in;
+  }
+}
+
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #c4ccd8 transparent;
+}

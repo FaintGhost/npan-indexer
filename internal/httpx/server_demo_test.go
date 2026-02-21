@@ -3,7 +3,6 @@ package httpx
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 )
@@ -11,7 +10,7 @@ import (
 func TestNewServer_RegistersAppRoutes(t *testing.T) {
 	t.Parallel()
 
-	e := NewServer(&Handlers{}, "test-key")
+	e := NewServer(&Handlers{}, "test-key", testDistFS())
 	routes := e.Router().Routes()
 	seen := map[string]bool{}
 	for _, route := range routes {
@@ -21,8 +20,8 @@ func TestNewServer_RegistersAppRoutes(t *testing.T) {
 	if !seen["GET /app"] {
 		t.Fatal("expected GET /app route to be registered")
 	}
-	if !seen["GET /app/"] {
-		t.Fatal("expected GET /app/ route to be registered")
+	if !seen["GET /app/*"] {
+		t.Fatal("expected GET /app/* route to be registered")
 	}
 	if !seen["GET /api/v1/app/search"] {
 		t.Fatal("expected GET /api/v1/app/search route to be registered")
@@ -35,12 +34,7 @@ func TestNewServer_RegistersAppRoutes(t *testing.T) {
 func TestAppPage_ReturnsHTML(t *testing.T) {
 	t.Parallel()
 
-	path := resolveAppHTMLPath()
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("app html path not found: %s, err=%v", path, err)
-	}
-
-	e := NewServer(&Handlers{}, "test-key")
+	e := NewServer(&Handlers{}, "test-key", testDistFS())
 	req := httptest.NewRequest(http.MethodGet, "/app", nil)
 	rec := httptest.NewRecorder()
 
