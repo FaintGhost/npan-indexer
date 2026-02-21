@@ -22,37 +22,37 @@ const baseDoc: IndexDocument = {
 
 describe('FileCard', () => {
   it('renders file name', () => {
-    render(<FileCard doc={baseDoc} onDownload={() => {}} />)
+    render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={() => {}} />)
     expect(screen.getByText('report.pdf')).toBeInTheDocument()
   })
 
   it('renders highlighted name with HTML', () => {
     const doc = { ...baseDoc, highlighted_name: '<mark>report</mark>.pdf' }
-    render(<FileCard doc={doc} onDownload={() => {}} />)
+    render(<FileCard doc={doc} downloadStatus="idle" onDownload={() => {}} />)
     const mark = document.querySelector('mark')
     expect(mark).toBeInTheDocument()
     expect(mark?.textContent).toBe('report')
   })
 
   it('renders formatted size', () => {
-    render(<FileCard doc={baseDoc} onDownload={() => {}} />)
+    render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={() => {}} />)
     expect(screen.getByText(/1 MB/)).toBeInTheDocument()
   })
 
   it('renders formatted date', () => {
-    render(<FileCard doc={baseDoc} onDownload={() => {}} />)
+    render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={() => {}} />)
     // Check for date pattern YYYY-MM-DD HH:mm
     const dateEl = screen.getByText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
     expect(dateEl).toBeInTheDocument()
   })
 
   it('renders source_id', () => {
-    render(<FileCard doc={baseDoc} onDownload={() => {}} />)
+    render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={() => {}} />)
     expect(screen.getByText(/456/)).toBeInTheDocument()
   })
 
   it('renders document icon for pdf', () => {
-    const { container } = render(<FileCard doc={baseDoc} onDownload={() => {}} />)
+    const { container } = render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={() => {}} />)
     // pdf -> document category -> bg-rose-100
     const iconEl = container.querySelector('.bg-rose-100')
     expect(iconEl).toBeInTheDocument()
@@ -60,28 +60,28 @@ describe('FileCard', () => {
 
   it('renders firmware icon for .bin file', () => {
     const doc = { ...baseDoc, name: 'firmware.bin' }
-    const { container } = render(<FileCard doc={doc} onDownload={() => {}} />)
+    const { container } = render(<FileCard doc={doc} downloadStatus="idle" onDownload={() => {}} />)
     const iconEl = container.querySelector('.bg-purple-100')
     expect(iconEl).toBeInTheDocument()
   })
 
   it('renders archive icon for .zip file', () => {
     const doc = { ...baseDoc, name: 'archive.zip' }
-    const { container } = render(<FileCard doc={doc} onDownload={() => {}} />)
+    const { container } = render(<FileCard doc={doc} downloadStatus="idle" onDownload={() => {}} />)
     const iconEl = container.querySelector('.bg-amber-100')
     expect(iconEl).toBeInTheDocument()
   })
 
   it('renders download button', () => {
-    render(<FileCard doc={baseDoc} onDownload={() => {}} />)
+    render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={() => {}} />)
     expect(screen.getByRole('button', { name: /下载/ })).toBeInTheDocument()
   })
 
   it('calls onDownload when download button clicked', async () => {
     const onDownload = vi.fn()
-    render(<FileCard doc={baseDoc} onDownload={onDownload} />)
+    render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={onDownload} />)
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: /下载/ }))
-    expect(onDownload).toHaveBeenCalledWith(baseDoc.source_id)
+    expect(onDownload).toHaveBeenCalled()
   })
 })

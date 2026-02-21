@@ -23,6 +23,92 @@ mark {
   padding: 0 1px;
 }
 
+/* ── Search stage (header) ── */
+.search-stage {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  transition:
+    background-color 400ms ease,
+    border-color 400ms ease;
+  view-transition-name: search-stage;
+}
+
+.search-card {
+  transition: box-shadow 400ms ease;
+  view-transition-name: search-card;
+}
+
+.results-wrap {
+  position: relative;
+  z-index: 10;
+  view-transition-name: results-wrap;
+}
+
+/* ── View Transition timing ── */
+::view-transition-group(search-stage),
+::view-transition-group(search-card),
+::view-transition-group(results-wrap) {
+  animation-duration: 650ms;
+  animation-timing-function: var(--ease-smooth);
+}
+
+::view-transition-old(results-list),
+::view-transition-new(results-list) {
+  animation-duration: 300ms;
+  animation-timing-function: ease;
+}
+
+/* ── Hero mode (initial, no results) ── */
+.mode-hero {
+  overflow: hidden;
+}
+
+.mode-hero .search-stage {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+}
+
+.mode-hero .search-card {
+  transform: scale(1.02);
+  box-shadow: 0 24px 60px rgba(23, 48, 105, 0.14);
+}
+
+.mode-hero .results-wrap {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(60px);
+}
+
+/* ── Docked mode (has results / searching) ── */
+.mode-docked .search-stage {
+  height: auto;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  background: rgba(243, 246, 253, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(218, 230, 255, 0.6);
+  box-shadow: 0 4px 24px -8px rgba(23, 48, 105, 0.08);
+}
+
+.mode-docked .search-card {
+  transform: scale(1);
+  box-shadow: 0 4px 16px rgba(23, 48, 105, 0.04);
+}
+
+.mode-docked .results-wrap {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Skeleton pulse ── */
 @keyframes softPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -32,21 +118,17 @@ mark {
   animation: softPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-@layer components {
-  .vt-card {
-    view-transition-name: var(--vt-name);
-  }
-
-  ::view-transition-old(.vt-card) {
-    animation: 0.25s var(--ease-smooth) both fade-out;
-  }
-
-  ::view-transition-new(.vt-card) {
-    animation: 0.25s var(--ease-smooth) both fade-in;
-  }
-}
-
+/* ── Scrollbar ── */
 .thin-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #c4ccd8 transparent;
+  scrollbar-color: #ced7ea transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: #ced7ea;
+  border-radius: 9999px;
 }

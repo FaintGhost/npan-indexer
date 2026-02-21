@@ -10,7 +10,7 @@ describe('InitialState', () => {
 
   it('renders description', () => {
     render(<InitialState />)
-    expect(screen.getByText(/输入关键词/)).toBeInTheDocument()
+    expect(screen.getByText(/查找.*文件名/)).toBeInTheDocument()
   })
 })
 

@@ -64,7 +64,8 @@ describe('SearchPage', () => {
     await user.type(screen.getByRole('searchbox'), 'nonexistent{Enter}')
 
     await waitFor(() => {
-      expect(screen.getByText('未找到相关文件')).toBeInTheDocument()
+      // Empty state card has the description text
+      expect(screen.getByText(/没有找到匹配的内容/)).toBeInTheDocument()
     })
   })
 
@@ -122,7 +123,8 @@ describe('SearchPage', () => {
     await user.type(screen.getByRole('searchbox'), 'test{Enter}')
 
     await waitFor(() => {
-      expect(screen.getByText(/50/)).toBeInTheDocument()
+      // Counter shows "3 / 50"
+      expect(screen.getByText('3 / 50')).toBeInTheDocument()
     })
   })
 })

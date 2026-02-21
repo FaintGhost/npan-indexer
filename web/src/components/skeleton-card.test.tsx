@@ -6,7 +6,7 @@ describe('SkeletonCard', () => {
   it('renders with pulse animation class', () => {
     const { container } = render(<SkeletonCard />)
     const el = container.firstElementChild as HTMLElement
-    expect(el.className).toContain('animate-pulse')
+    expect(el.className).toContain('animate-soft-pulse')
   })
 
   it('sets aria-hidden', () => {

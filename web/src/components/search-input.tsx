@@ -11,69 +11,72 @@ interface SearchInputProps {
 export function SearchInput({ value, onChange, onSubmit, onClear, ref }: SearchInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault()
       onSubmit()
     }
   }
 
   return (
-    <div className="relative">
+    <div className="relative flex w-full items-center">
       {/* Search icon */}
-      <svg
-        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-        xmlns="http://www.w3.org/2000/svg"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="11" cy="11" r="8" />
-        <path d="m21 21-4.3-4.3" />
-      </svg>
+      <div className="pointer-events-none absolute left-4 text-slate-400">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      </div>
 
       <input
         ref={ref}
-        type="search"
+        type="text"
         role="searchbox"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="搜索文件名..."
-        className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-12 text-base text-slate-900 outline-none transition-shadow focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+        placeholder="输入文件名关键词，例如：MX40、固件、安装包"
         autoComplete="off"
+        className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-16 text-[15px] text-slate-800 outline-none ring-blue-100 transition focus:border-blue-300 focus:ring-4"
       />
 
-      {/* Clear button or keyboard shortcut badge */}
-      {value ? (
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label="清空搜索"
-          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      <div className="absolute right-3 flex items-center gap-2">
+        {value ? (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="清空搜索"
+            className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none"
           >
-            <line x1="18" x2="6" y1="6" y2="18" />
-            <line x1="6" x2="18" y1="6" y2="18" />
-          </svg>
-        </button>
-      ) : (
-        <kbd className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-400">
-          {isMac() ? '⌘K' : 'Ctrl K'}
-        </kbd>
-      )}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        ) : (
+          <kbd className="hidden items-center justify-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 sm:inline-flex">
+            {isMac() ? '⌘K' : 'Ctrl K'}
+          </kbd>
+        )}
+      </div>
     </div>
   )
 }
