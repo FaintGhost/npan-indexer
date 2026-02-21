@@ -50,3 +50,14 @@ func EmbeddedAuth() echo.MiddlewareFunc {
     }
   }
 }
+
+// ConfigFallbackAuth 允许使用服务端配置的凭据访问上游 API。
+// 用于已通过 APIKeyAuth 认证的管理路由。
+func ConfigFallbackAuth() echo.MiddlewareFunc {
+  return func(next echo.HandlerFunc) echo.HandlerFunc {
+    return func(c *echo.Context) error {
+      c.Set("allow_config_fallback", true)
+      return next(c)
+    }
+  }
+}
