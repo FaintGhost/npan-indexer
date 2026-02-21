@@ -224,6 +224,7 @@
         loading: false,
         hasMore: false,
         requestSeq: 0,
+        abortController: null,
         debounceTimer: null,
         linkCache: new Map(),
         docked: false,
@@ -266,7 +267,7 @@
         });
       }
 
-      function requestJSON(path, params) {
+      function requestJSON(path, params, signal) {
         const url = new URL(path, window.location.origin);
         Object.keys(params || {}).forEach((key) => {
           const val = params[key];
@@ -274,13 +275,21 @@
             url.searchParams.set(key, String(val));
           }
         });
-        return fetch(url.toString(), { method: "GET" }).then(async (resp) => {
+        return fetch(url.toString(), { method: "GET", signal }).then(async (resp) => {
           const data = await resp.json().catch(() => ({}));
           if (!resp.ok) {
             throw new Error(data.error || "请求失败: HTTP " + resp.status);
           }
           return data;
         });
+      }
+
+      function abortInFlight() {
+        if (state.abortController) {
+          state.abortController.abort();
+          state.abortController = null;
+        }
+        state.loading = false;
       }
 
       function escapeHTML(value) {
@@ -383,6 +392,7 @@
       }
 
       function resetSearch(query) {
+        abortInFlight();
         state.requestSeq += 1;
         state.query = query;
         state.items = [];
@@ -393,7 +403,13 @@
       }
 
       async function fetchPage(page, replaceMode) {
-        if (state.loading || !state.query) {
+        if (!state.query) {
+          return;
+        }
+        if (replaceMode && state.loading) {
+          abortInFlight();
+        }
+        if (!replaceMode && state.loading) {
           return;
         }
         if (!replaceMode && !state.hasMore) {
@@ -401,6 +417,8 @@
         }
 
         const seq = state.requestSeq;
+        const controller = new AbortController();
+        state.abortController = controller;
         state.loading = true;
         setStatus(replaceMode ? "搜索中..." : "正在加载更多...");
         if (replaceMode) {
@@ -415,7 +433,7 @@
             query: state.query,
             page,
             page_size: state.pageSize,
-          });
+          }, controller.signal);
 
           if (seq !== state.requestSeq) {
             return;
@@ -448,6 +466,9 @@
             "已加载 " + state.items.length + " / " + state.total + " 个文件",
           );
         } catch (error) {
+          if (error && error.name === "AbortError") {
+            return;
+          }
           setStatus(error.message || String(error), true);
           if (!state.items.length) {
             await applyMode(false);
@@ -456,7 +477,12 @@
             });
           }
         } finally {
-          state.loading = false;
+          if (state.abortController === controller) {
+            state.abortController = null;
+          }
+          if (seq === state.requestSeq) {
+            state.loading = false;
+          }
         }
       }
 
