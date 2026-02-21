@@ -35,6 +35,8 @@ func main() {
 	}
 
 	queryService := search.NewQueryService(meiliIndex)
+	tracker := search.NewSearchActivityTracker(5)
+	cachedService := search.NewCachedQueryService(queryService, 256, 30*time.Second, tracker)
 	progressStore := storage.NewJSONProgressStore(cfg.ProgressFile)
 	syncManager := service.NewSyncManager(service.SyncManagerArgs{
 		Index:              meiliIndex,
@@ -47,14 +49,19 @@ func main() {
 		Retry:              cfg.Retry,
 		MaxConcurrent:      cfg.SyncMaxConcurrent,
 		MinTimeMS:          cfg.SyncMinTimeMS,
+		ActivityChecker:    tracker,
 	})
 
-	handlers := httpx.NewHandlers(cfg, queryService, syncManager)
+	handlers := httpx.NewHandlers(cfg, cachedService, syncManager)
 	e := httpx.NewServer(handlers, cfg.AdminAPIKey)
 
 	httpServer := &http.Server{
-		Addr:    cfg.ServerAddr,
-		Handler: e,
+		Addr:              cfg.ServerAddr,
+		Handler:           e,
+		ReadHeaderTimeout: cfg.ServerReadHeaderTimeout,
+		ReadTimeout:       cfg.ServerReadTimeout,
+		WriteTimeout:      cfg.ServerWriteTimeout,
+		IdleTimeout:       cfg.ServerIdleTimeout,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

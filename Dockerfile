@@ -24,4 +24,6 @@ USER npan
 EXPOSE 1323
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
     CMD wget -q -O /dev/null http://localhost:1323/healthz || exit 1
+ENV GOMEMLIMIT=512MiB
+ENV GOGC=100
 ENTRYPOINT ["npan-server"]

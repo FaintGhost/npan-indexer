@@ -47,6 +47,7 @@ func NewServer(handlers *Handlers, adminAPIKey string) *echo.Echo {
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestLogger())
+	e.Use(RateLimitMiddleware(20, 40))
 
 	// Public endpoints (no auth)
 	e.GET("/healthz", handlers.Health)
@@ -73,7 +74,7 @@ func NewServer(handlers *Handlers, adminAPIKey string) *echo.Echo {
 	api.GET("/download-url", handlers.DownloadURL)
 
 	// Admin (requires API key)
-	admin := e.Group("/api/v1/admin", APIKeyAuth(adminAPIKey))
+	admin := e.Group("/api/v1/admin", APIKeyAuth(adminAPIKey), RateLimitMiddleware(5, 10))
 	admin.POST("/sync/full", handlers.StartFullSync)
 	admin.GET("/sync/full/progress", handlers.GetFullSyncProgress)
 	admin.POST("/sync/full/cancel", handlers.CancelFullSync)

@@ -2,6 +2,12 @@ package search
 
 import "npan/internal/models"
 
+// Searcher 定义搜索服务的统一接口，支持缓存装饰器等扩展。
+type Searcher interface {
+  Query(params models.LocalSearchParams) (QueryResult, error)
+  Ping() error
+}
+
 type QueryService struct {
 	index *MeiliIndex
 }

@@ -27,7 +27,7 @@ type Handlers struct {
 	syncManager  *service.SyncManager
 }
 
-func NewHandlers(cfg config.Config, queryService *search.QueryService, syncManager *service.SyncManager) *Handlers {
+func NewHandlers(cfg config.Config, queryService search.Searcher, syncManager *service.SyncManager) *Handlers {
 	return &Handlers{
 		cfg:          cfg,
 		queryService: queryService,

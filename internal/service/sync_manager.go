@@ -37,6 +37,7 @@ type SyncManager struct {
 	retry                     models.RetryPolicyOptions
 	maxConcurrent             int
 	minTimeMS                 int
+	activityChecker           indexer.ActivityChecker
 
 	mu      sync.Mutex
 	running bool
@@ -54,6 +55,7 @@ type SyncManagerArgs struct {
 	Retry              models.RetryPolicyOptions
 	MaxConcurrent      int
 	MinTimeMS          int
+	ActivityChecker    indexer.ActivityChecker
 }
 
 func NewSyncManager(args SyncManagerArgs) *SyncManager {
@@ -68,6 +70,7 @@ func NewSyncManager(args SyncManagerArgs) *SyncManager {
 		retry:                     args.Retry,
 		maxConcurrent:             args.MaxConcurrent,
 		minTimeMS:                 args.MinTimeMS,
+		activityChecker:           args.ActivityChecker,
 	}
 }
 
@@ -503,6 +506,9 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	semaphore := make(chan struct{}, rootWorkers)
 	progressMu := &sync.Mutex{}
 	limiter := indexer.NewRequestLimiter(m.maxConcurrent, m.minTimeMS)
+	if m.activityChecker != nil {
+		limiter.SetActivityChecker(m.activityChecker)
+	}
 	runCtx, runCancel := context.WithCancel(ctx)
 	defer runCancel()
 

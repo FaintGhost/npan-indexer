@@ -4,13 +4,18 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"npan/internal/models"
 	"npan/internal/npan"
 )
 
 type Config struct {
-	ServerAddr string
+	ServerAddr             string
+	ServerReadHeaderTimeout time.Duration
+	ServerReadTimeout       time.Duration
+	ServerWriteTimeout      time.Duration
+	ServerIdleTimeout       time.Duration
 
 	AdminAPIKey             string
 	AllowConfigAuthFallback bool
@@ -85,6 +90,18 @@ func readBool(key string, fallback bool) bool {
 	return raw == "1" || raw == "true" || raw == "yes"
 }
 
+func readDuration(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
 func readInt64List(key string) []int64 {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
@@ -118,6 +135,10 @@ func Load() Config {
 
 	return Config{
 		ServerAddr:              readString("SERVER_ADDR", ":1323"),
+		ServerReadHeaderTimeout: readDuration("SERVER_READ_HEADER_TIMEOUT", 5*time.Second),
+		ServerReadTimeout:       readDuration("SERVER_READ_TIMEOUT", 10*time.Second),
+		ServerWriteTimeout:      readDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
+		ServerIdleTimeout:       readDuration("SERVER_IDLE_TIMEOUT", 120*time.Second),
 		AdminAPIKey:             readString("NPA_ADMIN_API_KEY", ""),
 		AllowConfigAuthFallback: readBool("NPA_ALLOW_CONFIG_AUTH_FALLBACK", false),
 
