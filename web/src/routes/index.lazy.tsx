@@ -100,7 +100,7 @@ export function SearchPage() {
                 </p>
               </div>
               <div className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                Tailwind v4 + View Transition
+                Powered by Meilisearch
               </div>
             </div>
 
