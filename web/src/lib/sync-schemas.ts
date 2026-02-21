@@ -36,7 +36,7 @@ export const IncrementalSyncStatsSchema = z.object({
 export type IncrementalSyncStats = z.infer<typeof IncrementalSyncStatsSchema>
 
 export const SyncProgressSchema = z.object({
-  status: z.enum(['idle', 'running', 'done', 'error', 'cancelled']),
+  status: z.enum(['idle', 'running', 'done', 'error', 'cancelled', 'interrupted']),
   startedAt: z.number(),
   updatedAt: z.number(),
   roots: z.array(z.number()),

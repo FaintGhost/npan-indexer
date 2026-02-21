@@ -10,6 +10,7 @@ const statusConfig: Record<string, { label: string; color: string; badgeBg: stri
   running: { label: '运行中', color: 'text-blue-600', badgeBg: 'bg-blue-100' },
   done: { label: '已完成', color: 'text-emerald-600', badgeBg: 'bg-emerald-100' },
   error: { label: '出错', color: 'text-rose-600', badgeBg: 'bg-rose-100' },
+  interrupted: { label: '已中断', color: 'text-amber-600', badgeBg: 'bg-amber-100' },
   cancelled: { label: '已取消', color: 'text-slate-500', badgeBg: 'bg-slate-100' },
 }
 

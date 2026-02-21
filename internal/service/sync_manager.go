@@ -98,7 +98,22 @@ func (m *SyncManager) IsRunning() bool {
 }
 
 func (m *SyncManager) GetProgress() (*models.SyncProgressState, error) {
-	return m.progressStore.Load()
+	progress, err := m.progressStore.Load()
+	if err != nil || progress == nil {
+		return progress, err
+	}
+
+	// If progress says "running" but no goroutine is active (e.g. after
+	// container restart), mark as interrupted so the UI shows the real state.
+	if progress.Status == "running" && !m.IsRunning() {
+		progress.Status = "interrupted"
+		progress.LastError = "进程重启，同步中断"
+		progress.ActiveRoot = nil
+		progress.UpdatedAt = time.Now().UnixMilli()
+		_ = m.progressStore.Save(progress)
+	}
+
+	return progress, nil
 }
 
 func (m *SyncManager) Cancel() bool {
