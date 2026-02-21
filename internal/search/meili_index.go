@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -53,6 +54,14 @@ func (m *MeiliIndex) EnsureSettings(ctx context.Context) error {
 		SearchableAttributes: []string{"name", "path_text"},
 		FilterableAttributes: []string{"type", "parent_id", "modified_at", "in_trash", "is_deleted"},
 		SortableAttributes:   []string{"modified_at", "size", "created_at"},
+		DisplayedAttributes:  []string{"doc_id", "source_id", "type", "name", "path_text", "parent_id", "modified_at", "created_at", "size"},
+		StopWords:            []string{"的", "了", "在", "是", "和", "就", "都", "而", "及", "与"},
+		TypoTolerance: &meilisearch.TypoTolerance{
+			Enabled:             true,
+			DisableOnAttributes: []string{"path_text"},
+			DisableOnWords:      []string{"pdf", "docx", "xlsx", "pptx", "jpg", "png", "mp4", "zip", "rar", "exe", "apk", "bin", "iso"},
+		},
+		ProximityPrecision: meilisearch.ByAttribute,
 	})
 	if err != nil {
 		return err
@@ -119,6 +128,13 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 		Page:        page,
 		HitsPerPage: pageSize,
 		Sort:        []string{"modified_at:desc"},
+		AttributesToRetrieve: []string{
+			"doc_id", "source_id", "type", "name", "path_text",
+			"parent_id", "modified_at", "created_at", "size",
+		},
+		AttributesToHighlight: []string{"name"},
+		HighlightPreTag:       "<mark>",
+		HighlightPostTag:      "</mark>",
 	}
 
 	response, err := m.index.Search(params.Query, request)
@@ -129,6 +145,26 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 	docs := make([]models.IndexDocument, 0, len(response.Hits))
 	if err := response.Hits.DecodeInto(&docs); err != nil {
 		return nil, 0, err
+	}
+
+	for i, hit := range response.Hits {
+		if i >= len(docs) {
+			break
+		}
+		formatted, ok := hit["_formatted"]
+		if !ok {
+			continue
+		}
+		var formattedObj map[string]json.RawMessage
+		if err := json.Unmarshal(formatted, &formattedObj); err != nil {
+			continue
+		}
+		if nameRaw, ok := formattedObj["name"]; ok {
+			var name string
+			if err := json.Unmarshal(nameRaw, &name); err == nil {
+				docs[i].HighlightedName = name
+			}
+		}
 	}
 
 	total := response.TotalHits

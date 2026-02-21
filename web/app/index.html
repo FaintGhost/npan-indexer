@@ -147,6 +147,13 @@
       .animate-soft-pulse {
         animation: softPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       }
+
+      mark {
+        background-color: #fef08a;
+        color: inherit;
+        border-radius: 2px;
+        padding: 0 1px;
+      }
     </style>
   </head>
   <body class="mode-hero text-slate-800 antialiased">
@@ -504,6 +511,7 @@
       function cardHTML(item) {
         const id = Number(item.source_id || 0);
         const name = String(item.name || "");
+        const displayName = item.highlighted_name || escapeHTML(name);
         const modifiedAt = formatTime(item.modified_at);
         const size = formatBytes(item.size);
         const iconInfo = getFileIcon(name);
@@ -519,7 +527,7 @@
           '<h3 class="truncate text-[15px] font-semibold text-slate-900" title="' +
           escapeHTML(name) +
           '">' +
-          escapeHTML(name) +
+          displayName +
           "</h3>" +
           '<p class="mt-1 text-[13px] text-slate-500 truncate">' +
           size +

@@ -39,18 +39,19 @@ type FolderChildrenPage struct {
 }
 
 type IndexDocument struct {
-	DocID      string   `json:"doc_id"`
-	SourceID   int64    `json:"source_id"`
-	Type       ItemType `json:"type"`
-	Name       string   `json:"name"`
-	PathText   string   `json:"path_text"`
-	ParentID   int64    `json:"parent_id"`
-	ModifiedAt int64    `json:"modified_at"`
-	CreatedAt  int64    `json:"created_at"`
-	Size       int64    `json:"size"`
-	SHA1       string   `json:"sha1"`
-	InTrash    bool     `json:"in_trash"`
-	IsDeleted  bool     `json:"is_deleted"`
+	DocID           string   `json:"doc_id"`
+	SourceID        int64    `json:"source_id"`
+	Type            ItemType `json:"type"`
+	Name            string   `json:"name"`
+	PathText        string   `json:"path_text"`
+	ParentID        int64    `json:"parent_id"`
+	ModifiedAt      int64    `json:"modified_at"`
+	CreatedAt       int64    `json:"created_at"`
+	Size            int64    `json:"size"`
+	SHA1            string   `json:"sha1"`
+	InTrash         bool     `json:"in_trash"`
+	IsDeleted       bool     `json:"is_deleted"`
+	HighlightedName string   `json:"highlighted_name,omitempty"`
 }
 
 type CrawlStats struct {
