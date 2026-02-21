@@ -24,6 +24,12 @@ export function useSyncProgress(headers: Record<string, string>) {
       setError(null)
       return result
     } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        // No sync progress yet — not an error
+        setProgress(null)
+        setError(null)
+        return null
+      }
       if (err instanceof ApiError) {
         setError(err.message)
       } else {

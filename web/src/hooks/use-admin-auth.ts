@@ -35,6 +35,12 @@ export function useAdminAuth() {
       return true
     } catch (err) {
       setLoading(false)
+      if (err instanceof ApiError && err.status === 404) {
+        // 404 means auth passed but no sync progress yet — treat as success
+        localStorage.setItem(STORAGE_KEY, key)
+        setApiKey(key)
+        return true
+      }
       if (err instanceof ApiError && err.status === 401) {
         setError('API Key 无效')
       } else {
