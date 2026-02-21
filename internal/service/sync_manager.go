@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"npan/internal/indexer"
+	"npan/internal/metrics"
 	"npan/internal/models"
 	"npan/internal/npan"
 	"npan/internal/search"
@@ -45,6 +46,7 @@ type SyncManager struct {
 	syncStateFile             string
 	defaultIncrementalQuery   string
 	defaultWindowOverlapMS    int64
+	metricsReporter           metrics.SyncReporter
 
 	mu      sync.Mutex
 	running bool
@@ -66,6 +68,7 @@ type SyncManagerArgs struct {
 	SyncStateFile      string
 	IncrementalQuery   string
 	WindowOverlapMS    int64
+	MetricsReporter    metrics.SyncReporter
 }
 
 func NewSyncManager(args SyncManagerArgs) *SyncManager {
@@ -84,6 +87,7 @@ func NewSyncManager(args SyncManagerArgs) *SyncManager {
 		syncStateFile:             args.SyncStateFile,
 		defaultIncrementalQuery:   args.IncrementalQuery,
 		defaultWindowOverlapMS:    args.WindowOverlapMS,
+		metricsReporter:           args.MetricsReporter,
 	}
 }
 
@@ -119,6 +123,10 @@ func (m *SyncManager) Start(api npan.API, request SyncStartRequest) error {
 	m.running = true
 	m.cancel = cancel
 	m.mu.Unlock()
+
+	if m.metricsReporter != nil {
+		m.metricsReporter.ReportSyncStarted(request.Mode)
+	}
 
 	go func() {
 		defer func() {
@@ -561,6 +569,7 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	}
 
 	// Full crawl path
+	fullStartTime := time.Now()
 	roots, rootEstimateMap, rootNameMap, err := m.discoverRootFolders(ctx, api, request)
 	if err != nil {
 		return err
@@ -703,6 +712,14 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		progress.ActiveRoot = nil
 		updateAggregateFromRoots(progress)
 		_ = m.progressStore.Save(progress)
+		if m.metricsReporter != nil {
+			m.metricsReporter.ReportSyncFinished(metrics.SyncEvent{
+				Mode:     models.SyncModeFull,
+				Status:   "error",
+				Duration: time.Since(fullStartTime),
+				Stats:    progress.AggregateStats,
+			})
+		}
 		return firstErr
 	}
 
@@ -712,6 +729,14 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		progress.ActiveRoot = nil
 		updateAggregateFromRoots(progress)
 		_ = m.progressStore.Save(progress)
+		if m.metricsReporter != nil {
+			m.metricsReporter.ReportSyncFinished(metrics.SyncEvent{
+				Mode:     models.SyncModeFull,
+				Status:   "cancelled",
+				Duration: time.Since(fullStartTime),
+				Stats:    progress.AggregateStats,
+			})
+		}
 		return ctx.Err()
 	}
 
@@ -731,11 +756,21 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		progress.Verification = buildVerification(meiliCount, progress.AggregateStats)
 	}
 
+	if m.metricsReporter != nil {
+		m.metricsReporter.ReportSyncFinished(metrics.SyncEvent{
+			Mode:     models.SyncModeFull,
+			Status:   "done",
+			Duration: time.Since(fullStartTime),
+			Stats:    progress.AggregateStats,
+		})
+	}
+
 	return m.progressStore.Save(progress)
 }
 
 func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, request SyncStartRequest, syncState *models.SyncState, syncStateStore *storage.JSONSyncStateStore) error {
-	now := time.Now().UnixMilli()
+	incrStartTime := time.Now()
+	now := incrStartTime.UnixMilli()
 
 	cursorBefore := int64(0)
 	if syncState != nil && syncState.LastSyncTime > 0 {
@@ -807,6 +842,17 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 	}
 
 	progress.UpdatedAt = time.Now().UnixMilli()
+
+	if m.metricsReporter != nil {
+		m.metricsReporter.ReportSyncFinished(metrics.SyncEvent{
+			Mode:      models.SyncModeIncremental,
+			Status:    progress.Status,
+			Duration:  time.Since(incrStartTime),
+			Stats:     progress.AggregateStats,
+			IncrStats: progress.IncrementalStats,
+		})
+	}
+
 	return m.progressStore.Save(progress)
 }
 

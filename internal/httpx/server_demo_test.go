@@ -10,7 +10,7 @@ import (
 func TestNewServer_RegistersAppRoutes(t *testing.T) {
 	t.Parallel()
 
-	e := NewServer(&Handlers{}, "test-key", testDistFS())
+	e := NewServer(&Handlers{}, "test-key", testDistFS(), nil)
 	routes := e.Router().Routes()
 	seen := map[string]bool{}
 	for _, route := range routes {
@@ -31,7 +31,7 @@ func TestNewServer_RegistersAppRoutes(t *testing.T) {
 func TestAppPage_ReturnsHTML(t *testing.T) {
 	t.Parallel()
 
-	e := NewServer(&Handlers{}, "test-key", testDistFS())
+	e := NewServer(&Handlers{}, "test-key", testDistFS(), nil)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 

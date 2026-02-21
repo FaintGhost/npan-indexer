@@ -68,6 +68,11 @@ func (s *CachedQueryService) Query(params models.LocalSearchParams) (QueryResult
   return result, nil
 }
 
+// Len returns the current number of entries in the cache.
+func (s *CachedQueryService) Len() int {
+	return s.cache.Len()
+}
+
 func (s *CachedQueryService) Ping() error {
-  return s.inner.Ping()
+	return s.inner.Ping()
 }

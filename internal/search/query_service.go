@@ -9,7 +9,7 @@ type Searcher interface {
 }
 
 type QueryService struct {
-	index *MeiliIndex
+	index IndexOperator
 }
 
 type QueryResult struct {
@@ -17,7 +17,7 @@ type QueryResult struct {
 	Total int64                  `json:"total"`
 }
 
-func NewQueryService(index *MeiliIndex) *QueryService {
+func NewQueryService(index IndexOperator) *QueryService {
 	return &QueryService{index: index}
 }
 

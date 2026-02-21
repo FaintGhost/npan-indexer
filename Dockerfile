@@ -21,7 +21,7 @@ RUN mkdir -p /app/data && chown -R npan:npan /app
 VOLUME ["/app/data"]
 WORKDIR /app
 USER npan
-EXPOSE 1323
+EXPOSE 1323 9091
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
     CMD wget -q -O /dev/null http://localhost:1323/healthz || exit 1
 ENV GOMEMLIMIT=512MiB

@@ -41,7 +41,7 @@ func newTestHandlers(t *testing.T) *Handlers {
 func TestNewServer_RateLimitOnSearchEndpoint(t *testing.T) {
   const adminAPIKey = "test-admin-key"
   handlers := newTestHandlers(t)
-  e := NewServer(handlers, adminAPIKey, testDistFS())
+  e := NewServer(handlers, adminAPIKey, testDistFS(), nil)
 
   const totalRequests = 50
   type result struct {
@@ -97,7 +97,7 @@ func TestNewServer_RateLimitOnSearchEndpoint(t *testing.T) {
 func TestNewServer_RateLimitOnAdminEndpoint(t *testing.T) {
   const adminAPIKey = "test-admin-key"
   handlers := newTestHandlers(t)
-  e := NewServer(handlers, adminAPIKey, testDistFS())
+  e := NewServer(handlers, adminAPIKey, testDistFS(), nil)
 
   const totalRequests = 50
   type result struct {

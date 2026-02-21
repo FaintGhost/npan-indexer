@@ -47,6 +47,7 @@ func (c Config) Validate() error {
 func (c Config) LogValue() slog.Value {
   return slog.GroupValue(
     slog.String("ServerAddr", c.ServerAddr),
+    slog.String("MetricsAddr", c.MetricsAddr),
     slog.String("BaseURL", c.BaseURL),
     slog.String("MeiliHost", c.MeiliHost),
     slog.String("MeiliIndex", c.MeiliIndex),

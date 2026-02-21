@@ -16,6 +16,7 @@ type Config struct {
 	ServerReadTimeout       time.Duration
 	ServerWriteTimeout      time.Duration
 	ServerIdleTimeout       time.Duration
+	MetricsAddr             string
 
 	AdminAPIKey             string
 	AllowConfigAuthFallback bool
@@ -140,6 +141,7 @@ func Load() Config {
 		ServerReadTimeout:       readDuration("SERVER_READ_TIMEOUT", 10*time.Second),
 		ServerWriteTimeout:      readDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),
 		ServerIdleTimeout:       readDuration("SERVER_IDLE_TIMEOUT", 120*time.Second),
+		MetricsAddr:             readString("METRICS_ADDR", ":9091"),
 		AdminAPIKey:             readString("NPA_ADMIN_API_KEY", ""),
 		AllowConfigAuthFallback: readBool("NPA_ALLOW_CONFIG_AUTH_FALLBACK", false),
 

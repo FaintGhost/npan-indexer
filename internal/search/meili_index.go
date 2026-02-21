@@ -13,6 +13,16 @@ import (
 	"npan/internal/models"
 )
 
+// IndexOperator defines the operations available on a Meilisearch index.
+type IndexOperator interface {
+	EnsureSettings(ctx context.Context) error
+	UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error
+	DeleteDocuments(ctx context.Context, docIDs []string) error
+	Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error)
+	Ping() error
+	DocumentCount(ctx context.Context) (int64, error)
+}
+
 type MeiliIndex struct {
 	index meilisearch.IndexManager
 }

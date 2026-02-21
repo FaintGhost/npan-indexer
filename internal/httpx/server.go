@@ -3,11 +3,15 @@ package httpx
 import (
 	"io/fs"
 	"log/slog"
+	"net/http"
 	"path"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // spaHandler serves the Vite build output with SPA fallback.
@@ -38,9 +42,85 @@ func spaHandler(distFS fs.FS) echo.HandlerFunc {
 	}
 }
 
-func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS) *echo.Echo {
+// statusCapture wraps http.ResponseWriter to capture the response status code.
+type statusCapture struct {
+	http.ResponseWriter
+	status int
+	wrote  bool
+}
+
+func (w *statusCapture) WriteHeader(code int) {
+	if !w.wrote {
+		w.status = code
+		w.wrote = true
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusCapture) Write(b []byte) (int, error) {
+	if !w.wrote {
+		w.status = http.StatusOK
+		w.wrote = true
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+// prometheusMiddleware registers HTTP request metrics with the given prometheus.Registerer
+// and returns an Echo v5 middleware that records per-route request count and duration.
+// Routes /healthz and /readyz are excluded from metrics.
+func prometheusMiddleware(reg prometheus.Registerer) echo.MiddlewareFunc {
+	labelNames := []string{"code", "method", "url"}
+
+	requestCount := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "npan",
+		Name:      "requests_total",
+		Help:      "How many HTTP requests processed, partitioned by status code, method, and route.",
+	}, labelNames)
+	reg.MustRegister(requestCount)
+
+	requestDuration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "npan",
+		Name:      "request_duration_seconds",
+		Help:      "The HTTP request latencies in seconds.",
+		Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0},
+	}, labelNames)
+	reg.MustRegister(requestDuration)
+
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			p := c.Path()
+			if p == "/healthz" || p == "/readyz" {
+				return next(c)
+			}
+
+			capture := &statusCapture{ResponseWriter: c.Response(), status: http.StatusOK}
+			c.SetResponse(capture)
+
+			start := time.Now()
+			err := next(c)
+			elapsed := time.Since(start).Seconds()
+
+			routePath := c.Path()
+			if routePath == "/*" || routePath == "" {
+				routePath = "/spa"
+			}
+
+			requestCount.WithLabelValues(strconv.Itoa(capture.status), c.Request().Method, routePath).Inc()
+			requestDuration.WithLabelValues(strconv.Itoa(capture.status), c.Request().Method, routePath).Observe(elapsed)
+
+			return err
+		}
+	}
+}
+
+func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg prometheus.Registerer) *echo.Echo {
 	e := echo.New()
 	e.Logger = slog.Default()
+
+	if promReg != nil {
+		e.Use(prometheusMiddleware(promReg))
+	}
+
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestLogger())
