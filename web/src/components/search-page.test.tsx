@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../tests/mocks/server'
-import { SearchPage } from '../routes/app.index.lazy'
+import { SearchPage } from '../routes/index.lazy'
 
 // Helper to create search response
 function makeSearchResponse(count: number, total: number) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { SearchPage } from '../routes/app.index.lazy'
+import { SearchPage } from '../routes/index.lazy'
 import { SkeletonCard } from '../components/skeleton-card'
 import { DownloadButton } from '../components/download-button'
 import { ApiKeyDialog } from '../components/api-key-dialog'

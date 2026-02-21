@@ -17,11 +17,8 @@ func TestNewServer_RegistersAppRoutes(t *testing.T) {
 		seen[route.Method+" "+route.Path] = true
 	}
 
-	if !seen["GET /app"] {
-		t.Fatal("expected GET /app route to be registered")
-	}
-	if !seen["GET /app/*"] {
-		t.Fatal("expected GET /app/* route to be registered")
+	if !seen["GET /*"] {
+		t.Fatal("expected GET /* route to be registered")
 	}
 	if !seen["GET /api/v1/app/search"] {
 		t.Fatal("expected GET /api/v1/app/search route to be registered")
@@ -35,7 +32,7 @@ func TestAppPage_ReturnsHTML(t *testing.T) {
 	t.Parallel()
 
 	e := NewServer(&Handlers{}, "test-key", testDistFS())
-	req := httptest.NewRequest(http.MethodGet, "/app", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
 	e.ServeHTTP(rec, req)

@@ -34,7 +34,7 @@ export function AdminSyncPage() {
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">同步管理</h1>
         <a
-          href="/app"
+          href="/"
           className="text-sm text-slate-500 transition-colors hover:text-slate-700"
         >
           ← 返回搜索

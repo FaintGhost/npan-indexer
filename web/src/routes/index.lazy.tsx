@@ -9,7 +9,7 @@ import { FileCard } from '@/components/file-card'
 import { InitialState, NoResultsState, ErrorState } from '@/components/empty-state'
 import { SkeletonCard } from '@/components/skeleton-card'
 
-export const Route = createLazyFileRoute('/app/')({
+export const Route = createLazyFileRoute('/')({
   component: SearchPage,
 })
 

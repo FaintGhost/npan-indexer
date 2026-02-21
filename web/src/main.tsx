@@ -6,7 +6,6 @@ import './app.css'
 
 const router = createRouter({
   routeTree,
-  basepath: '/app',
 })
 
 declare module '@tanstack/react-router' {

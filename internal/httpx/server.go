@@ -11,8 +11,8 @@ import (
 )
 
 // spaHandler serves the Vite build output with SPA fallback.
-// - Requests for /app/assets/* are served with immutable cache headers.
-// - Any unknown /app/* path falls back to index.html (SPA routing).
+// - Requests for assets/* are served with immutable cache headers.
+// - Any unknown path falls back to index.html (client-side routing).
 func spaHandler(distFS fs.FS) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		p := c.Param("*")
@@ -50,13 +50,10 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS) *echo.Echo 
 	e.GET("/healthz", handlers.Health)
 	e.GET("/readyz", handlers.Readyz)
 
-	// SPA frontend served from embedded Vite build output
+	// SPA frontend served from embedded Vite build output.
+	// Specific routes (/api, /healthz, /readyz) take priority over the catch-all.
 	spa := spaHandler(distFS)
-	e.GET("/app", func(c *echo.Context) error {
-		c.Response().Header().Set("Cache-Control", "no-cache")
-		return c.FileFS("index.html", distFS)
-	})
-	e.GET("/app/*", spa)
+	e.GET("/*", spa)
 
 	// App API (embedded auth — config fallback always enabled)
 	appAPI := e.Group("/api/v1/app", EmbeddedAuth())
