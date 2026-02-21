@@ -24,7 +24,7 @@ describe('useAdminAuth', () => {
 
   it('validates and stores valid key', async () => {
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', ({ request }) => {
+      http.get('/api/v1/admin/sync', ({ request }) => {
         const key = request.headers.get('X-API-Key')
         if (key === 'valid-key') {
           return HttpResponse.json({
@@ -64,7 +64,7 @@ describe('useAdminAuth', () => {
 
   it('rejects invalid key', async () => {
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', () => {
+      http.get('/api/v1/admin/sync', () => {
         return HttpResponse.json(
           { code: 'UNAUTHORIZED', message: 'Invalid' },
           { status: 401 },

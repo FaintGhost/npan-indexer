@@ -118,7 +118,7 @@ describe('apiPost', () => {
     let capturedBody: unknown = null
 
     server.use(
-      http.post('/api/v1/admin/sync/full', async ({ request }) => {
+      http.post('/api/v1/admin/sync', async ({ request }) => {
         capturedHeaders = Object.fromEntries(request.headers.entries())
         capturedBody = await request.json()
         return HttpResponse.json({ message: 'Sync started' })
@@ -126,7 +126,7 @@ describe('apiPost', () => {
     )
 
     const result = await apiPost(
-      '/api/v1/admin/sync/full',
+      '/api/v1/admin/sync',
       { root_folder_ids: [100, 200] },
       { headers: { 'X-API-Key': 'test-key' } },
     )
@@ -138,7 +138,7 @@ describe('apiPost', () => {
 
   it('throws ApiError on HTTP error', async () => {
     server.use(
-      http.post('/api/v1/admin/sync/full', () => {
+      http.post('/api/v1/admin/sync', () => {
         return HttpResponse.json(
           { code: 'UNAUTHORIZED', message: 'Invalid API key' },
           { status: 401 },
@@ -147,7 +147,7 @@ describe('apiPost', () => {
     )
 
     await expect(
-      apiPost('/api/v1/admin/sync/full', {}, { headers: { 'X-API-Key': 'bad' } }),
+      apiPost('/api/v1/admin/sync', {}, { headers: { 'X-API-Key': 'bad' } }),
     ).rejects.toThrow(ApiError)
   })
 })

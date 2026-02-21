@@ -133,7 +133,6 @@ describe('SyncProgressDisplay', () => {
       },
     }
     render(<SyncProgressDisplay progress={incrementalProgress} />)
-    expect(screen.getByText('增量同步')).toBeInTheDocument()
     expect(screen.getByText('变更').closest('div')).toHaveTextContent('42')
     expect(screen.getByText('写入').closest('div')).toHaveTextContent('30')
     expect(screen.getByText('删除').closest('div')).toHaveTextContent('5')

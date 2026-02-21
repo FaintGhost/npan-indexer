@@ -24,7 +24,7 @@ export function useAdminAuth() {
 
     try {
       await apiGet(
-        '/api/v1/admin/sync/full/progress',
+        '/api/v1/admin/sync',
         {},
         SyncProgressSchema,
         { headers: { 'X-API-Key': key } },

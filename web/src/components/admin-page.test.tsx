@@ -37,7 +37,7 @@ describe('AdminSyncPage', () => {
   it('shows admin panel when key is stored', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', () => {
+      http.get('/api/v1/admin/sync', () => {
         return HttpResponse.json(validProgress)
       }),
     )
@@ -45,13 +45,13 @@ describe('AdminSyncPage', () => {
     render(<AdminSyncPage />)
 
     await waitFor(() => {
-      expect(screen.getByText(/启动全量同步/)).toBeInTheDocument()
+      expect(screen.getByText(/启动同步/)).toBeInTheDocument()
     })
   })
 
   it('closes dialog after valid key input', async () => {
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', ({ request }) => {
+      http.get('/api/v1/admin/sync', ({ request }) => {
         const key = request.headers.get('X-API-Key')
         if (key === 'valid-key') {
           return HttpResponse.json(validProgress)
@@ -70,14 +70,14 @@ describe('AdminSyncPage', () => {
     await user.click(screen.getByRole('button', { name: /确认/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/启动全量同步/)).toBeInTheDocument()
+      expect(screen.getByText(/启动同步/)).toBeInTheDocument()
     })
   })
 
   it('shows progress when sync is running', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', () => {
+      http.get('/api/v1/admin/sync', () => {
         return HttpResponse.json({
           ...validProgress,
           status: 'running',

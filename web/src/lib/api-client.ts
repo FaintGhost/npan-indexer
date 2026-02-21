@@ -76,3 +76,26 @@ export async function apiPost<T = { message: string }>(
 
   return res.json() as Promise<T>
 }
+
+export async function apiDelete<T = { message: string }>(
+  path: string,
+  options?: { signal?: AbortSignal; headers?: Record<string, string> },
+): Promise<T> {
+  const url = new URL(path, window.location.origin).toString()
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: options?.headers,
+    signal: options?.signal,
+  })
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}))
+    const parsed = ErrorResponseSchema.safeParse(errBody)
+    if (parsed.success) {
+      throw new ApiError(res.status, parsed.data.code, parsed.data.message)
+    }
+    throw new ApiError(res.status, 'UNKNOWN', `HTTP ${res.status}`)
+  }
+
+  return res.json() as Promise<T>
+}

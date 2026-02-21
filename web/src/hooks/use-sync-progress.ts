@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { apiGet, apiPost, ApiError } from '@/lib/api-client'
+import { apiGet, apiPost, apiDelete, ApiError } from '@/lib/api-client'
 import { SyncProgressSchema } from '@/lib/sync-schemas'
 import type { SyncProgress } from '@/lib/sync-schemas'
 
@@ -15,7 +15,7 @@ export function useSyncProgress(headers: Record<string, string>) {
   const fetchProgress = useCallback(async () => {
     try {
       const result = await apiGet(
-        '/api/v1/admin/sync/full/progress',
+        '/api/v1/admin/sync',
         {},
         SyncProgressSchema,
         { headers },
@@ -53,13 +53,14 @@ export function useSyncProgress(headers: Record<string, string>) {
     }
   }, [fetchProgress])
 
-  const startSync = useCallback(async (rootFolderIds: number[]) => {
+  const startSync = useCallback(async (rootFolderIds: number[], mode: string = 'auto') => {
     setLoading(true)
     setError(null)
     try {
-      await apiPost('/api/v1/admin/sync/full', {
+      await apiPost('/api/v1/admin/sync', {
         root_folder_ids: rootFolderIds,
         resume_progress: true,
+        mode,
       }, { headers })
       const result = await fetchProgress()
       if (result) {
@@ -79,7 +80,7 @@ export function useSyncProgress(headers: Record<string, string>) {
   const cancelSync = useCallback(async () => {
     setLoading(true)
     try {
-      await apiPost('/api/v1/admin/sync/full/cancel', {}, { headers })
+      await apiDelete('/api/v1/admin/sync', { headers })
       await fetchProgress()
       if (intervalRef.current) {
         clearInterval(intervalRef.current)

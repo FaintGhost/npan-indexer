@@ -35,9 +35,6 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
             )}
             {config.label}
           </span>
-          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-            {progress.mode === 'incremental' ? '增量同步' : '全量同步'}
-          </span>
         </div>
         {progress.startedAt > 0 && (
           <ElapsedTime

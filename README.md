@@ -5,7 +5,7 @@ Npan 外部索引服务 — 将 Npan 云盘文件元数据同步到 Meilisearch�
 - **Web 框架:** Echo v5
 - **搜索引擎:** Meilisearch
 - **运行时:** Go 1.25+
-- **核心能力:** 全量同步、断点续跑、增量同步、本地全文检索、远程搜索代理、下载链接代理、401 自动刷新 token
+- **核心能力:** 自适应同步（自动/全量/增量）、断点续跑、本地全文检索、远程搜索代理、下载链接代理、401 自动刷新 token
 
 ## 快速开始
 
@@ -47,9 +47,9 @@ go run ./cmd/server
 go run ./cmd/cli --help
 ```
 
-### 5. Web 搜索页面
+### 5. Web 前端
 
-服务启动后访问 `http://127.0.0.1:1323/app`，纯 HTML 搜索页面，支持即时搜索和无限滚动。页面通过 `/api/v1/app/*` 端点访问，凭据由服务端配置处理，无需用户输入 token。
+服务启动后访问 `http://127.0.0.1:1323/`，React 19 + Vite 单页应用，支持即时搜索和无限滚动。`/admin` 路径提供同步管理面板（模式选择、实时进度、取消）。页面通过 `/api/v1/app/*` 端点访问，凭据由服务端配置处理。
 
 ## API 端点
 
@@ -81,9 +81,9 @@ go run ./cmd/cli --help
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/v1/admin/sync/full` | 启动全量同步 |
-| GET | `/api/v1/admin/sync/full/progress` | 查询同步进度 |
-| POST | `/api/v1/admin/sync/full/cancel` | 取消同步任务 |
+| POST | `/api/v1/admin/sync` | 启动同步（支持 mode: auto/full/incremental） |
+| GET | `/api/v1/admin/sync` | 查询同步进度 |
+| DELETE | `/api/v1/admin/sync` | 取消同步任务 |
 
 API Key 通过请求头传递：`X-API-Key: <key>` 或 `Authorization: Bearer <key>`。
 
@@ -106,17 +106,20 @@ go run ./cmd/server
 # 查询同步进度
 go run ./cmd/cli sync-progress
 
-# 全量同步（默认人类可读进度）
-go run ./cmd/cli sync-full
+# 自适应同步（有游标走增量，否则全量）
+go run ./cmd/cli sync
 
-# 全量同步（结构化 JSON 进度）
-go run ./cmd/cli sync-full --progress-output json
+# 强制全量同步
+go run ./cmd/cli sync --mode full
 
-# 增量同步
-go run ./cmd/cli sync-incremental
+# 强制增量同步
+go run ./cmd/cli sync --mode incremental
 
-# 增量同步（显式指定查询词与窗口回看）
-go run ./cmd/cli sync-incremental --incremental-query-words "* OR *" --window-overlap-ms 2000
+# JSON 格式进度输出
+go run ./cmd/cli sync --progress-output json
+
+# 指定增量查询词与窗口回看
+go run ./cmd/cli sync --mode incremental --incremental-query-words "* OR *" --window-overlap-ms 2000
 ```
 
 ## 环境变量
@@ -165,6 +168,9 @@ go run ./cmd/cli sync-incremental --incremental-query-words "* OR *" --window-ov
 | `NPA_ROOT_FOLDER_IDS` | 同步根目录 ID 列表（逗号分隔） | `0` |
 | `NPA_INCLUDE_DEPARTMENTS` | 是否包含部门文件 | `true` |
 | `NPA_DEPARTMENT_IDS` | 部门 ID 列表（逗号分隔） | — |
+| `NPA_SYNC_STATE_FILE` | 增量游标状态文件路径 | `./data/progress/incremental-sync-state.json` |
+| `NPA_INCREMENTAL_QUERY_WORDS` | 增量查询词 | `* OR *` |
+| `NPA_SYNC_WINDOW_OVERLAP_MS` | 增量窗口回看毫秒数 | `2000` |
 
 ### 重试策略
 
@@ -218,8 +224,7 @@ docker run -d \
 │   ├── search/          # Meilisearch 查询服务
 │   ├── service/         # 同步管理器等业务服务
 │   └── storage/         # 进度持久化
-├── web/
-│   └── app/             # Web 搜索页面（纯 HTML）
+├── web/                # React 19 + Vite 前端（搜索页 + Admin 同步管理）
 ├── data/                # 运行时状态文件（不提交）
 ├── docs/
 │   ├── plans/           # 设计与实施计划

@@ -745,6 +745,10 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 		}
 	}
 
+	// Preserve roots/rootProgress from the previous full sync so that
+	// the admin UI can still display per-root details after an incremental run.
+	existing, _ := m.progressStore.Load()
+
 	progress := &models.SyncProgressState{
 		Status:             "running",
 		Mode:               string(models.SyncModeIncremental),
@@ -754,9 +758,18 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 		MeiliIndex:         m.meiliIndex,
 		Roots:              []int64{},
 		CompletedRoots:     []int64{},
+		RootNames:          map[int64]string{},
 		RootProgress:       map[string]*models.RootSyncProgress{},
 		AggregateStats:     models.CrawlStats{StartedAt: now, EndedAt: now},
 		IncrementalStats:   &models.IncrementalSyncStats{CursorBefore: cursorBefore},
+	}
+
+	if existing != nil {
+		progress.Roots = existing.Roots
+		progress.CompletedRoots = existing.CompletedRoots
+		progress.RootNames = existing.RootNames
+		progress.RootProgress = existing.RootProgress
+		progress.AggregateStats = existing.AggregateStats
 	}
 
 	if err := m.progressStore.Save(progress); err != nil {

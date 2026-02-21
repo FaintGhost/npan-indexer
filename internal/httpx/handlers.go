@@ -451,7 +451,7 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusAccepted, map[string]any{
-		"message": "全量同步任务已启动",
+		"message": "同步任务已启动",
 	})
 }
 

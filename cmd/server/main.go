@@ -53,6 +53,9 @@ func main() {
 		MaxConcurrent:      cfg.SyncMaxConcurrent,
 		MinTimeMS:          cfg.SyncMinTimeMS,
 		ActivityChecker:    tracker,
+		SyncStateFile:      cfg.SyncStateFile,
+		IncrementalQuery:   cfg.IncrementalQuery,
+		WindowOverlapMS:    cfg.SyncWindowOverlapMS,
 	})
 
 	handlers := httpx.NewHandlers(cfg, cachedService, syncManager)

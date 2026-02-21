@@ -35,8 +35,9 @@ type Config struct {
 
 	CheckpointTemplate string
 	ProgressFile       string
-	SyncStateFile      string
-	IncrementalQuery   string
+	SyncStateFile        string
+	IncrementalQuery     string
+	SyncWindowOverlapMS  int64
 
 	DefaultIncludeDepartments bool
 	DefaultRootFolderIDs      []int64
@@ -157,8 +158,9 @@ func Load() Config {
 
 		CheckpointTemplate: readString("NPA_CHECKPOINT_FILE", "./data/checkpoints/full-crawl.json"),
 		ProgressFile:       readString("NPA_PROGRESS_FILE", "./data/progress/full-sync-progress.json"),
-		SyncStateFile:      readString("NPA_SYNC_STATE_FILE", "./data/progress/incremental-sync-state.json"),
-		IncrementalQuery:   readString("NPA_INCREMENTAL_QUERY_WORDS", "* OR *"),
+		SyncStateFile:       readString("NPA_SYNC_STATE_FILE", "./data/progress/incremental-sync-state.json"),
+		IncrementalQuery:    readString("NPA_INCREMENTAL_QUERY_WORDS", "* OR *"),
+		SyncWindowOverlapMS: readInt64("NPA_SYNC_WINDOW_OVERLAP_MS", 2000),
 
 		DefaultIncludeDepartments: readBool("NPA_INCLUDE_DEPARTMENTS", true),
 		DefaultRootFolderIDs:      rootIDs,

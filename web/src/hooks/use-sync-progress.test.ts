@@ -34,7 +34,7 @@ describe('useSyncProgress', () => {
 
   it('fetches initial progress', async () => {
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', () => {
+      http.get('/api/v1/admin/sync', () => {
         return HttpResponse.json({
           ...validProgress,
           status: 'done',
@@ -57,10 +57,10 @@ describe('useSyncProgress', () => {
   it('starts sync', async () => {
     let postCalled = false
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', () => {
+      http.get('/api/v1/admin/sync', () => {
         return HttpResponse.json(validProgress)
       }),
-      http.post('/api/v1/admin/sync/full', () => {
+      http.post('/api/v1/admin/sync', () => {
         postCalled = true
         return HttpResponse.json({ message: 'Sync started' })
       }),
@@ -82,10 +82,10 @@ describe('useSyncProgress', () => {
   it('cancels sync', async () => {
     let cancelCalled = false
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', () => {
+      http.get('/api/v1/admin/sync', () => {
         return HttpResponse.json({ ...validProgress, status: 'running' })
       }),
-      http.post('/api/v1/admin/sync/full/cancel', () => {
+      http.delete('/api/v1/admin/sync', () => {
         cancelCalled = true
         return HttpResponse.json({ message: 'Cancelled' })
       }),
@@ -106,7 +106,7 @@ describe('useSyncProgress', () => {
 
   it('sets error on failed request', async () => {
     server.use(
-      http.get('/api/v1/admin/sync/full/progress', () => {
+      http.get('/api/v1/admin/sync', () => {
         return HttpResponse.json(
           { code: 'INTERNAL_ERROR', message: 'Server error' },
           { status: 500 },
