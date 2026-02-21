@@ -51,6 +51,7 @@ func (m *MeiliIndex) waitTask(ctx context.Context, taskInfo *meilisearch.TaskInf
 
 func (m *MeiliIndex) EnsureSettings(ctx context.Context) error {
 	taskInfo, err := m.index.UpdateSettingsWithContext(ctx, &meilisearch.Settings{
+		RankingRules:         []string{"words", "typo", "proximity", "attribute", "exactness", "modified_at:desc"},
 		SearchableAttributes: []string{"name", "path_text"},
 		FilterableAttributes: []string{"type", "parent_id", "modified_at", "in_trash", "is_deleted"},
 		SortableAttributes:   []string{"modified_at", "size", "created_at"},
@@ -127,7 +128,6 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 		Filter:      filters,
 		Page:        page,
 		HitsPerPage: pageSize,
-		Sort:        []string{"modified_at:desc"},
 		AttributesToRetrieve: []string{
 			"doc_id", "source_id", "type", "name", "path_text",
 			"parent_id", "modified_at", "created_at", "size",
