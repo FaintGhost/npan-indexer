@@ -25,29 +25,33 @@ NPA_CLIENT_SECRET=xxx
 NPA_SUB_ID=123
 ```
 
-### 2. 启动 Meilisearch
+### 2. 启动服务
+
+**方式 A — Docker Compose 一键启动（生产推荐）：**
 
 ```bash
-docker compose up -d meilisearch
+docker compose up -d --build
 ```
 
-若已有 Meilisearch 实例，设置 `MEILI_HOST` 和 `MEILI_API_KEY` 即可跳过。
-
-### 3. 启动 API 服务
+**方式 B — 本地开发：**
 
 ```bash
+# 先启动 Meilisearch
+docker compose up -d meilisearch
+
+# 再启动 API 服务
 go run ./cmd/server
 ```
 
-服务默认监听 `:1323`，支持优雅关闭（SIGINT/SIGTERM）。
+服务默认监听 `:1323`，Prometheus 指标在 `:9091`，支持优雅关闭（SIGINT/SIGTERM）。
 
-### 4. CLI 工具
+### 3. CLI 工具
 
 ```bash
 go run ./cmd/cli --help
 ```
 
-### 5. Web 前端
+### 4. Web 前端
 
 服务启动后访问 `http://127.0.0.1:1323/`，React 19 + Vite 单页应用，支持即时搜索和无限滚动。`/admin` 路径提供同步管理面板（模式选择、实时进度、取消）。页面通过 `/api/v1/app/*` 端点访问，凭据由服务端配置处理。
 
@@ -135,6 +139,7 @@ go run ./cmd/cli sync --mode incremental --incremental-query-words "* OR *" --wi
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `SERVER_ADDR` | 监听地址 | `:1323` |
+| `METRICS_ADDR` | Prometheus 指标端口（留空禁用） | `:9091` |
 | `NPA_BASE_URL` | Npan OpenAPI 地址 | `https://npan.novastar.tech:6001/openapi` |
 | `NPA_ALLOW_CONFIG_AUTH_FALLBACK` | 允许 API 接口回退服务端凭据 | `false` |
 
@@ -181,16 +186,49 @@ go run ./cmd/cli sync --mode incremental --incremental-query-words "* OR *" --wi
 | `NPA_MAX_DELAY_MS` | 最大重试延迟（ms） | `5000` |
 | `NPA_JITTER_MS` | 重试抖动（ms） | `200` |
 
-## Docker
+## Docker 部署
+
+### 一键启动（推荐）
+
+使用 docker compose 同时启动 Meilisearch + npan 服务：
+
+```bash
+# 准备配置
+cp .env.example .env
+cp .env.meilisearch.example .env.meilisearch
+
+# 编辑 .env 填入必要配置（NPA_ADMIN_API_KEY, OAuth 凭据等）
+# 编辑 .env.meilisearch 设置 MEILI_MASTER_KEY
+
+# 构建并启动
+docker compose up -d --build
+
+# 查看日志
+docker compose logs -f npan
+
+# 停止
+docker compose down
+```
+
+服务启动后：
+- Web UI: `http://<host>:1323/`
+- Admin: `http://<host>:1323/admin`
+- Prometheus 指标: `http://<host>:9091/metrics`
+- Meilisearch: `http://<host>:7700`
+
+> docker compose 中 `MEILI_HOST` 会自动设为 `http://meilisearch:7700`（容器内网络），无需手动配置。
+
+### 单独构建镜像
 
 ```bash
 # 构建镜像
 docker build -t npan .
 
-# 运行
+# 运行（需自行指定 Meilisearch 地址）
 docker run -d \
   --env-file .env \
   -p 1323:1323 \
+  -p 9091:9091 \
   -v npan-data:/app/data \
   npan
 ```

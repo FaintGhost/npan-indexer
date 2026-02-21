@@ -6,6 +6,34 @@ services:
     ports:
       - "7700:7700"
     volumes:
-      - ./data:/meili_data
+      - meili-data:/meili_data
     env_file:
       - .env.meilisearch
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  npan:
+    build: .
+    container_name: npan
+    restart: always
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+    ports:
+      - "1323:1323"
+      - "9091:9091"
+    volumes:
+      - npan-data:/app/data
+    env_file:
+      - .env
+    environment:
+      # 覆盖 .env 中的 MEILI_HOST，使用 docker 内部网络
+      MEILI_HOST: http://meilisearch:7700
+      METRICS_ADDR: ":9091"
+
+volumes:
+  meili-data:
+  npan-data:
