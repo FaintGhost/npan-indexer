@@ -169,9 +169,10 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 	}
 
 	request := &meilisearch.SearchRequest{
-		Filter:      filters,
-		Page:        page,
-		HitsPerPage: pageSize,
+		Filter:           filters,
+		Page:             page,
+		HitsPerPage:      pageSize,
+		MatchingStrategy: meilisearch.All,
 		AttributesToRetrieve: []string{
 			"doc_id", "source_id", "type", "name", "path_text",
 			"parent_id", "modified_at", "created_at", "size",
