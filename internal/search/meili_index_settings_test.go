@@ -60,6 +60,13 @@ func TestEnsureSettings_TypoTolerance(t *testing.T) {
     t.Error("TypoTolerance.Enabled should be true")
   }
 
+  if s.TypoTolerance.MinWordSizeForTypos.OneTypo != 5 {
+    t.Errorf("MinWordSizeForTypos.OneTypo = %d, want 5", s.TypoTolerance.MinWordSizeForTypos.OneTypo)
+  }
+  if s.TypoTolerance.MinWordSizeForTypos.TwoTypos != 9 {
+    t.Errorf("MinWordSizeForTypos.TwoTypos = %d, want 9", s.TypoTolerance.MinWordSizeForTypos.TwoTypos)
+  }
+
   if !containsString(s.TypoTolerance.DisableOnAttributes, "path_text") {
     t.Error("TypoTolerance.DisableOnAttributes should contain \"path_text\"")
   }

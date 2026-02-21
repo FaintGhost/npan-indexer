@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/meilisearch/meilisearch-go"
 
 	"npan/internal/models"
@@ -18,7 +20,11 @@ type MeiliIndex struct {
 const defaultTaskPollInterval = 100 * time.Millisecond
 
 func NewMeiliIndex(host string, apiKey string, indexName string) *MeiliIndex {
-	client := meilisearch.New(host, meilisearch.WithAPIKey(apiKey))
+	client := meilisearch.New(host,
+		meilisearch.WithAPIKey(apiKey),
+		meilisearch.WithCustomJsonMarshaler(sonic.Marshal),
+		meilisearch.WithCustomJsonUnmarshaler(sonic.Unmarshal),
+	)
 	return &MeiliIndex{index: client.Index(indexName)}
 }
 
@@ -58,7 +64,11 @@ func (m *MeiliIndex) EnsureSettings(ctx context.Context) error {
 		DisplayedAttributes:  []string{"doc_id", "source_id", "type", "name", "path_text", "parent_id", "modified_at", "created_at", "size"},
 		StopWords:            []string{"的", "了", "在", "是", "和", "就", "都", "而", "及", "与"},
 		TypoTolerance: &meilisearch.TypoTolerance{
-			Enabled:             true,
+			Enabled: true,
+			MinWordSizeForTypos: meilisearch.MinWordSizeForTypos{
+				OneTypo:  5,
+				TwoTypos: 9,
+			},
 			DisableOnAttributes: []string{"path_text"},
 			DisableOnWords:      []string{"pdf", "docx", "xlsx", "pptx", "jpg", "png", "mp4", "zip", "rar", "exe", "apk", "bin", "iso"},
 		},
@@ -93,6 +103,40 @@ func (m *MeiliIndex) DeleteDocuments(ctx context.Context, docIDs []string) error
 		return err
 	}
 	return m.waitTask(ctx, taskInfo)
+}
+
+// knownExtensions 是常见文件扩展名集合，用于查询预处理。
+var knownExtensions = map[string]bool{
+	"pdf": true, "docx": true, "xlsx": true, "pptx": true,
+	"doc": true, "xls": true, "ppt": true,
+	"jpg": true, "jpeg": true, "png": true, "gif": true, "bmp": true,
+	"mp4": true, "avi": true, "mov": true, "mkv": true,
+	"zip": true, "rar": true, "7z": true, "tar": true, "gz": true,
+	"exe": true, "apk": true, "bin": true, "iso": true,
+	"dwg": true, "dxf": true, "cad": true,
+	"txt": true, "csv": true, "json": true, "xml": true,
+}
+
+// reorderQuery 将查询中的文件扩展名移到前面，确保实际搜索词
+// 留在最后以获得 Meilisearch 的前缀匹配。
+// 例如 "mx40 spec pdf" → "pdf mx40 spec"，使 "spec" 前缀匹配 "specifications"。
+func reorderQuery(query string) string {
+	words := strings.Fields(query)
+	if len(words) <= 1 {
+		return query
+	}
+	var ext, terms []string
+	for _, w := range words {
+		if knownExtensions[strings.ToLower(w)] {
+			ext = append(ext, w)
+		} else {
+			terms = append(terms, w)
+		}
+	}
+	if len(ext) == 0 || len(terms) == 0 {
+		return query
+	}
+	return strings.Join(append(ext, terms...), " ")
 }
 
 func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error) {
@@ -137,7 +181,7 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 		HighlightPostTag:      "</mark>",
 	}
 
-	response, err := m.index.Search(params.Query, request)
+	response, err := m.index.Search(reorderQuery(params.Query), request)
 	if err != nil {
 		return nil, 0, err
 	}

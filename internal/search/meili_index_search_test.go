@@ -706,3 +706,25 @@ func TestSearch_ResponseIncludesHighlightedName(t *testing.T) {
     t.Errorf("expected HighlightedName = %q, got %q", expected, docs[0].HighlightedName)
   }
 }
+
+func TestReorderQuery(t *testing.T) {
+  tests := []struct {
+    input string
+    want  string
+  }{
+    {"mx40 spec pdf", "pdf mx40 spec"},
+    {"mx40 pdf spec", "pdf mx40 spec"},
+    {"mx40 spec", "mx40 spec"},
+    {"pdf", "pdf"},
+    {"mx40 spec pdf docx", "pdf docx mx40 spec"},
+    {"report", "report"},
+    {"", ""},
+    {"MX40 SPEC PDF", "PDF MX40 SPEC"},
+  }
+  for _, tt := range tests {
+    got := reorderQuery(tt.input)
+    if got != tt.want {
+      t.Errorf("reorderQuery(%q) = %q, want %q", tt.input, got, tt.want)
+    }
+  }
+}
