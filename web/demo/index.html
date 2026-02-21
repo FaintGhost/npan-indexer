@@ -34,15 +34,11 @@
         font-family: "ZCOOL XiaoWei", serif;
       }
 
-      /* ================= 动画优化核心区 ================= */
-
-      /* 为重要元素分配独立的 View Transition 图层 */
       .search-stage {
         position: sticky;
         top: 0;
         z-index: 50;
         width: 100%;
-        /* 只保留颜色相关的常规过渡，防止和布局过渡打架 */
         transition:
           background-color 400ms ease,
           border-color 400ms ease;
@@ -60,7 +56,6 @@
         view-transition-name: results-wrap;
       }
 
-      /* 重写 View Transition 的默认行为，减缓速度，增加丝滑的阻尼感 */
       ::view-transition-group(search-stage),
       ::view-transition-group(search-card),
       ::view-transition-group(results-wrap) {
@@ -68,14 +63,10 @@
         animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
       }
 
-      /* ============================================== */
-
-      /* 锁死默认状态的滚动 */
       body.mode-hero {
         overflow: hidden;
       }
 
-      /* 默认状态：全屏居中 */
       body.mode-hero .search-stage {
         height: 100vh;
         height: 100dvh;
@@ -91,14 +82,12 @@
         box-shadow: 0 24px 60px rgba(23, 48, 105, 0.14);
       }
 
-      /* 默认状态下，结果列表在屏幕下方待命，保持实际宽度，防止从角落闪现 */
       body.mode-hero .results-wrap {
         opacity: 0;
         pointer-events: none;
         transform: translateY(60px);
       }
 
-      /* 搜索状态：吸顶 + 毛玻璃遮挡 */
       body.mode-docked .search-stage {
         height: auto;
         padding-top: 16px;
@@ -120,7 +109,6 @@
         transform: translateY(0);
       }
 
-      /* 滚动条与其他细节样式 */
       .thin-scrollbar {
         scrollbar-width: thin;
       }
@@ -144,6 +132,19 @@
       ::view-transition-new(result-card) {
         animation-duration: 300ms;
         animation-timing-function: ease;
+      }
+
+      @keyframes softPulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+      .animate-soft-pulse {
+        animation: softPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       }
     </style>
   </head>
@@ -174,13 +175,59 @@
           </div>
 
           <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
-            <input
-              id="queryInput"
-              type="text"
-              autocomplete="off"
-              placeholder="输入文件名关键词，例如：MX40、固件、安装包"
-              class="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-[15px] text-slate-800 outline-none ring-blue-100 transition focus:border-blue-300 focus:ring-4"
-            />
+            <div class="relative flex items-center w-full">
+              <div class="absolute left-4 text-slate-400 pointer-events-none">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+              </div>
+              <input
+                id="queryInput"
+                type="text"
+                autocomplete="off"
+                placeholder="输入文件名关键词，例如：MX40、固件、安装包"
+                class="h-12 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-16 text-[15px] text-slate-800 outline-none ring-blue-100 transition focus:border-blue-300 focus:ring-4"
+              />
+              <div class="absolute right-3 flex items-center gap-2">
+                <button
+                  id="clearBtn"
+                  class="hidden text-slate-400 transition hover:text-slate-600 focus:outline-none p-1.5 rounded-full hover:bg-slate-100"
+                  title="清空"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+                <kbd
+                  id="shortcutKbd"
+                  class="hidden sm:inline-flex items-center justify-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400"
+                >
+                  ⌘K
+                </kbd>
+              </div>
+            </div>
             <button
               id="searchBtn"
               type="button"
@@ -190,8 +237,11 @@
             </button>
           </div>
 
-          <p id="status" class="mt-3 min-h-5 text-xs text-slate-500">
-            请输入关键词开始搜索
+          <p
+            id="status"
+            class="mt-3 min-h-5 text-xs text-slate-500 transition-colors duration-300"
+          >
+            随时准备为您检索文件
           </p>
         </div>
       </div>
@@ -215,6 +265,36 @@
     </main>
 
     <script>
+      const UIStates = {
+        INITIAL: `
+          <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50/50 px-6 py-16 text-center">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100/50 text-blue-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </div>
+            <h3 class="text-[15px] font-medium text-slate-900">等待探索</h3>
+            <p class="mt-2 text-sm text-slate-500">输入你想查找的文件名、格式或相关关键词，<br class="hidden sm:block"/>我们将为你检索全库资源。</p>
+          </div>
+        `,
+        NO_RESULTS: `
+          <div class="rounded-3xl border border-dashed border-slate-300 bg-slate-50/50 px-6 py-16 text-center">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-200/50 text-slate-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="9" x2="15" y1="13" y2="13"/><line x1="12" x2="12" y1="10" y2="16"/></svg>
+            </div>
+            <h3 class="text-[15px] font-medium text-slate-900">未找到相关文件</h3>
+            <p class="mt-2 text-sm text-slate-500">抱歉，没有找到匹配的内容。建议尝试更简短或更准确的关键词。</p>
+          </div>
+        `,
+        ERROR: `
+          <div class="rounded-3xl border border-dashed border-rose-200 bg-rose-50/50 px-6 py-16 text-center">
+            <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-100/50 text-rose-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            </div>
+            <h3 class="text-[15px] font-medium text-slate-900">加载出错了</h3>
+            <p class="mt-2 text-sm text-slate-500">网络请求似乎遇到了问题，请稍后重试或联系后端程序。</p>
+          </div>
+        `,
+      };
+
       const state = {
         query: "",
         items: [],
@@ -232,6 +312,8 @@
 
       const el = {
         queryInput: document.getElementById("queryInput"),
+        clearBtn: document.getElementById("clearBtn"),
+        shortcutKbd: document.getElementById("shortcutKbd"),
         searchBtn: document.getElementById("searchBtn"),
         status: document.getElementById("status"),
         counter: document.getElementById("counter"),
@@ -240,11 +322,44 @@
         resultsWrap: document.getElementById("resultsWrap"),
       };
 
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+      el.shortcutKbd.textContent = isMac ? "⌘K" : "Ctrl K";
+
+      document.addEventListener("keydown", (e) => {
+        if ((isMac ? e.metaKey : e.ctrlKey) && e.key === "k") {
+          e.preventDefault();
+          el.queryInput.focus();
+        }
+      });
+
+      function toggleClearBtn() {
+        if (el.queryInput.value.length > 0) {
+          el.clearBtn.classList.remove("hidden");
+          el.shortcutKbd.classList.add("hidden");
+        } else {
+          el.clearBtn.classList.add("hidden");
+          el.shortcutKbd.classList.remove("hidden");
+        }
+      }
+
+      el.clearBtn.addEventListener("click", async () => {
+        el.queryInput.value = "";
+        toggleClearBtn();
+        el.queryInput.focus();
+        resetSearch("");
+        await applyMode(false); // 点击清空后，重置为全屏居中 (Hero) 模式
+        await runViewTransition(() => {
+          el.list.innerHTML = UIStates.INITIAL;
+          el.counter.textContent = "0 / 0";
+        });
+        setStatus("随时准备为您检索文件");
+      });
+
       function setStatus(text, isError) {
         el.status.textContent = text || "";
         el.status.className =
-          "mt-3 min-h-5 text-xs " +
-          (isError ? "text-rose-600" : "text-slate-500");
+          "mt-3 min-h-5 text-xs transition-colors duration-300 " +
+          (isError ? "text-rose-600 font-medium" : "text-slate-500");
       }
 
       function runViewTransition(update) {
@@ -257,9 +372,7 @@
       }
 
       async function applyMode(docked) {
-        if (state.docked === docked) {
-          return;
-        }
+        if (state.docked === docked) return;
         state.docked = docked;
         await runViewTransition(() => {
           document.body.classList.toggle("mode-docked", docked);
@@ -275,13 +388,15 @@
             url.searchParams.set(key, String(val));
           }
         });
-        return fetch(url.toString(), { method: "GET", signal }).then(async (resp) => {
-          const data = await resp.json().catch(() => ({}));
-          if (!resp.ok) {
-            throw new Error(data.error || "请求失败: HTTP " + resp.status);
-          }
-          return data;
-        });
+        return fetch(url.toString(), { method: "GET", signal }).then(
+          async (resp) => {
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+              throw new Error(data.error || "请求失败: HTTP " + resp.status);
+            }
+            return data;
+          },
+        );
       }
 
       function abortInFlight() {
@@ -303,14 +418,10 @@
 
       function formatTime(ts) {
         const raw = Number(ts || 0);
-        if (!raw) {
-          return "-";
-        }
+        if (!raw) return "-";
         const millis = raw > 1_000_000_000_000 ? raw : raw * 1000;
         const d = new Date(millis);
-        if (Number.isNaN(d.getTime())) {
-          return "-";
-        }
+        if (Number.isNaN(d.getTime())) return "-";
         const y = d.getFullYear();
         const m = String(d.getMonth() + 1).padStart(2, "0");
         const day = String(d.getDate()).padStart(2, "0");
@@ -321,9 +432,7 @@
 
       function formatBytes(size) {
         const value = Number(size || 0);
-        if (!value) {
-          return "-";
-        }
+        if (!value) return "-";
         const units = ["B", "KB", "MB", "GB", "TB"];
         let idx = 0;
         let num = value;
@@ -334,34 +443,97 @@
         return num.toFixed(num >= 10 || idx === 0 ? 0 : 1) + " " + units[idx];
       }
 
+      function getFileIcon(filename) {
+        const extMatch = filename.match(/\.([a-zA-Z0-9]+)$/);
+        const ext = extMatch ? extMatch[1].toLowerCase() : "";
+        const nameLower = filename.toLowerCase();
+
+        if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) {
+          return {
+            bg: "bg-amber-100",
+            text: "text-amber-600",
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h6"/></svg>',
+          };
+        }
+        if (
+          ["apk", "ipa", "exe", "dmg"].includes(ext) ||
+          nameLower.includes("安装包")
+        ) {
+          return {
+            bg: "bg-emerald-100",
+            text: "text-emerald-600",
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+          };
+        }
+        if (
+          ["bin", "iso", "img", "rom"].includes(ext) ||
+          nameLower.includes("固件")
+        ) {
+          return {
+            bg: "bg-purple-100",
+            text: "text-purple-600",
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>',
+          };
+        }
+        if (["pdf", "doc", "docx", "txt", "md"].includes(ext)) {
+          return {
+            bg: "bg-rose-100",
+            text: "text-rose-500",
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>',
+          };
+        }
+        return {
+          bg: "bg-blue-50",
+          text: "text-blue-500",
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>',
+        };
+      }
+
+      const BtnStates = {
+        DEFAULT:
+          '<span class="btn-content flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>下载</span>',
+        LOADING:
+          '<span class="btn-content flex items-center gap-1.5"><svg class="animate-spin text-white/80" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>获取中</span>',
+        SUCCESS:
+          '<span class="btn-content flex items-center gap-1.5 text-emerald-400"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>成功</span>',
+        ERROR:
+          '<span class="btn-content flex items-center gap-1.5 text-rose-400">重试</span>',
+      };
+
       function cardHTML(item) {
         const id = Number(item.source_id || 0);
         const name = String(item.name || "");
-        const pathText = String(item.path_text || "-");
         const modifiedAt = formatTime(item.modified_at);
         const size = formatBytes(item.size);
+        const iconInfo = getFileIcon(name);
 
         return (
           '<article class="group rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:px-5" style="view-transition-name: result-card;">' +
-          '<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">' +
-          '<div class="min-w-0">' +
-          '<h3 class="truncate text-[15px] font-semibold text-slate-900">' +
+          '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">' +
+          '<div class="flex items-start gap-4 min-w-0 flex-1">' +
+          `<div class="flex shrink-0 items-center justify-center w-12 h-12 rounded-xl ${iconInfo.bg} ${iconInfo.text}">` +
+          iconInfo.svg +
+          "</div>" +
+          '<div class="min-w-0 flex-1 pt-1">' +
+          '<h3 class="truncate text-[15px] font-semibold text-slate-900" title="' +
+          escapeHTML(name) +
+          '">' +
           escapeHTML(name) +
           "</h3>" +
-          '<p class="mt-1 truncate text-xs text-slate-500">' +
-          escapeHTML(pathText) +
-          "</p>" +
-          '<p class="mt-2 text-xs text-slate-400">ID: ' +
-          id +
-          " · 大小: " +
+          '<p class="mt-1 text-[13px] text-slate-500 truncate">' +
           size +
-          " · 更新时间: " +
+          " <span class='mx-1.5 text-slate-300'>·</span> " +
           modifiedAt +
+          " <span class='mx-1.5 text-slate-300'>·</span> ID: " +
+          id +
           "</p>" +
+          "</div>" +
           "</div>" +
           '<button data-action="download" data-id="' +
           id +
-          '" class="h-10 shrink-0 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">下载</button>' +
+          '" class="relative flex h-10 w-full sm:w-auto min-w-[96px] shrink-0 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:opacity-90">' +
+          BtnStates.DEFAULT +
+          "</button>" +
           "</div>" +
           "</article>"
         );
@@ -370,11 +542,19 @@
       function renderSkeleton(count) {
         const blocks = [];
         for (let i = 0; i < count; i += 1) {
+          const delay = i * 120;
           blocks.push(
-            '<div class="animate-pulse rounded-2xl border border-slate-200 bg-white px-4 py-4 sm:px-5">' +
-              '<div class="h-4 w-2/3 rounded bg-slate-200"></div>' +
-              '<div class="mt-2 h-3 w-5/6 rounded bg-slate-100"></div>' +
-              '<div class="mt-3 h-3 w-1/2 rounded bg-slate-100"></div>' +
+            `<div class="animate-soft-pulse rounded-2xl border border-slate-200 bg-white px-4 py-4 sm:px-5" style="animation-delay: ${delay}ms;">` +
+              '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">' +
+              '<div class="flex items-start gap-4 flex-1 min-w-0">' +
+              '<div class="w-12 h-12 shrink-0 rounded-xl bg-slate-100"></div>' +
+              '<div class="flex-1 space-y-3 pt-1.5">' +
+              '<div class="h-4 w-3/4 max-w-[280px] rounded-md bg-slate-200"></div>' +
+              '<div class="h-3 w-1/2 max-w-[200px] rounded-md bg-slate-100/80"></div>' +
+              "</div>" +
+              "</div>" +
+              '<div class="h-10 w-full sm:w-[96px] shrink-0 rounded-xl bg-slate-100"></div>' +
+              "</div>" +
               "</div>",
           );
         }
@@ -384,8 +564,7 @@
       function renderList() {
         el.counter.textContent = state.items.length + " / " + state.total;
         if (!state.items.length) {
-          el.list.innerHTML =
-            '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">没有匹配结果，试试更短或更常见的关键词。</div>';
+          el.list.innerHTML = UIStates.NO_RESULTS;
           return;
         }
         el.list.innerHTML = state.items.map(cardHTML).join("");
@@ -403,41 +582,46 @@
       }
 
       async function fetchPage(page, replaceMode) {
-        if (!state.query) {
-          return;
-        }
-        if (replaceMode && state.loading) {
-          abortInFlight();
-        }
-        if (!replaceMode && state.loading) {
-          return;
-        }
-        if (!replaceMode && !state.hasMore) {
-          return;
-        }
+        if (!state.query) return;
+        if (replaceMode && state.loading) abortInFlight();
+        if (!replaceMode && state.loading) return;
+        if (!replaceMode && !state.hasMore) return;
 
         const seq = state.requestSeq;
         const controller = new AbortController();
         state.abortController = controller;
         state.loading = true;
-        setStatus(replaceMode ? "搜索中..." : "正在加载更多...");
+
+        setStatus(replaceMode ? "检索中..." : "正在加载更多...");
+
         if (replaceMode) {
-          await runViewTransition(() => {
-            el.list.innerHTML = renderSkeleton(5);
-            el.counter.textContent = "0 / 0";
-          });
+          if (!state.docked) {
+            await runViewTransition(() => {
+              el.list.innerHTML = renderSkeleton(5);
+              el.counter.textContent = "0 / 0";
+            });
+          } else {
+            el.list.classList.add(
+              "opacity-50",
+              "pointer-events-none",
+              "transition-opacity",
+              "duration-200",
+            );
+          }
         }
 
         try {
-          const data = await requestJSON("/api/v1/demo/search", {
-            query: state.query,
-            page,
-            page_size: state.pageSize,
-          }, controller.signal);
+          const data = await requestJSON(
+            "/api/v1/demo/search",
+            {
+              query: state.query,
+              page,
+              page_size: state.pageSize,
+            },
+            controller.signal,
+          );
 
-          if (seq !== state.requestSeq) {
-            return;
-          }
+          if (seq !== state.requestSeq) return;
 
           const incoming = Array.isArray(data.items) ? data.items : [];
           state.total = Number(data.total || 0);
@@ -458,31 +642,42 @@
 
           state.hasMore =
             state.items.length < state.total && incoming.length > 0;
-          await applyMode(state.items.length > 0);
+
+          // 【修复部分】：只要点击了搜索，无论有没有结果，都强制停留在吸顶模式
+          await applyMode(true);
+
           await runViewTransition(() => {
+            el.list.classList.remove(
+              "opacity-50",
+              "pointer-events-none",
+              "transition-opacity",
+              "duration-200",
+            );
             renderList();
           });
-          setStatus(
-            "已加载 " + state.items.length + " / " + state.total + " 个文件",
-          );
-        } catch (error) {
-          if (error && error.name === "AbortError") {
-            return;
+
+          if (state.items.length > 0) {
+            setStatus(
+              "已加载 " + state.items.length + " / " + state.total + " 个文件",
+            );
+          } else {
+            setStatus("未找到相关文件", false);
           }
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
           setStatus(error.message || String(error), true);
           if (!state.items.length) {
-            await applyMode(false);
+            // 【修复部分】：如果报错了，同样强制进入吸顶模式，以便展示红色的 Error 面板
+            await applyMode(true);
             await runViewTransition(() => {
-              renderList();
+              el.list.classList.remove("opacity-50", "pointer-events-none");
+              el.list.innerHTML = UIStates.ERROR;
             });
           }
         } finally {
-          if (state.abortController === controller) {
+          if (state.abortController === controller)
             state.abortController = null;
-          }
-          if (seq === state.requestSeq) {
-            state.loading = false;
-          }
+          if (seq === state.requestSeq) state.loading = false;
         }
       }
 
@@ -492,11 +687,10 @@
           resetSearch("");
           await applyMode(false);
           await runViewTransition(() => {
-            el.list.innerHTML =
-              '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">请输入关键词开始搜索。</div>';
+            el.list.innerHTML = UIStates.INITIAL;
             el.counter.textContent = "0 / 0";
           });
-          setStatus("请输入关键词开始搜索");
+          setStatus("随时准备为您检索文件");
           return;
         }
 
@@ -505,80 +699,67 @@
       }
 
       async function getDownloadURL(fileID) {
-        if (state.linkCache.has(fileID)) {
-          return state.linkCache.get(fileID);
-        }
+        if (state.linkCache.has(fileID)) return state.linkCache.get(fileID);
         const data = await requestJSON("/api/v1/demo/download-url", {
           file_id: fileID,
         });
         const url = String(data.download_url || "");
-        if (!url) {
-          throw new Error("下载链接为空");
-        }
+        if (!url) throw new Error("下载链接为空");
         state.linkCache.set(fileID, url);
         return url;
       }
 
-      el.searchBtn.addEventListener("click", () => {
-        triggerSearch();
-      });
+      el.searchBtn.addEventListener("click", () => triggerSearch());
 
       el.queryInput.addEventListener("input", () => {
-        if (state.debounceTimer) {
-          window.clearTimeout(state.debounceTimer);
-        }
-        state.debounceTimer = window.setTimeout(() => {
-          triggerSearch();
-        }, 280);
+        toggleClearBtn();
+        if (state.debounceTimer) window.clearTimeout(state.debounceTimer);
+        state.debounceTimer = window.setTimeout(() => triggerSearch(), 280);
       });
 
       el.queryInput.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter") {
-          return;
-        }
+        if (event.key !== "Enter") return;
         event.preventDefault();
-        if (state.debounceTimer) {
-          window.clearTimeout(state.debounceTimer);
-        }
+        if (state.debounceTimer) window.clearTimeout(state.debounceTimer);
         triggerSearch();
       });
 
       el.list.addEventListener("click", async (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        if (target.getAttribute("data-action") !== "download") {
-          return;
-        }
+        const btn = event.target.closest('[data-action="download"]');
+        if (!btn) return;
 
-        const id = Number(target.getAttribute("data-id") || 0);
-        if (!id) {
-          return;
-        }
+        const id = Number(btn.getAttribute("data-id") || 0);
+        if (!id || btn.hasAttribute("disabled")) return;
 
         try {
-          target.setAttribute("disabled", "disabled");
+          btn.setAttribute("disabled", "disabled");
+          btn.innerHTML = BtnStates.LOADING;
           setStatus("正在生成下载链接...");
+
           const url = await getDownloadURL(id);
-          window.open(url, "_blank", "noopener,noreferrer");
+
+          btn.innerHTML = BtnStates.SUCCESS;
           setStatus("已打开下载链接");
+          window.open(url, "_blank", "noopener,noreferrer");
+
+          setTimeout(() => {
+            if (btn) {
+              btn.innerHTML = BtnStates.DEFAULT;
+              btn.removeAttribute("disabled");
+            }
+          }, 1500);
         } catch (error) {
+          btn.innerHTML = BtnStates.ERROR;
+          btn.removeAttribute("disabled");
           setStatus(error.message || String(error), true);
-        } finally {
-          target.removeAttribute("disabled");
         }
       });
 
       const observer = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
-            if (!entry.isIntersecting) {
-              continue;
-            }
-            if (!state.query || state.loading || !state.hasMore) {
-              continue;
-            }
+            if (!entry.isIntersecting) continue;
+            if (!state.query || state.loading || !state.hasMore) continue;
             fetchPage(state.page + 1, false);
           }
         },
@@ -586,8 +767,7 @@
       );
       observer.observe(el.sentinel);
 
-      el.list.innerHTML =
-        '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center text-sm text-slate-500">请输入关键词开始搜索。</div>';
+      el.list.innerHTML = UIStates.INITIAL;
     </script>
   </body>
 </html>

@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -42,6 +43,7 @@ func resolveDemoHTMLPath() string {
 
 func NewServer(handlers *Handlers) *echo.Echo {
 	e := echo.New()
+	e.Logger = slog.Default()
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestLogger())
