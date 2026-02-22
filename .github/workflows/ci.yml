@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-test-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - run: go test ./... -short -count=1 -race
+
+  unit-test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: cd web && bun install --frozen-lockfile
+
+      - run: cd web && bun run test
+
+  generate-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+
+      - run: cd web && bun install --frozen-lockfile
+
+      - run: make generate-check
+
+  smoke-test:
+    needs: [unit-test-go, unit-test-frontend, generate-check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Start services
+        run: docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
+
+      - name: Run smoke tests
+        run: ./tests/smoke/smoke_test.sh
+
+      - name: Export logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down --volumes

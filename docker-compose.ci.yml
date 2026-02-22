@@ -1,0 +1,45 @@
+# CI-only Docker Compose — no persistent volumes, inline env, fast healthchecks.
+# Usage: docker compose -f docker-compose.ci.yml up --build -d
+
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.35.1
+    container_name: meilisearch-ci
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: ci-test-meili-key-5678
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  npan:
+    build:
+      context: .
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
+    container_name: npan-ci
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+    ports:
+      - "1323:1323"
+      - "9091:9091"
+    environment:
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_API_KEY: ci-test-meili-key-5678
+      MEILI_INDEX: npan_items
+      METRICS_ADDR: ":9091"
+      NPA_ADMIN_API_KEY: ci-test-admin-api-key-1234
+      NPA_ALLOW_CONFIG_AUTH_FALLBACK: "true"
+      NPA_TOKEN: ci-dummy-token
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:1323/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
