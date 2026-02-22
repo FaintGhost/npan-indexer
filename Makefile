@@ -22,4 +22,4 @@ smoke-test:
 	@cleanup() { docker compose -f docker-compose.ci.yml down --volumes; }; \
 	trap cleanup EXIT; \
 	docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120 && \
-	./tests/smoke/smoke_test.sh
+	BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh

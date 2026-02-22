@@ -72,7 +72,7 @@ jobs:
         run: docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
 
       - name: Run smoke tests
-        run: ./tests/smoke/smoke_test.sh
+        run: BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh
 
       - name: Export logs on failure
         if: failure()

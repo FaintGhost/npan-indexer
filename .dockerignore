@@ -1,0 +1,36 @@
+# Version control
+.git
+.gitignore
+
+# Documentation
+docs/
+*.md
+
+# IDE / Editor
+.vscode/
+.idea/
+.DS_Store
+
+# CI
+.github/
+tests/
+
+# Runtime data
+data/
+
+# Frontend dev artifacts (built in Docker)
+web/node_modules/
+web/dist/
+
+# Go test/build cache
+*.test
+*.out
+coverage.out
+
+# Env files
+.env
+.env.*
+
+# Temporary
+.cache/
+tmp/

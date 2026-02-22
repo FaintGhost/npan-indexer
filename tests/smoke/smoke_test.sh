@@ -35,10 +35,10 @@ run_test() {
 
   if $assert_fn "$http_code" "$body"; then
     results+=("${GREEN}PASS${RESET}  $name")
-    ((passed++))
+    ((passed++)) || true
   else
     results+=("${RED}FAIL${RESET}  $name  (HTTP $http_code)")
-    ((failed++))
+    ((failed++)) || true
   fi
 }
 

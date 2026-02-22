@@ -6,12 +6,12 @@ services:
     image: getmeili/meilisearch:v1.35.1
     container_name: meilisearch-ci
     ports:
-      - "7700:7700"
+      - "17700:7700"
     environment:
       MEILI_ENV: development
       MEILI_MASTER_KEY: ci-test-meili-key-5678
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:7700/health"]
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:7700/health"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -28,8 +28,8 @@ services:
       meilisearch:
         condition: service_healthy
     ports:
-      - "1323:1323"
-      - "9091:9091"
+      - "11323:1323"
+      - "19091:9091"
     environment:
       MEILI_HOST: http://meilisearch:7700
       MEILI_API_KEY: ci-test-meili-key-5678
@@ -39,7 +39,7 @@ services:
       NPA_ALLOW_CONFIG_AUTH_FALLBACK: "true"
       NPA_TOKEN: ci-dummy-token
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:1323/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:1323/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
