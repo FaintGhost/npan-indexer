@@ -125,4 +125,134 @@ describe('useSyncProgress', () => {
       expect(result.current.error).toBeTruthy()
     })
   })
+
+  describe('startSync 后状态自动刷新', () => {
+    const doneProgress = {
+      ...validProgress,
+      status: 'done' as const,
+      startedAt: 1000,
+      updatedAt: 2000,
+      roots: [100],
+      completedRoots: [100],
+      aggregateStats: {
+        ...validProgress.aggregateStats,
+        filesIndexed: 42,
+      },
+    }
+
+    it('startSync 后 progress 立即变为 running（乐观更新）', async () => {
+      let getCalls = 0
+      server.use(
+        http.get('/api/v1/admin/sync', () => {
+          getCalls++
+          return HttpResponse.json(doneProgress)
+        }),
+        http.post('/api/v1/admin/sync', () => {
+          return HttpResponse.json({ message: 'ok' }, { status: 202 })
+        }),
+      )
+
+      const { result } = renderHook(() => useSyncProgress(headers))
+
+      // Wait for initial fetch
+      await waitFor(() => {
+        expect(result.current.progress).not.toBeNull()
+      })
+
+      // startSync should set progress.status to "running" optimistically,
+      // even though GET returns "done" (old data)
+      await act(async () => {
+        await result.current.startSync([100], 'auto')
+      })
+
+      expect(result.current.progress?.status).toBe('running')
+    })
+
+    it('startSync 后轮询不因旧数据停止（宽限期内）', async () => {
+      let getCalls = 0
+      server.use(
+        http.get('/api/v1/admin/sync', () => {
+          getCalls++
+          return HttpResponse.json(doneProgress)
+        }),
+        http.post('/api/v1/admin/sync', () => {
+          return HttpResponse.json({ message: 'ok' }, { status: 202 })
+        }),
+      )
+
+      const { result } = renderHook(() => useSyncProgress(headers))
+
+      // Wait for initial fetch
+      await waitFor(() => {
+        expect(result.current.progress).not.toBeNull()
+      })
+
+      const callsBeforeSync = getCalls
+
+      await act(async () => {
+        await result.current.startSync([100], 'auto')
+      })
+
+      // Record calls right after startSync (includes the fetchProgress in startSync)
+      const callsAfterSync = getCalls
+
+      // Advance past one poll interval — polling should still be active
+      // even though GET keeps returning "done" (grace period)
+      await act(async () => {
+        vi.advanceTimersByTime(2000)
+      })
+
+      const callsAfterFirstPoll = getCalls
+      expect(callsAfterFirstPoll).toBeGreaterThan(callsAfterSync)
+
+      // Advance another poll interval — still within grace period
+      await act(async () => {
+        vi.advanceTimersByTime(2000)
+      })
+
+      const callsAfterSecondPoll = getCalls
+      expect(callsAfterSecondPoll).toBeGreaterThan(callsAfterFirstPoll)
+    })
+
+    it('宽限期结束后轮询正常停止', async () => {
+      let getCalls = 0
+      server.use(
+        http.get('/api/v1/admin/sync', () => {
+          getCalls++
+          return HttpResponse.json(doneProgress)
+        }),
+        http.post('/api/v1/admin/sync', () => {
+          return HttpResponse.json({ message: 'ok' }, { status: 202 })
+        }),
+      )
+
+      const { result } = renderHook(() => useSyncProgress(headers))
+
+      // Wait for initial fetch
+      await waitFor(() => {
+        expect(result.current.progress).not.toBeNull()
+      })
+
+      await act(async () => {
+        await result.current.startSync([100], 'auto')
+      })
+
+      // Advance past the grace period (5 polls × 2000ms = 10000ms + extra)
+      await act(async () => {
+        vi.advanceTimersByTime(12000)
+      })
+
+      // Record the call count after grace period expires
+      const callsAfterGrace = getCalls
+
+      // Advance another poll interval — polling should have stopped
+      await act(async () => {
+        vi.advanceTimersByTime(4000)
+      })
+
+      const callsAfterExtra = getCalls
+      expect(callsAfterExtra).toBe(callsAfterGrace)
+    })
+  })
+
 })

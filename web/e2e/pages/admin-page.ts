@@ -15,6 +15,7 @@ export class AdminPage {
   readonly syncMessage: Locator
   readonly errorMessage: Locator
   readonly backToSearchLink: Locator
+  readonly syncStatusBadge: Locator
 
   constructor(page: Page) {
     this.page = page
@@ -31,6 +32,7 @@ export class AdminPage {
     this.syncMessage = page.locator('.border-emerald-200')
     this.errorMessage = page.locator('.border-rose-200')
     this.backToSearchLink = page.getByRole('link', { name: /返回搜索/ })
+    this.syncStatusBadge = page.locator('text=运行中')
   }
 
   async goto(): Promise<void> {

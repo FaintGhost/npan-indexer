@@ -201,6 +201,23 @@ test.describe('Admin 同步控制', () => {
     await authenticatedPage.waitForTimeout(1000)
     expect(deleteSent).toBe(false)
   })
+
+  test('启动同步后 UI 自动显示 running 状态', async ({ authenticatedPage }) => {
+    // Monitor POST request and response
+    const syncResponse = authenticatedPage.waitForResponse(
+      (r) => r.url().includes('/api/v1/admin/sync') && r.request().method() === 'POST',
+    )
+
+    // Click start sync
+    await adminPage.startSyncButton.click()
+
+    // Wait for POST to complete
+    await syncResponse
+
+    // UI should automatically show "同步进行中" without page.reload()
+    // The button text changes to "同步进行中" when isRunning is true
+    await expect(adminPage.startSyncButton).toContainText('同步进行中', { timeout: 10_000 })
+  })
 })
 
 test.describe('Admin 边界场景', () => {

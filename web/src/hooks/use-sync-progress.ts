@@ -39,16 +39,21 @@ export function useSyncProgress(headers: Record<string, string>) {
     }
   }, [headers])
 
-  const startPolling = useCallback((status: string) => {
+  const startPolling = useCallback((status: string, gracePollCount: number = 0) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
 
     if (status === 'running') {
+      let remainingGrace = gracePollCount
       intervalRef.current = setInterval(() => {
         void fetchProgress().then((result) => {
           if (result && result.status !== 'running') {
+            if (remainingGrace > 0) {
+              remainingGrace--
+              return
+            }
             if (intervalRef.current) {
               clearInterval(intervalRef.current)
               intervalRef.current = null
@@ -68,8 +73,24 @@ export function useSyncProgress(headers: Record<string, string>) {
         resume_progress: true,
         mode,
       }, { headers })
+      // Fetch real progress first (may update stats)
       await fetchProgress()
-      startPolling('running')
+      // Optimistic update: force status to running regardless of what GET returned
+      setProgress((prev) => prev
+        ? { ...prev, status: 'running' as const, lastError: undefined, updatedAt: Date.now() }
+        : {
+            status: 'running' as const,
+            mode: mode as 'auto' | 'full' | 'incremental',
+            startedAt: Date.now(),
+            updatedAt: Date.now(),
+            roots: [],
+            completedRoots: [],
+            rootProgress: {},
+            aggregateStats: { filesIndexed: 0, filesDiscovered: 0, skippedFiles: 0, pagesFetched: 0, foldersVisited: 0, failedRequests: 0, startedAt: 0, endedAt: 0 },
+          } satisfies SyncProgress
+      )
+      // Start polling with grace period of 5 (10 seconds)
+      startPolling('running', 5)
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)

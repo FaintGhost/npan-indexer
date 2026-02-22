@@ -99,18 +99,43 @@ func (m *SyncManager) IsRunning() bool {
 
 func (m *SyncManager) GetProgress() (*models.SyncProgressState, error) {
 	progress, err := m.progressStore.Load()
-	if err != nil || progress == nil {
-		return progress, err
+	if err != nil {
+		return nil, err
+	}
+
+	isRunning := m.IsRunning()
+
+	if progress == nil {
+		if isRunning {
+			// Sync goroutine started but hasn't saved initial progress yet.
+			// Return a minimal running state so the frontend sees "running".
+			return &models.SyncProgressState{
+				Status:         "running",
+				StartedAt:      time.Now().UnixMilli(),
+				UpdatedAt:      time.Now().UnixMilli(),
+				Roots:          []int64{},
+				CompletedRoots: []int64{},
+				RootProgress:   map[string]*models.RootSyncProgress{},
+			}, nil
+		}
+		return nil, nil
 	}
 
 	// If progress says "running" but no goroutine is active (e.g. after
 	// container restart), mark as interrupted so the UI shows the real state.
-	if progress.Status == "running" && !m.IsRunning() {
+	if progress.Status == "running" && !isRunning {
 		progress.Status = "interrupted"
 		progress.LastError = "进程重启，同步中断"
 		progress.ActiveRoot = nil
 		progress.UpdatedAt = time.Now().UnixMilli()
 		_ = m.progressStore.Save(progress)
+	}
+
+	// Goroutine is running but hasn't overwritten old progress yet.
+	// Override status in-memory only (don't write to store — goroutine will save real progress).
+	if isRunning && progress.Status != "running" {
+		progress.Status = "running"
+		progress.LastError = ""
 	}
 
 	return progress, nil
