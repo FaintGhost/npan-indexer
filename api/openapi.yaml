@@ -1,0 +1,836 @@
+openapi: 3.0.3
+info:
+  title: npan API
+  description: File search and sync management service backed by Meilisearch.
+  version: 0.1.0
+  license:
+    name: MIT
+
+servers:
+  - url: /
+    description: Same-origin (SPA or reverse-proxy)
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    QueryParam:
+      name: query
+      in: query
+      description: Search query string (alias `q` also accepted).
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    PageParam:
+      name: page
+      in: query
+      description: Page number (1-based).
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSizeParam:
+      name: page_size
+      in: query
+      description: Number of results per page.
+      schema:
+        type: integer
+        minimum: 1
+        default: 20
+    FileIdParam:
+      name: file_id
+      in: query
+      required: true
+      description: Numeric file ID.
+      schema:
+        type: integer
+        minimum: 1
+    ValidPeriodParam:
+      name: valid_period
+      in: query
+      description: Download URL validity period in seconds.
+      schema:
+        type: integer
+
+  schemas:
+    ItemType:
+      type: string
+      enum: [file, folder]
+
+    SyncStatus:
+      type: string
+      enum: [idle, running, done, error, cancelled, interrupted]
+
+    SyncMode:
+      type: string
+      enum: [auto, full, incremental]
+
+    ErrorCode:
+      type: string
+      enum:
+        - UNAUTHORIZED
+        - BAD_REQUEST
+        - NOT_FOUND
+        - CONFLICT
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+
+    IndexDocument:
+      type: object
+      required:
+        - doc_id
+        - source_id
+        - type
+        - name
+        - path_text
+        - parent_id
+        - modified_at
+        - created_at
+        - size
+        - sha1
+        - in_trash
+        - is_deleted
+      properties:
+        doc_id:
+          type: string
+        source_id:
+          type: integer
+        type:
+          $ref: "#/components/schemas/ItemType"
+        name:
+          type: string
+        path_text:
+          type: string
+        parent_id:
+          type: integer
+        modified_at:
+          type: integer
+          description: Unix timestamp.
+        created_at:
+          type: integer
+          description: Unix timestamp.
+        size:
+          type: integer
+        sha1:
+          type: string
+        in_trash:
+          type: boolean
+        is_deleted:
+          type: boolean
+        highlighted_name:
+          type: string
+
+    QueryResult:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndexDocument"
+        total:
+          type: integer
+
+    CrawlStats:
+      type: object
+      required:
+        - foldersVisited
+        - filesIndexed
+        - filesDiscovered
+        - skippedFiles
+        - pagesFetched
+        - failedRequests
+        - startedAt
+        - endedAt
+      properties:
+        foldersVisited:
+          type: integer
+        filesIndexed:
+          type: integer
+        filesDiscovered:
+          type: integer
+        skippedFiles:
+          type: integer
+        pagesFetched:
+          type: integer
+        failedRequests:
+          type: integer
+        startedAt:
+          type: integer
+          description: Unix timestamp.
+        endedAt:
+          type: integer
+          description: Unix timestamp.
+
+    RootSyncProgress:
+      type: object
+      required:
+        - rootFolderId
+        - status
+        - stats
+        - updatedAt
+      properties:
+        rootFolderId:
+          type: integer
+        status:
+          type: string
+        estimatedTotalDocs:
+          type: integer
+          nullable: true
+        stats:
+          $ref: "#/components/schemas/CrawlStats"
+        updatedAt:
+          type: integer
+          description: Unix timestamp.
+
+    IncrementalSyncStats:
+      type: object
+      required:
+        - changesFetched
+        - upserted
+        - deleted
+        - skippedUpserts
+        - skippedDeletes
+        - cursorBefore
+        - cursorAfter
+      properties:
+        changesFetched:
+          type: integer
+        upserted:
+          type: integer
+        deleted:
+          type: integer
+        skippedUpserts:
+          type: integer
+        skippedDeletes:
+          type: integer
+        cursorBefore:
+          type: integer
+        cursorAfter:
+          type: integer
+
+    SyncVerification:
+      type: object
+      required:
+        - meiliDocCount
+        - crawledDocCount
+        - discoveredDocCount
+        - skippedCount
+        - verified
+      properties:
+        meiliDocCount:
+          type: integer
+        crawledDocCount:
+          type: integer
+        discoveredDocCount:
+          type: integer
+        skippedCount:
+          type: integer
+        verified:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+
+    SyncProgressState:
+      type: object
+      required:
+        - status
+        - startedAt
+        - updatedAt
+        - roots
+        - completedRoots
+        - aggregateStats
+        - rootProgress
+      properties:
+        status:
+          $ref: "#/components/schemas/SyncStatus"
+        mode:
+          $ref: "#/components/schemas/SyncMode"
+        startedAt:
+          type: integer
+          description: Unix timestamp.
+        updatedAt:
+          type: integer
+          description: Unix timestamp.
+        roots:
+          type: array
+          items:
+            type: integer
+        rootNames:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map of root folder ID to name.
+        completedRoots:
+          type: array
+          items:
+            type: integer
+        activeRoot:
+          type: integer
+          nullable: true
+        aggregateStats:
+          $ref: "#/components/schemas/CrawlStats"
+        rootProgress:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/RootSyncProgress"
+          description: Map of root folder ID (as string key) to its progress.
+        incrementalStats:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/IncrementalSyncStats"
+        lastError:
+          type: string
+        verification:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/SyncVerification"
+
+    SyncStartRequest:
+      type: object
+      properties:
+        mode:
+          $ref: "#/components/schemas/SyncMode"
+        root_folder_ids:
+          type: array
+          items:
+            type: integer
+        include_departments:
+          type: boolean
+          nullable: true
+        department_ids:
+          type: array
+          items:
+            type: integer
+        resume_progress:
+          type: boolean
+          nullable: true
+        root_workers:
+          type: integer
+        progress_every:
+          type: integer
+        checkpoint_template:
+          type: string
+        window_overlap_ms:
+          type: integer
+        incremental_query:
+          type: string
+
+    TokenRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Existing bearer token (if available).
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        sub_id:
+          type: integer
+        sub_type:
+          type: string
+        oauth_host:
+          type: string
+
+    RemoteSearchItem:
+      type: object
+      required: [id, name, type]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+
+    RemoteSearchResponse:
+      type: object
+      required:
+        - files
+        - folders
+        - total_count
+        - page_id
+        - page_capacity
+        - page_count
+      properties:
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/RemoteSearchItem"
+        folders:
+          type: array
+          items:
+            $ref: "#/components/schemas/RemoteSearchItem"
+        total_count:
+          type: integer
+        page_id:
+          type: integer
+        page_capacity:
+          type: integer
+        page_count:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        message:
+          type: string
+        request_id:
+          type: string
+
+    HealthResponse:
+      type: object
+      required: [status, running_sync]
+      properties:
+        status:
+          type: string
+          example: ok
+        running_sync:
+          type: boolean
+
+    ReadyResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+        meili:
+          type: string
+          description: Present only when status is not_ready.
+
+    DownloadURLResponse:
+      type: object
+      required: [file_id, download_url]
+      properties:
+        file_id:
+          type: integer
+        download_url:
+          type: string
+          format: uri
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+paths:
+  /healthz:
+    get:
+      operationId: health
+      summary: Liveness probe
+      tags: [Health]
+      responses:
+        "200":
+          description: Service is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /readyz:
+    get:
+      operationId: readyz
+      summary: Readiness probe (checks Meilisearch connectivity)
+      tags: [Health]
+      responses:
+        "200":
+          description: Service is ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+        "503":
+          description: Meilisearch is unreachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+
+  /api/v1/app/search:
+    get:
+      operationId: appSearch
+      summary: Search files (embedded frontend auth)
+      tags: [App]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueryParam"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 30
+      responses:
+        "200":
+          description: Search results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+        "400":
+          description: Missing or invalid query parameter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Search service unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/app/download-url:
+    get:
+      operationId: appDownloadURL
+      summary: Get file download URL (embedded frontend auth)
+      tags: [App]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileIdParam"
+        - $ref: "#/components/parameters/ValidPeriodParam"
+      responses:
+        "200":
+          description: Download URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadURLResponse"
+        "400":
+          description: Missing or invalid file_id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream download URL generation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Download service unavailable (credential issue).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/token:
+    post:
+      operationId: createToken
+      summary: Request an upstream access token
+      tags: [Auth]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenRequest"
+      responses:
+        "200":
+          description: Token string.
+          content:
+            application/json:
+              schema:
+                type: string
+        "400":
+          description: Invalid credentials or missing parameters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/search/remote:
+    get:
+      operationId: remoteSearch
+      summary: Proxy search to upstream API
+      tags: [Search]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Search query string (alias `q` also accepted).
+          schema:
+            type: string
+            minLength: 1
+        - name: type
+          in: query
+          description: Item type filter.
+          schema:
+            type: string
+            default: all
+        - name: page_id
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: query_filter
+          in: query
+          schema:
+            type: string
+            default: all
+        - name: search_in_folder
+          in: query
+          schema:
+            type: integer
+        - name: updated_time_range
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Upstream search results (proxied).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteSearchResponse"
+        "400":
+          description: Missing query or invalid parameters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/search/local:
+    get:
+      operationId: localSearch
+      summary: Search the local Meilisearch index
+      tags: [Search]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueryParam"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/PageSizeParam"
+        - name: type
+          in: query
+          description: Item type filter.
+          schema:
+            type: string
+            default: all
+        - name: parent_id
+          in: query
+          schema:
+            type: integer
+        - name: updated_after
+          in: query
+          description: Unix timestamp lower bound.
+          schema:
+            type: integer
+        - name: updated_before
+          in: query
+          description: Unix timestamp upper bound.
+          schema:
+            type: integer
+        - name: include_deleted
+          in: query
+          description: Include soft-deleted documents.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Local search results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+        "400":
+          description: Missing query or invalid parameters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Search service unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/download-url:
+    get:
+      operationId: downloadURL
+      summary: Get file download URL
+      tags: [Download]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/FileIdParam"
+        - $ref: "#/components/parameters/ValidPeriodParam"
+      responses:
+        "200":
+          description: Download URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadURLResponse"
+        "400":
+          description: Missing or invalid file_id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/admin/sync:
+    post:
+      operationId: startSync
+      summary: Start a sync job
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncStartRequest"
+      responses:
+        "202":
+          description: Sync job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid request body or missing credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A sync job is already running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    get:
+      operationId: getSyncProgress
+      summary: Get current sync progress
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Current sync progress state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncProgressState"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No sync progress found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to read sync progress.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: cancelSync
+      summary: Cancel the running sync job
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Cancel signal sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: No running sync to cancel.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

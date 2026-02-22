@@ -1,0 +1,7 @@
+package: api
+output: types.gen.go
+generate:
+  models: true
+  echo-server: false
+  strict-server: false
+  client: false

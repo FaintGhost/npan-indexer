@@ -12,7 +12,8 @@
     "fmt:check": "oxfmt --check src/",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "generate": "openapi-ts"
   },
   "dependencies": {
     "react": "^19.0.0",
@@ -20,6 +21,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "^0.92.4",
     "@tailwindcss/vite": "^4.0.0",
     "@tanstack/react-router": "^1.120.0",
     "@tanstack/router-plugin": "^1.120.0",
