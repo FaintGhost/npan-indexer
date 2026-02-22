@@ -11,7 +11,7 @@ services:
       MEILI_ENV: development
       MEILI_MASTER_KEY: ci-test-meili-key-5678
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://127.0.0.1:7700/health"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:7700/health || wget -q -O /dev/null http://127.0.0.1:7700/health"]
       interval: 5s
       timeout: 3s
       retries: 10
