@@ -68,10 +68,8 @@ export function useSyncProgress(headers: Record<string, string>) {
         resume_progress: true,
         mode,
       }, { headers })
-      const result = await fetchProgress()
-      if (result) {
-        startPolling(result.status)
-      }
+      await fetchProgress()
+      startPolling('running')
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
