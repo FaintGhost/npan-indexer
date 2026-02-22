@@ -8,6 +8,8 @@ import {
 const validStats = {
   foldersVisited: 10,
   filesIndexed: 100,
+  filesDiscovered: 0,
+  skippedFiles: 0,
   pagesFetched: 20,
   failedRequests: 0,
   startedAt: 1700000000,
@@ -41,13 +43,10 @@ describe('CrawlStatsSchema', () => {
     }
   })
 
-  it('defaults filesDiscovered and skippedFiles to 0 when missing', () => {
-    const result = CrawlStatsSchema.safeParse(validStats)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.filesDiscovered).toBe(0)
-      expect(result.data.skippedFiles).toBe(0)
-    }
+  it('rejects missing filesDiscovered and skippedFiles', () => {
+    const { filesDiscovered, skippedFiles, ...statsWithout } = validStats
+    const result = CrawlStatsSchema.safeParse(statsWithout)
+    expect(result.success).toBe(false)
   })
 })
 
@@ -55,6 +54,7 @@ describe('RootProgressSchema', () => {
   it('parses valid root progress', () => {
     const result = RootProgressSchema.safeParse({
       rootFolderId: 12345,
+      checkpointFile: '',
       status: 'running',
       stats: validStats,
       updatedAt: 1700000500,
@@ -65,6 +65,7 @@ describe('RootProgressSchema', () => {
   it('parses with optional estimatedTotalDocs', () => {
     const result = RootProgressSchema.safeParse({
       rootFolderId: 12345,
+      checkpointFile: '',
       status: 'done',
       estimatedTotalDocs: 500,
       stats: validStats,
@@ -79,6 +80,7 @@ describe('RootProgressSchema', () => {
   it('parses with null estimatedTotalDocs', () => {
     const result = RootProgressSchema.safeParse({
       rootFolderId: 12345,
+      checkpointFile: '',
       status: 'running',
       estimatedTotalDocs: null,
       stats: validStats,
@@ -96,12 +98,16 @@ describe('SyncProgressSchema', () => {
     status: 'running',
     startedAt: 1700000000,
     updatedAt: 1700000500,
+    meiliHost: 'http://localhost:7700',
+    meiliIndex: 'documents',
+    checkpointTemplate: '',
     roots: [100, 200],
     completedRoots: [100],
     aggregateStats: validStats,
     rootProgress: {
       '100': {
         rootFolderId: 100,
+        checkpointFile: '',
         status: 'done',
         stats: validStats,
         updatedAt: 1700000500,
@@ -140,11 +146,11 @@ describe('SyncProgressSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('defaults lastError to empty string when missing', () => {
+  it('lastError is undefined when missing', () => {
     const result = SyncProgressSchema.safeParse(validProgress)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.lastError).toBe('')
+      expect(result.data.lastError).toBeUndefined()
     }
   })
 
@@ -210,7 +216,7 @@ describe('SyncProgressSchema', () => {
     }
   })
 
-  it('defaults verification warnings to empty array when missing', () => {
+  it('verification warnings is undefined when missing', () => {
     const result = SyncProgressSchema.safeParse({
       ...validProgress,
       verification: {
@@ -223,7 +229,7 @@ describe('SyncProgressSchema', () => {
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.verification?.warnings).toEqual([])
+      expect(result.data.verification?.warnings).toBeUndefined()
     }
   })
 })

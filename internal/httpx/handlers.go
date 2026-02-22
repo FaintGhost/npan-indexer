@@ -465,7 +465,7 @@ func (h *Handlers) GetFullSyncProgress(c *echo.Context) error {
 		return writeErrorResponse(c, http.StatusNotFound, ErrCodeNotFound, "未找到同步进度")
 	}
 
-	return c.JSON(http.StatusOK, progress)
+	return c.JSON(http.StatusOK, toSyncProgressResponse(progress))
 }
 
 func (h *Handlers) CancelFullSync(c *echo.Context) error {

@@ -3,15 +3,19 @@ package httpx
 import "npan/internal/models"
 
 type SyncProgressResponse struct {
-  Status         string                           `json:"status"`
-  StartedAt      int64                            `json:"startedAt"`
-  UpdatedAt      int64                            `json:"updatedAt"`
-  Roots          []int64                          `json:"roots"`
-  CompletedRoots []int64                          `json:"completedRoots"`
-  ActiveRoot     *int64                           `json:"activeRoot,omitempty"`
-  AggregateStats models.CrawlStats                `json:"aggregateStats"`
-  RootProgress   map[string]*RootProgressResponse `json:"rootProgress"`
-  LastError      string                           `json:"lastError,omitempty"`
+  Status           string                           `json:"status"`
+  Mode             string                           `json:"mode,omitempty"`
+  StartedAt        int64                            `json:"startedAt"`
+  UpdatedAt        int64                            `json:"updatedAt"`
+  Roots            []int64                          `json:"roots"`
+  RootNames        map[int64]string                 `json:"rootNames,omitempty"`
+  CompletedRoots   []int64                          `json:"completedRoots"`
+  ActiveRoot       *int64                           `json:"activeRoot,omitempty"`
+  AggregateStats   models.CrawlStats                `json:"aggregateStats"`
+  RootProgress     map[string]*RootProgressResponse `json:"rootProgress"`
+  IncrementalStats *models.IncrementalSyncStats      `json:"incrementalStats,omitempty"`
+  LastError        string                           `json:"lastError,omitempty"`
+  Verification     *models.SyncVerification          `json:"verification,omitempty"`
 }
 
 type RootProgressResponse struct {
@@ -24,14 +28,18 @@ type RootProgressResponse struct {
 
 func toSyncProgressResponse(state *models.SyncProgressState) SyncProgressResponse {
   resp := SyncProgressResponse{
-    Status:         state.Status,
-    StartedAt:      state.StartedAt,
-    UpdatedAt:      state.UpdatedAt,
-    Roots:          state.Roots,
-    CompletedRoots: state.CompletedRoots,
-    ActiveRoot:     state.ActiveRoot,
-    AggregateStats: state.AggregateStats,
-    LastError:      state.LastError,
+    Status:           state.Status,
+    Mode:             state.Mode,
+    StartedAt:        state.StartedAt,
+    UpdatedAt:        state.UpdatedAt,
+    Roots:            state.Roots,
+    RootNames:        state.RootNames,
+    CompletedRoots:   state.CompletedRoots,
+    ActiveRoot:       state.ActiveRoot,
+    AggregateStats:   state.AggregateStats,
+    IncrementalStats: state.IncrementalStats,
+    LastError:        state.LastError,
+    Verification:     state.Verification,
   }
   if state.RootProgress != nil {
     resp.RootProgress = make(map[string]*RootProgressResponse, len(state.RootProgress))

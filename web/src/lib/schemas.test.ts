@@ -38,11 +38,11 @@ describe('IndexDocumentSchema', () => {
     }
   })
 
-  it('defaults highlighted_name to empty string when missing', () => {
+  it('highlighted_name is undefined when missing', () => {
     const result = IndexDocumentSchema.safeParse(validDoc)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.highlighted_name).toBe('')
+      expect(result.data.highlighted_name).toBeUndefined()
     }
   })
 
