@@ -53,3 +53,7 @@ tmp/
 /task_plan.md
 /findings.md
 /progress.md
+
+# Playwright
+web/playwright-report/
+web/test-results/

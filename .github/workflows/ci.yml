@@ -81,3 +81,35 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose -f docker-compose.ci.yml down --volumes
+
+  e2e-test:
+    needs: [smoke-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Start app services
+        run: docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
+
+      - name: Run E2E tests
+        run: docker compose -f docker-compose.ci.yml run --rm --profile e2e playwright
+
+      - name: Upload test artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 7
+
+      - name: Export logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down --volumes

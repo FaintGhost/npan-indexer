@@ -1,4 +1,4 @@
-.PHONY: generate-go generate-ts generate generate-check test test-frontend smoke-test
+.PHONY: generate-go generate-ts generate generate-check test test-frontend smoke-test e2e-test
 
 generate-go:
 	go generate ./api/...
@@ -23,3 +23,10 @@ smoke-test:
 	trap cleanup EXIT; \
 	docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120 && \
 	BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh
+
+e2e-test:
+	@cleanup() { docker compose -f docker-compose.ci.yml down --volumes; }; \
+	trap cleanup EXIT; \
+	docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120 && \
+	BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh && \
+	docker compose -f docker-compose.ci.yml run --rm --profile e2e playwright

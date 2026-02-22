@@ -43,3 +43,25 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    container_name: playwright-ci
+    depends_on:
+      npan:
+        condition: service_healthy
+    ipc: host
+    init: true
+    working_dir: /web
+    volumes:
+      - ./web:/web
+    environment:
+      BASE_URL: http://npan:1323
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_API_KEY: ci-test-meili-key-5678
+      MEILI_INDEX: npan_items
+      E2E_ADMIN_API_KEY: ci-test-admin-api-key-1234
+      CI: "true"
+    command: sh -c "npm install 2>/dev/null; npx playwright test"
+    profiles:
+      - e2e
