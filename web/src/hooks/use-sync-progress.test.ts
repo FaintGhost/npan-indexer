@@ -8,9 +8,6 @@ const validProgress = {
   status: "idle",
   startedAt: 0,
   updatedAt: 0,
-  meiliHost: "http://localhost:7700",
-  meiliIndex: "documents",
-  checkpointTemplate: "",
   roots: [],
   completedRoots: [],
   aggregateStats: {
@@ -296,8 +293,6 @@ describe("useSyncProgress", () => {
       await waitFor(() => {
         expect(result.current.progress).not.toBeNull();
       });
-
-      const callsBeforeSync = getCalls;
 
       await act(async () => {
         await result.current.startSync([100], "auto");

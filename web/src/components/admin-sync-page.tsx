@@ -3,6 +3,7 @@ import { useAdminAuth } from "@/hooks/use-admin-auth";
 import { useSyncProgress } from "@/hooks/use-sync-progress";
 import { ApiKeyDialog } from "@/components/api-key-dialog";
 import { SyncProgressDisplay } from "@/components/sync-progress-display";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 const SYNC_MODES = [
   { value: "auto", label: "自适应", description: "有游标走增量，否则全量" },
@@ -16,16 +17,45 @@ export function AdminSyncPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<string>("auto");
   const [forceRebuild, setForceRebuild] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    variant: "danger" | "default";
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    confirmLabel: "",
+    variant: "default",
+    onConfirm: () => {},
+  });
 
   const isRunning = sync.progress?.status === "running";
   const isBusy = sync.loading || isRunning;
 
   const handleStartSync = async () => {
-    if (
-      forceRebuild &&
-      !window.confirm("强制重建将清空所有索引数据并重新爬取，确认继续？")
-    )
+    if (forceRebuild) {
+      setConfirmDialog({
+        open: true,
+        title: "强制重建索引",
+        message:
+          "此操作将清空所有索引数据并重新爬取，重建期间搜索将无结果。确认继续？",
+        confirmLabel: "确认重建",
+        variant: "danger",
+        onConfirm: () => {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+          void doStartSync();
+        },
+      });
       return;
+    }
+    await doStartSync();
+  };
+
+  const doStartSync = async () => {
     setMessage(null);
     await sync.startSync([], mode, forceRebuild);
     if (!sync.error) {
@@ -35,7 +65,20 @@ export function AdminSyncPage() {
   };
 
   const handleCancelSync = async () => {
-    if (!window.confirm("确认取消同步？")) return;
+    setConfirmDialog({
+      open: true,
+      title: "取消同步",
+      message: "确认取消当前正在进行的同步任务？",
+      confirmLabel: "确认取消",
+      variant: "danger",
+      onConfirm: () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        void doCancelSync();
+      },
+    });
+  };
+
+  const doCancelSync = async () => {
     setMessage(null);
     await sync.cancelSync();
     if (!sync.error) {
@@ -90,19 +133,34 @@ export function AdminSyncPage() {
           </div>
         )}
         {!isRunning && mode === "full" && (
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={forceRebuild}
-              onChange={(e) => setForceRebuild(e.target.checked)}
-              disabled={isBusy}
-              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            强制重建索引
-            <span className="text-xs text-slate-400">
-              （清空现有索引后重新爬取）
+          <button
+            type="button"
+            role="switch"
+            aria-checked={forceRebuild}
+            onClick={() => setForceRebuild(!forceRebuild)}
+            disabled={isBusy}
+            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span
+              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                forceRebuild ? "bg-rose-500" : "bg-slate-200"
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                  forceRebuild ? "translate-x-4" : "translate-x-1"
+                }`}
+              />
             </span>
-          </label>
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">
+                强制重建索引
+              </span>
+              <span className="text-xs text-slate-400">
+                清空现有索引后重新爬取，重建期间搜索将无结果
+              </span>
+            </span>
+          </button>
         )}
         <div className="flex gap-3">
           <button
@@ -175,6 +233,16 @@ export function AdminSyncPage() {
             <p className="text-sm text-slate-400">暂无同步记录</p>
           </div>
         )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+      />
     </div>
   );
 }
