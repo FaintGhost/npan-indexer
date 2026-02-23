@@ -1,6 +1,62 @@
 package search
 
-import "npan/internal/models"
+import (
+  "regexp"
+  "strings"
+
+  "npan/internal/models"
+)
+
+// versionPrefixRe matches V/v immediately followed by digit.digit pattern,
+// where V is either at word boundary or preceded by a non-ASCII character.
+// Examples that match: "V1.5.0", "_V4.9.4.0", " v3.2.1"
+// Examples that don't match: "VIVO", "V2", "固件包V2"
+var versionPrefixRe = regexp.MustCompile(`([^a-zA-Z]|^)[Vv](\d+\.\d+)`)
+
+// ExtractNameExt returns the lowercase file extension if it is a known
+// extension (present in knownExtensions), otherwise returns "".
+func ExtractNameExt(name string) string {
+  if name == "" {
+    return ""
+  }
+  dotIdx := strings.LastIndex(name, ".")
+  if dotIdx < 0 || dotIdx == len(name)-1 {
+    return ""
+  }
+  ext := strings.ToLower(name[dotIdx+1:])
+  if knownExtensions[ext] {
+    return ext
+  }
+  return ""
+}
+
+// ExtractNameBase returns the file name with the known extension removed
+// and any V/v prefix before version numbers stripped.
+func ExtractNameBase(name string) string {
+  if name == "" {
+    return ""
+  }
+
+  base := name
+
+  // Remove known extension (including the dot).
+  ext := ExtractNameExt(name)
+  if ext != "" {
+    // Remove the last ".ext" from the name.
+    base = name[:len(name)-len(ext)-1]
+  }
+
+  // Remove V/v prefix before version numbers (e.g., V1.5.0 -> 1.5.0).
+  base = versionPrefixRe.ReplaceAllStringFunc(base, func(match string) string {
+    // Find the position of V/v in the match.
+    vIdx := strings.IndexAny(match, "Vv")
+    prefix := match[:vIdx]
+    rest := match[vIdx+1:] // everything after V/v
+    return prefix + rest
+  })
+
+  return base
+}
 
 func toSafeNumber(value int64, fallback int64) int64 {
 	if value == 0 {
@@ -15,6 +71,8 @@ func MapFolderToIndexDoc(folder models.NpanFolder, pathText string) models.Index
 		SourceID:   folder.ID,
 		Type:       models.ItemTypeFolder,
 		Name:       folder.Name,
+		NameBase:   ExtractNameBase(folder.Name),
+		NameExt:    "",
 		PathText:   pathText,
 		ParentID:   folder.ParentID,
 		ModifiedAt: toSafeNumber(folder.ModifiedAt, 0),
@@ -32,6 +90,8 @@ func MapFileToIndexDoc(file models.NpanFile, pathText string) models.IndexDocume
 		SourceID:   file.ID,
 		Type:       models.ItemTypeFile,
 		Name:       file.Name,
+		NameBase:   ExtractNameBase(file.Name),
+		NameExt:    ExtractNameExt(file.Name),
 		PathText:   pathText,
 		ParentID:   file.ParentID,
 		ModifiedAt: toSafeNumber(file.ModifiedAt, 0),

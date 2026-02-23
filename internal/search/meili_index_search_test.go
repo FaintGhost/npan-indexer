@@ -728,3 +728,163 @@ func TestReorderQuery(t *testing.T) {
     }
   }
 }
+
+// --- Fallback search mock ---
+
+// searchCallRecord records a single Search invocation.
+type searchCallRecord struct {
+  query   string
+  request *meilisearch.SearchRequest
+}
+
+// fallbackCaptureIndex wraps searchCaptureIndex and records multiple Search
+// calls, returning pre-configured responses in order.
+type fallbackCaptureIndex struct {
+  searchCaptureIndex
+  calls     []searchCallRecord
+  responses []*meilisearch.SearchResponse
+}
+
+func (f *fallbackCaptureIndex) Search(query string, request *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+  idx := len(f.calls)
+  // Deep-copy the MatchingStrategy since it may be overwritten between calls.
+  reqCopy := *request
+  f.calls = append(f.calls, searchCallRecord{query: query, request: &reqCopy})
+  if idx < len(f.responses) {
+    return f.responses[idx], nil
+  }
+  return &meilisearch.SearchResponse{}, nil
+}
+
+func (f *fallbackCaptureIndex) SearchWithContext(_ context.Context, query string, request *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+  return f.Search(query, request)
+}
+
+// --- Fallback search tests ---
+
+func TestSearch_FallbackToLastOnZeroResults(t *testing.T) {
+  emptyResponse := &meilisearch.SearchResponse{
+    Hits:      meilisearch.Hits{},
+    TotalHits: 0,
+  }
+  hitResponse := &meilisearch.SearchResponse{
+    Hits:      buildHitsWithFormatted(),
+    TotalHits: 1,
+  }
+
+  mock := &fallbackCaptureIndex{
+    responses: []*meilisearch.SearchResponse{emptyResponse, hitResponse},
+  }
+  idx := NewMeiliIndexFromManager(mock)
+
+  docs, total, err := idx.Search(models.LocalSearchParams{
+    Query: "mx40 spec pdf",
+  })
+  if err != nil {
+    t.Fatalf("Search returned error: %v", err)
+  }
+
+  // Should have made two calls (All then Last fallback)
+  if len(mock.calls) != 2 {
+    t.Fatalf("expected 2 search calls, got %d", len(mock.calls))
+  }
+
+  // First call uses All strategy
+  if mock.calls[0].request.MatchingStrategy != meilisearch.All {
+    t.Errorf("first call MatchingStrategy = %v, want All", mock.calls[0].request.MatchingStrategy)
+  }
+
+  // Second call uses Last strategy
+  if mock.calls[1].request.MatchingStrategy != meilisearch.Last {
+    t.Errorf("second call MatchingStrategy = %v, want Last", mock.calls[1].request.MatchingStrategy)
+  }
+
+  // Should return the results from the second call
+  if len(docs) != 1 {
+    t.Fatalf("expected 1 doc, got %d", len(docs))
+  }
+  if total != 1 {
+    t.Errorf("expected total = 1, got %d", total)
+  }
+}
+
+func TestSearch_NoFallbackWhenResultsExist(t *testing.T) {
+  hitResponse := &meilisearch.SearchResponse{
+    Hits:      buildHitsWithFormatted(),
+    TotalHits: 1,
+  }
+
+  mock := &fallbackCaptureIndex{
+    responses: []*meilisearch.SearchResponse{hitResponse},
+  }
+  idx := NewMeiliIndexFromManager(mock)
+
+  docs, _, err := idx.Search(models.LocalSearchParams{
+    Query: "file",
+  })
+  if err != nil {
+    t.Fatalf("Search returned error: %v", err)
+  }
+
+  // Should have made only one call
+  if len(mock.calls) != 1 {
+    t.Fatalf("expected 1 search call, got %d", len(mock.calls))
+  }
+
+  // Used All strategy
+  if mock.calls[0].request.MatchingStrategy != meilisearch.All {
+    t.Errorf("call MatchingStrategy = %v, want All", mock.calls[0].request.MatchingStrategy)
+  }
+
+  if len(docs) != 1 {
+    t.Errorf("expected 1 doc, got %d", len(docs))
+  }
+}
+
+func TestSearch_NoFallbackOnEmptyQuery(t *testing.T) {
+  emptyResponse := &meilisearch.SearchResponse{
+    Hits:      meilisearch.Hits{},
+    TotalHits: 0,
+  }
+
+  mock := &fallbackCaptureIndex{
+    responses: []*meilisearch.SearchResponse{emptyResponse},
+  }
+  idx := NewMeiliIndexFromManager(mock)
+
+  _, _, err := idx.Search(models.LocalSearchParams{
+    Query: "",
+  })
+  if err != nil {
+    t.Fatalf("Search returned error: %v", err)
+  }
+
+  // Empty query should NOT trigger fallback
+  if len(mock.calls) != 1 {
+    t.Fatalf("expected 1 search call for empty query, got %d", len(mock.calls))
+  }
+}
+
+func TestPreprocessQuery(t *testing.T) {
+  tests := []struct {
+    input string
+    want  string
+  }{
+    {"mx6000 V1.5.0", "mx6000 1.5.0"},
+    {"规格书.pdf", "pdf 规格书"},
+    {"mx6000 V1.5.0 pdf", "pdf mx6000 1.5.0"},
+    {"4.9.4.0", "4.9.4.0"},
+    {"4.9.4.0 zip", "zip 4.9.4.0"},
+    {"mx40 spec pdf", "pdf mx40 spec"},
+    {"王晨 报告", "王晨 报告"},
+    {"", ""},
+    {"firmware v3.2.1", "firmware 3.2.1"},
+    {"VIVO手机", "VIVO手机"},
+  }
+  for _, tt := range tests {
+    got := preprocessQuery(tt.input)
+    if got != tt.want {
+      t.Errorf("preprocessQuery(%q) = %q, want %q", tt.input, got, tt.want)
+    }
+  }
+}

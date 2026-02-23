@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -67,12 +68,13 @@ func (m *MeiliIndex) waitTask(ctx context.Context, taskInfo *meilisearch.TaskInf
 
 func (m *MeiliIndex) EnsureSettings(ctx context.Context) error {
 	taskInfo, err := m.index.UpdateSettingsWithContext(ctx, &meilisearch.Settings{
-		RankingRules:         []string{"words", "typo", "proximity", "attribute", "exactness", "modified_at:desc"},
-		SearchableAttributes: []string{"name", "path_text"},
+		RankingRules:         []string{"words", "typo", "exactness", "proximity", "attribute", "modified_at:desc"},
+		SearchableAttributes: []string{"name_base", "name_ext", "name", "path_text"},
 		FilterableAttributes: []string{"type", "parent_id", "modified_at", "in_trash", "is_deleted"},
 		SortableAttributes:   []string{"modified_at", "size", "created_at"},
-		DisplayedAttributes:  []string{"doc_id", "source_id", "type", "name", "path_text", "parent_id", "modified_at", "created_at", "size"},
+		DisplayedAttributes:  []string{"doc_id", "source_id", "type", "name", "name_base", "name_ext", "path_text", "parent_id", "modified_at", "created_at", "size"},
 		StopWords:            []string{"的", "了", "在", "是", "和", "就", "都", "而", "及", "与"},
+		NonSeparatorTokens:   []string{"."},
 		TypoTolerance: &meilisearch.TypoTolerance{
 			Enabled: true,
 			MinWordSizeForTypos: meilisearch.MinWordSizeForTypos{
@@ -149,6 +151,45 @@ func reorderQuery(query string) string {
 	return strings.Join(append(ext, terms...), " ")
 }
 
+// vPrefixRe 匹配 V/v 后跟 数字.* 的模式，如 V1.5.0、v3.2.1。
+var vPrefixRe = regexp.MustCompile(`^[Vv](\d+\..+)$`)
+
+// preprocessQuery 对搜索查询进行预处理：
+// 1. 拆分 "word.ext" 模式（如 "规格书.pdf" → "规格书" + "pdf"）
+// 2. 去除 V/v 前缀（如 "V1.5.0" → "1.5.0"）
+// 3. 将已知扩展名词移到查询前面（复用 reorderQuery 逻辑）
+func preprocessQuery(query string) string {
+	words := strings.Fields(query)
+	if len(words) == 0 {
+		return query
+	}
+
+	// Step 1: 拆分 word.ext 模式
+	expanded := make([]string, 0, len(words)+4)
+	for _, w := range words {
+		dotIdx := strings.LastIndex(w, ".")
+		if dotIdx > 0 && dotIdx < len(w)-1 {
+			ext := w[dotIdx+1:]
+			if knownExtensions[strings.ToLower(ext)] {
+				base := w[:dotIdx]
+				expanded = append(expanded, base, ext)
+				continue
+			}
+		}
+		expanded = append(expanded, w)
+	}
+
+	// Step 2: 去除 V/v 前缀
+	for i, w := range expanded {
+		if m := vPrefixRe.FindStringSubmatch(w); m != nil {
+			expanded[i] = m[1]
+		}
+	}
+
+	// Step 3: 扩展名移前
+	return reorderQuery(strings.Join(expanded, " "))
+}
+
 func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error) {
 	filters := make([]string, 0, 8)
 
@@ -178,25 +219,45 @@ func (m *MeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocu
 		pageSize = 20
 	}
 
-	request := &meilisearch.SearchRequest{
-		Filter:           filters,
-		Page:             page,
-		HitsPerPage:      pageSize,
-		MatchingStrategy: meilisearch.All,
-		AttributesToRetrieve: []string{
-			"doc_id", "source_id", "type", "name", "path_text",
-			"parent_id", "modified_at", "created_at", "size",
-		},
-		AttributesToHighlight: []string{"name"},
-		HighlightPreTag:       "<mark>",
-		HighlightPostTag:      "</mark>",
+	query := preprocessQuery(params.Query)
+
+	buildRequest := func(strategy meilisearch.MatchingStrategy) *meilisearch.SearchRequest {
+		return &meilisearch.SearchRequest{
+			Filter:           filters,
+			Page:             page,
+			HitsPerPage:      pageSize,
+			MatchingStrategy: strategy,
+			AttributesToRetrieve: []string{
+				"doc_id", "source_id", "type", "name", "path_text",
+				"parent_id", "modified_at", "created_at", "size",
+			},
+			AttributesToHighlight: []string{"name"},
+			HighlightPreTag:       "<mark>",
+			HighlightPostTag:      "</mark>",
+		}
 	}
 
-	response, err := m.index.Search(reorderQuery(params.Query), request)
+	// First attempt: match all words.
+	response, err := m.index.Search(query, buildRequest(meilisearch.All))
 	if err != nil {
 		return nil, 0, err
 	}
 
+	// Fallback: if no results with All strategy and query is non-empty, retry with Last.
+	if response.TotalHits == 0 && response.EstimatedTotalHits == 0 &&
+		len(response.Hits) == 0 && strings.TrimSpace(params.Query) != "" {
+		response, err = m.index.Search(query, buildRequest(meilisearch.Last))
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return parseSearchResponse(response)
+}
+
+// parseSearchResponse extracts IndexDocument slice and total count from a
+// Meilisearch SearchResponse, including highlighted name extraction.
+func parseSearchResponse(response *meilisearch.SearchResponse) ([]models.IndexDocument, int64, error) {
 	docs := make([]models.IndexDocument, 0, len(response.Hits))
 	if err := response.Hits.DecodeInto(&docs); err != nil {
 		return nil, 0, err

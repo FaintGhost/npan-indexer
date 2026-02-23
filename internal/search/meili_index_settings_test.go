@@ -127,6 +127,59 @@ func TestEnsureSettings_ProximityPrecision(t *testing.T) {
   }
 }
 
+func TestEnsureSettings_NonSeparatorTokens(t *testing.T) {
+  s := callEnsureSettings(t)
+  if !containsString(s.NonSeparatorTokens, ".") {
+    t.Errorf("expected NonSeparatorTokens to contain '.', got %v", s.NonSeparatorTokens)
+  }
+}
+
+func TestEnsureSettings_SearchableAttributes_IncludesNameBase(t *testing.T) {
+  s := callEnsureSettings(t)
+
+  if !containsString(s.SearchableAttributes, "name_base") {
+    t.Errorf("SearchableAttributes should contain \"name_base\", got %v", s.SearchableAttributes)
+  }
+  if !containsString(s.SearchableAttributes, "name_ext") {
+    t.Errorf("SearchableAttributes should contain \"name_ext\", got %v", s.SearchableAttributes)
+  }
+
+  // name_base should come before name
+  nameBaseIdx := slices.Index(s.SearchableAttributes, "name_base")
+  nameIdx := slices.Index(s.SearchableAttributes, "name")
+  if nameBaseIdx >= nameIdx {
+    t.Errorf("expected \"name_base\" (idx=%d) before \"name\" (idx=%d) in SearchableAttributes", nameBaseIdx, nameIdx)
+  }
+}
+
+func TestEnsureSettings_RankingRules_ExactnessBeforeProximity(t *testing.T) {
+  s := callEnsureSettings(t)
+
+  exactIdx := slices.Index(s.RankingRules, "exactness")
+  proxIdx := slices.Index(s.RankingRules, "proximity")
+
+  if exactIdx < 0 {
+    t.Fatal("RankingRules should contain \"exactness\"")
+  }
+  if proxIdx < 0 {
+    t.Fatal("RankingRules should contain \"proximity\"")
+  }
+  if exactIdx >= proxIdx {
+    t.Errorf("expected \"exactness\" (idx=%d) before \"proximity\" (idx=%d) in RankingRules", exactIdx, proxIdx)
+  }
+}
+
+func TestEnsureSettings_DisplayedAttributes_IncludesNewFields(t *testing.T) {
+  s := callEnsureSettings(t)
+
+  if !containsString(s.DisplayedAttributes, "name_base") {
+    t.Errorf("DisplayedAttributes should contain \"name_base\", got %v", s.DisplayedAttributes)
+  }
+  if !containsString(s.DisplayedAttributes, "name_ext") {
+    t.Errorf("DisplayedAttributes should contain \"name_ext\", got %v", s.DisplayedAttributes)
+  }
+}
+
 // ---------- remaining IndexManager stubs (unused, panic on call) ----------
 
 func (m *settingsCaptureIndex) UpdateSettings(s *meilisearch.Settings) (*meilisearch.TaskInfo, error) {

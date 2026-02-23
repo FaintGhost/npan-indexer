@@ -43,6 +43,8 @@ type IndexDocument struct {
 	SourceID        int64    `json:"source_id"`
 	Type            ItemType `json:"type"`
 	Name            string   `json:"name"`
+	NameBase        string   `json:"name_base"`
+	NameExt         string   `json:"name_ext"`
 	PathText        string   `json:"path_text"`
 	ParentID        int64    `json:"parent_id"`
 	ModifiedAt      int64    `json:"modified_at"`
