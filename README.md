@@ -93,6 +93,21 @@ API Key 通过请求头传递：`X-API-Key: <key>` 或 `Authorization: Bearer <k
 
 ## 常用命令
 
+<!-- AUTO-GENERATED:makefile-targets -->
+### Makefile 快捷命令
+
+| 命令 | 说明 |
+|------|------|
+| `make test` | Go 单元测试（`-short -count=1 -race`） |
+| `make test-frontend` | 前端测试（`cd web && bun run test`） |
+| `make generate` | 生成 Go + TypeScript 类型定义 |
+| `make generate-check` | 生成并检查是否有未提交的差异 |
+| `make smoke-test` | 启动 Docker CI 环境并运行 34 项冒烟测试 |
+| `make e2e-test` | 冒烟测试 + Playwright E2E 测试（32 项） |
+<!-- /AUTO-GENERATED:makefile-targets -->
+
+### Go 命令
+
 ```bash
 # 测试
 go test ./...
@@ -237,9 +252,35 @@ docker run -d \
 
 ## 安全
 
-- `NPA_ADMIN_API_KEY` **必填**，启动时校验，保护 `/api/v1/*` 和 `/api/v1/admin/*` 端点
+### 认证与授权
+
+- `NPA_ADMIN_API_KEY` **必填**，启动时校验（空 key 直接 panic），保护 `/api/v1/*` 和 `/api/v1/admin/*` 端点
 - API Key 使用 constant-time 比较，防止计时攻击
 - `NPA_ALLOW_CONFIG_AUTH_FALLBACK` 默认关闭，防止 API 接口意外使用服务端凭据
+
+### HTTP 安全中间件栈
+
+<!-- AUTO-GENERATED:middleware-stack -->
+| 中间件 | 说明 |
+|--------|------|
+| RequestID | 为每个请求生成唯一 ID |
+| Recover | 捕获 panic 防止进程崩溃 |
+| SecureHeaders | 设置 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Referrer-Policy`、`Permissions-Policy` |
+| RequestLogger | 结构化请求日志 |
+| BodyLimit(1MB) | 限制请求体大小，防止大 payload DoS |
+| RateLimitMiddleware | 全局 20 rps / burst 40；Admin 路由 5 rps / burst 10 |
+| IPExtractor(Direct) | 直连 IP 提取（部署在反代后需改为 XFF） |
+| HTTPErrorHandler | 统一 JSON 错误响应，5xx 消息自动脱敏为 `"服务器内部错误"` |
+<!-- /AUTO-GENERATED:middleware-stack -->
+
+### 输入验证
+
+- `type` 参数白名单校验（`all`、`file`、`folder`），防止 Meilisearch 过滤注入
+- `page_size` 上限 100，防止资源耗尽
+- `checkpoint_template` 路径遍历防护（禁止绝对路径、`..`、必须在 `data/checkpoints/` 下）
+
+### 其他
+
 - 错误响应不泄露内部信息（堆栈、地址、凭据等），仅返回结构化错误码和消息
 - 敏感配置在日志中自动脱敏（`[REDACTED]`）
 - 生产环境不要提交 `.env`，仅提交 `.env.example`

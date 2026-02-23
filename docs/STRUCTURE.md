@@ -14,8 +14,10 @@
 
 - 确认 `.env` 不在版本控制中，仅保留 `.env.example`。
 - 运行验证：
-  - `go test ./...`
+  - `make test`（或 `go test ./...`）
   - `go test -race ./...`
-  - `go build ./...`
-- 若开放公网接口，配置 `NPA_ADMIN_API_KEY`。
+  - `make smoke-test`（Docker 34 项冒烟测试）
+  - `make e2e-test`（Playwright 32 项 E2E 测试）
+- 若开放公网接口，配置 `NPA_ADMIN_API_KEY`（>= 16 字符，空值启动时 panic）。
 - 默认保持 `NPA_ALLOW_CONFIG_AUTH_FALLBACK=false`。
+- 若部署在反向代理后，将 `IPExtractor` 改为 `ExtractIPFromXFFHeader()`。

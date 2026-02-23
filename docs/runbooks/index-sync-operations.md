@@ -12,14 +12,16 @@
   - `go test ./...`
   - `go build ./...`
 2. 执行全量任务（CLI 方式）：
-  - `go run ./cmd/cli sync-full --token <token> --root-folder-ids 0`
+  - `go run ./cmd/cli sync --mode full --token <token> --root-folder-ids 0`
   - 交互式排障建议使用默认人类可读进度：`--progress-output human`
   - 如需机器采集进度日志可切换：`--progress-output json`
   - 人类可读进度会附带估算进度字段：
     - `est=xx.x%(docs=a/b roots=c/d)`：按已知根目录 `estimatedTotalDocs` 估算，`a` 为已处理文档数（`files+folders`），`b` 为估算总文档数。
     - `est=n/a`：当前根目录无法可靠获取总量，不显示百分比（不影响同步本身）。
 3. 或服务方式触发：
-  - `POST /api/v1/sync/full/start`
+  - `POST /api/v1/admin/sync` (body: `{"mode": "full"}`)
+  - 查看进度：`GET /api/v1/admin/sync`
+  - 取消同步：`DELETE /api/v1/admin/sync`
 3. 同步完成后确认指标：
   - 遍历目录数量
   - 索引文档数量
@@ -32,7 +34,7 @@
 - `lastSyncTime` 使用秒级时间戳；若历史状态为毫秒值，程序会自动兼容迁移。
 - 同步成功后推进游标；失败时保留旧游标。
 - CLI 示例：
-  - `go run ./cmd/cli sync-incremental --incremental-query-words "* OR *" --window-overlap-ms 2000`
+  - `go run ./cmd/cli sync --mode incremental --incremental-query-words "* OR *" --window-overlap-ms 2000`
 
 ## 4. 检索与下载
 
