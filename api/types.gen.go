@@ -197,8 +197,11 @@ type SyncProgressState struct {
 
 // SyncStartRequest defines model for SyncStartRequest.
 type SyncStartRequest struct {
-	CheckpointTemplate *string   `json:"checkpoint_template,omitempty"`
-	DepartmentIds      *[]int    `json:"department_ids,omitempty"`
+	CheckpointTemplate *string `json:"checkpoint_template,omitempty"`
+	DepartmentIds      *[]int  `json:"department_ids,omitempty"`
+
+	// ForceRebuild 清空索引后重建，重新应用设置并从头爬取
+	ForceRebuild       *bool     `json:"force_rebuild"`
 	IncludeDepartments *bool     `json:"include_departments"`
 	IncrementalQuery   *string   `json:"incremental_query,omitempty"`
 	Mode               *SyncMode `json:"mode,omitempty"`

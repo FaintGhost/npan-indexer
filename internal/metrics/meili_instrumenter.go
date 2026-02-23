@@ -45,6 +45,16 @@ func (i *InstrumentedMeiliIndex) DeleteDocuments(ctx context.Context, docIDs []s
 	return err
 }
 
+func (i *InstrumentedMeiliIndex) DeleteAllDocuments(ctx context.Context) error {
+	start := time.Now()
+	err := i.inner.DeleteAllDocuments(ctx)
+	i.metrics.MeiliDurationSeconds.WithLabelValues("delete_all").Observe(time.Since(start).Seconds())
+	if err != nil {
+		i.metrics.MeiliErrorsTotal.WithLabelValues("delete_all").Inc()
+	}
+	return err
+}
+
 func (i *InstrumentedMeiliIndex) Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error) {
 	start := time.Now()
 	docs, total, err := i.inner.Search(params)

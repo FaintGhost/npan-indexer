@@ -68,7 +68,11 @@ export function useSyncProgress(headers: Record<string, string>) {
   );
 
   const startSync = useCallback(
-    async (rootFolderIds: number[], mode: string = "auto") => {
+    async (
+      rootFolderIds: number[],
+      mode: string = "auto",
+      forceRebuild: boolean = false,
+    ) => {
       setLoading(true);
       setError(null);
       try {
@@ -76,7 +80,8 @@ export function useSyncProgress(headers: Record<string, string>) {
           "/api/v1/admin/sync",
           {
             root_folder_ids: rootFolderIds,
-            resume_progress: mode !== "full",
+            resume_progress: mode !== "full" && !forceRebuild,
+            force_rebuild: forceRebuild || undefined,
             mode,
           },
           { headers },

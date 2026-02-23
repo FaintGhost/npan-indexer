@@ -19,6 +19,7 @@ type IndexOperator interface {
 	EnsureSettings(ctx context.Context) error
 	UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error
 	DeleteDocuments(ctx context.Context, docIDs []string) error
+	DeleteAllDocuments(ctx context.Context) error
 	Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error)
 	Ping() error
 	DocumentCount(ctx context.Context) (int64, error)
@@ -111,6 +112,14 @@ func (m *MeiliIndex) DeleteDocuments(ctx context.Context, docIDs []string) error
 	}
 
 	taskInfo, err := m.index.DeleteDocumentsWithContext(ctx, docIDs, nil)
+	if err != nil {
+		return err
+	}
+	return m.waitTask(ctx, taskInfo)
+}
+
+func (m *MeiliIndex) DeleteAllDocuments(ctx context.Context) error {
+	taskInfo, err := m.index.DeleteAllDocumentsWithContext(ctx, nil)
 	if err != nil {
 		return err
 	}

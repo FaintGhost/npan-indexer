@@ -33,6 +33,10 @@ func (m *mockIndexOperator) DeleteDocuments(ctx context.Context, docIDs []string
 	return m.deleteErr
 }
 
+func (m *mockIndexOperator) DeleteAllDocuments(ctx context.Context) error {
+	return m.deleteErr
+}
+
 func (m *mockIndexOperator) Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error) {
 	return m.searchDocs, m.searchTotal, m.searchErr
 }

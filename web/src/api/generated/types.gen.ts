@@ -124,6 +124,10 @@ export type SyncStartRequest = {
     include_departments?: boolean | null;
     department_ids?: Array<number>;
     resume_progress?: boolean | null;
+    /**
+     * 清空索引后重建，重新应用设置并从头爬取
+     */
+    force_rebuild?: boolean | null;
     root_workers?: number;
     progress_every?: number;
     checkpoint_template?: string;

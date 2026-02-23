@@ -1,42 +1,48 @@
-import { useState } from 'react'
-import { useAdminAuth } from '@/hooks/use-admin-auth'
-import { useSyncProgress } from '@/hooks/use-sync-progress'
-import { ApiKeyDialog } from '@/components/api-key-dialog'
-import { SyncProgressDisplay } from '@/components/sync-progress-display'
+import { useState } from "react";
+import { useAdminAuth } from "@/hooks/use-admin-auth";
+import { useSyncProgress } from "@/hooks/use-sync-progress";
+import { ApiKeyDialog } from "@/components/api-key-dialog";
+import { SyncProgressDisplay } from "@/components/sync-progress-display";
 
 const SYNC_MODES = [
-  { value: 'auto', label: '自适应', description: '有游标走增量，否则全量' },
-  { value: 'full', label: '全量', description: '重新爬取所有目录' },
-  { value: 'incremental', label: '增量', description: '仅同步最近变更' },
-] as const
+  { value: "auto", label: "自适应", description: "有游标走增量，否则全量" },
+  { value: "full", label: "全量", description: "重新爬取所有目录" },
+  { value: "incremental", label: "增量", description: "仅同步最近变更" },
+] as const;
 
 export function AdminSyncPage() {
-  const auth = useAdminAuth()
-  const sync = useSyncProgress(auth.getHeaders())
-  const [message, setMessage] = useState<string | null>(null)
-  const [mode, setMode] = useState<string>('auto')
+  const auth = useAdminAuth();
+  const sync = useSyncProgress(auth.getHeaders());
+  const [message, setMessage] = useState<string | null>(null);
+  const [mode, setMode] = useState<string>("auto");
+  const [forceRebuild, setForceRebuild] = useState(false);
 
-  const isRunning = sync.progress?.status === 'running'
-  const isBusy = sync.loading || isRunning
+  const isRunning = sync.progress?.status === "running";
+  const isBusy = sync.loading || isRunning;
 
   const handleStartSync = async () => {
-    setMessage(null)
-    await sync.startSync([], mode)
+    if (
+      forceRebuild &&
+      !window.confirm("强制重建将清空所有索引数据并重新爬取，确认继续？")
+    )
+      return;
+    setMessage(null);
+    await sync.startSync([], mode, forceRebuild);
     if (!sync.error) {
-      setMessage('同步任务已启动')
-      setTimeout(() => setMessage(null), 4000)
+      setMessage("同步任务已启动");
+      setTimeout(() => setMessage(null), 4000);
     }
-  }
+  };
 
   const handleCancelSync = async () => {
-    if (!window.confirm('确认取消同步？')) return
-    setMessage(null)
-    await sync.cancelSync()
+    if (!window.confirm("确认取消同步？")) return;
+    setMessage(null);
+    await sync.cancelSync();
     if (!sync.error) {
-      setMessage('已发送取消请求')
-      setTimeout(() => setMessage(null), 4000)
+      setMessage("已发送取消请求");
+      setTimeout(() => setMessage(null), 4000);
     }
-  }
+  };
 
   if (auth.needsAuth) {
     return (
@@ -46,7 +52,7 @@ export function AdminSyncPage() {
         error={auth.error}
         loading={auth.loading}
       />
-    )
+    );
   }
 
   return (
@@ -73,8 +79,8 @@ export function AdminSyncPage() {
                 disabled={isBusy}
                 className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   mode === m.value
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
                 } disabled:cursor-not-allowed disabled:opacity-60`}
                 title={m.description}
               >
@@ -82,6 +88,21 @@ export function AdminSyncPage() {
               </button>
             ))}
           </div>
+        )}
+        {!isRunning && mode === "full" && (
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={forceRebuild}
+              onChange={(e) => setForceRebuild(e.target.checked)}
+              disabled={isBusy}
+              className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            强制重建索引
+            <span className="text-xs text-slate-400">
+              （清空现有索引后重新爬取）
+            </span>
+          </label>
         )}
         <div className="flex gap-3">
           <button
@@ -97,10 +118,10 @@ export function AdminSyncPage() {
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
             )}
             {sync.loading && !isRunning
-              ? '启动中...'
+              ? "启动中..."
               : isRunning
-                ? '同步进行中'
-                : '启动同步'}
+                ? "同步进行中"
+                : "启动同步"}
           </button>
 
           {isRunning && (
@@ -142,13 +163,18 @@ export function AdminSyncPage() {
         </div>
       )}
 
-      {!sync.initialLoading && sync.progress && <SyncProgressDisplay progress={sync.progress} />}
-
-      {!sync.initialLoading && !sync.progress && !sync.loading && !sync.error && (
-        <div className="py-12 text-center">
-          <p className="text-sm text-slate-400">暂无同步记录</p>
-        </div>
+      {!sync.initialLoading && sync.progress && (
+        <SyncProgressDisplay progress={sync.progress} />
       )}
+
+      {!sync.initialLoading &&
+        !sync.progress &&
+        !sync.loading &&
+        !sync.error && (
+          <div className="py-12 text-center">
+            <p className="text-sm text-slate-400">暂无同步记录</p>
+          </div>
+        )}
     </div>
-  )
+  );
 }

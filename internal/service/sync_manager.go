@@ -23,6 +23,7 @@ type SyncStartRequest struct {
 	IncludeDepartments *bool           `json:"include_departments"`
 	DepartmentIDs      []int64         `json:"department_ids"`
 	ResumeProgress     *bool           `json:"resume_progress"`
+	ForceRebuild       *bool           `json:"force_rebuild"`
 	RootWorkers        int             `json:"root_workers"`
 	ProgressEvery      int             `json:"progress_every"`
 	CheckpointTemplate string          `json:"checkpoint_template"`
@@ -616,6 +617,18 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	}
 
 	// Full crawl path
+	forceRebuild := request.ForceRebuild != nil && *request.ForceRebuild
+	if forceRebuild {
+		slog.Info("强制重建索引：清空所有文档")
+		if err := m.index.DeleteAllDocuments(ctx); err != nil {
+			return fmt.Errorf("清空索引失败: %w", err)
+		}
+		slog.Info("强制重建索引：重新应用索引设置")
+		if err := m.index.EnsureSettings(ctx); err != nil {
+			return fmt.Errorf("重新应用索引设置失败: %w", err)
+		}
+	}
+
 	fullStartTime := time.Now()
 	roots, rootEstimateMap, rootNameMap, err := m.discoverRootFolders(ctx, api, request)
 	if err != nil {
@@ -638,6 +651,9 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	resume := true
 	if request.ResumeProgress != nil {
 		resume = *request.ResumeProgress
+	}
+	if forceRebuild {
+		resume = false
 	}
 
 	existing, err := m.progressStore.Load()

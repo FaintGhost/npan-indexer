@@ -127,6 +127,10 @@ export const zSyncStartRequest = z.object({
         z.boolean(),
         z.null()
     ]).optional(),
+    force_rebuild: z.union([
+        z.boolean(),
+        z.null()
+    ]).optional(),
     root_workers: z.number().int().optional(),
     progress_every: z.number().int().optional(),
     checkpoint_template: z.string().optional(),

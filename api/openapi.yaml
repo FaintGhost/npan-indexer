@@ -315,6 +315,10 @@ components:
         resume_progress:
           type: boolean
           nullable: true
+        force_rebuild:
+          type: boolean
+          nullable: true
+          description: 清空索引后重建，重新应用设置并从头爬取
         root_workers:
           type: integer
         progress_every:

@@ -141,6 +141,59 @@ describe("useSyncProgress", () => {
     expect(capturedBody!.mode).toBe("auto");
   });
 
+  it("sends force_rebuild when forceRebuild is true", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.get("/api/v1/admin/sync", () => {
+        return HttpResponse.json(validProgress);
+      }),
+      http.post("/api/v1/admin/sync", async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ message: "Sync started" });
+      }),
+    );
+
+    const { result } = renderHook(() => useSyncProgress(headers));
+
+    await waitFor(() => {
+      expect(result.current.progress).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.startSync([], "full", true);
+    });
+
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.force_rebuild).toBe(true);
+    expect(capturedBody!.resume_progress).toBe(false);
+  });
+
+  it("omits force_rebuild when forceRebuild is false", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.get("/api/v1/admin/sync", () => {
+        return HttpResponse.json(validProgress);
+      }),
+      http.post("/api/v1/admin/sync", async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ message: "Sync started" });
+      }),
+    );
+
+    const { result } = renderHook(() => useSyncProgress(headers));
+
+    await waitFor(() => {
+      expect(result.current.progress).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.startSync([], "full", false);
+    });
+
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.force_rebuild).toBeUndefined();
+  });
+
   it("cancels sync", async () => {
     let cancelCalled = false;
     server.use(

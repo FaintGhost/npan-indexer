@@ -424,6 +424,7 @@ type syncStartPayload struct {
 	IncludeDepartments *bool   `json:"include_departments"`
 	DepartmentIDs      []int64 `json:"department_ids"`
 	ResumeProgress     *bool   `json:"resume_progress"`
+	ForceRebuild       *bool   `json:"force_rebuild"`
 	RootWorkers        int     `json:"root_workers"`
 	ProgressEvery      int     `json:"progress_every"`
 	CheckpointTemplate string  `json:"checkpoint_template"`
@@ -456,6 +457,7 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 		IncludeDepartments: payload.IncludeDepartments,
 		DepartmentIDs:      payload.DepartmentIDs,
 		ResumeProgress:     payload.ResumeProgress,
+		ForceRebuild:       payload.ForceRebuild,
 		RootWorkers:        payload.RootWorkers,
 		ProgressEvery:      payload.ProgressEvery,
 		CheckpointTemplate: payload.CheckpointTemplate,
