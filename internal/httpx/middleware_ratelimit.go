@@ -1,6 +1,7 @@
 package httpx
 
 import (
+  "context"
   "net/http"
   "sync"
   "time"
@@ -21,13 +22,13 @@ type rateLimiterStore struct {
   burst    int
 }
 
-func newRateLimiterStore(rps float64, burst int) *rateLimiterStore {
+func newRateLimiterStore(ctx context.Context, rps float64, burst int) *rateLimiterStore {
   store := &rateLimiterStore{
     limiters: make(map[string]*ipLimiter),
     rps:      rate.Limit(rps),
     burst:    burst,
   }
-  go store.cleanup()
+  go store.cleanup(ctx)
   return store
 }
 
@@ -45,21 +46,27 @@ func (s *rateLimiterStore) getLimiter(ip string) *rate.Limiter {
   return entry.limiter
 }
 
-func (s *rateLimiterStore) cleanup() {
+func (s *rateLimiterStore) cleanup(ctx context.Context) {
+  ticker := time.NewTicker(time.Minute)
+  defer ticker.Stop()
   for {
-    time.Sleep(time.Minute)
-    s.mu.Lock()
-    for ip, entry := range s.limiters {
-      if time.Since(entry.lastSeen) > 3*time.Minute {
-        delete(s.limiters, ip)
+    select {
+    case <-ctx.Done():
+      return
+    case <-ticker.C:
+      s.mu.Lock()
+      for ip, entry := range s.limiters {
+        if time.Since(entry.lastSeen) > 3*time.Minute {
+          delete(s.limiters, ip)
+        }
       }
+      s.mu.Unlock()
     }
-    s.mu.Unlock()
   }
 }
 
-func RateLimitMiddleware(rps float64, burst int) echo.MiddlewareFunc {
-  store := newRateLimiterStore(rps, burst)
+func RateLimitMiddleware(ctx context.Context, rps float64, burst int) echo.MiddlewareFunc {
+  store := newRateLimiterStore(ctx, rps, burst)
   return func(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c *echo.Context) error {
       ip := c.RealIP()

@@ -106,7 +106,14 @@ func computeDelay(attempt int, opts models.RetryPolicyOptions) time.Duration {
 		maxDelay = base
 	}
 
-	raw := base << (attempt - 1)
+	raw := base
+	for i := 1; i < attempt && raw < maxDelay; i++ {
+		if raw > maxDelay/2 {
+			raw = maxDelay
+			break
+		}
+		raw *= 2
+	}
 	if raw > maxDelay {
 		raw = maxDelay
 	}

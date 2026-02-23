@@ -67,9 +67,11 @@ func customHTTPErrorHandler(c *echo.Context, err error) {
   if errors.As(err, &he) {
     status = he.Code
     code = httpStatusToErrCode(status)
-    message = fmt.Sprintf("%v", he.Message)
     if status >= http.StatusInternalServerError {
+      message = "服务器内部错误"
       slog.Error("http server error", "status", status, "err", err)
+    } else {
+      message = fmt.Sprintf("%v", he.Message)
     }
   } else {
     status = http.StatusInternalServerError

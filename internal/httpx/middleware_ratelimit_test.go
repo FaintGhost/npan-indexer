@@ -1,6 +1,7 @@
 package httpx
 
 import (
+  "context"
   "encoding/json"
   "net/http"
   "net/http/httptest"
@@ -13,7 +14,7 @@ import (
 // newRateLimitedEcho 构建挂载了速率限制中间件的 Echo 实例，并注册一个简单的 GET /test 路由。
 func newRateLimitedEcho(rps float64, burst int) *echo.Echo {
   e := echo.New()
-  e.Use(RateLimitMiddleware(rps, burst))
+  e.Use(RateLimitMiddleware(context.Background(), rps, burst))
   e.GET("/test", func(c *echo.Context) error {
     return c.String(http.StatusOK, "ok")
   })

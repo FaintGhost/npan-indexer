@@ -296,6 +296,9 @@ func (h *Handlers) LocalSearch(c *echo.Context) error {
 		}
 		pageSize = parsed
 	}
+	if err := validatePageSize(pageSize); err != nil {
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, err.Error())
+	}
 
 	parentID, err := parseInt64Pointer(c.QueryParam("parent_id"))
 	if err != nil {
@@ -312,9 +315,14 @@ func (h *Handlers) LocalSearch(c *echo.Context) error {
 		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "updated_before 必须是整数")
 	}
 
+	typeParam := firstNotEmpty(c.QueryParam("type"), "all")
+	if err := validateType(typeParam); err != nil {
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, err.Error())
+	}
+
 	result, err := h.queryService.Query(models.LocalSearchParams{
 		Query:          query,
-		Type:           firstNotEmpty(c.QueryParam("type"), "all"),
+		Type:           typeParam,
 		Page:           page,
 		PageSize:       pageSize,
 		ParentID:       parentID,
@@ -355,6 +363,9 @@ func (h *Handlers) AppSearch(c *echo.Context) error {
 			return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "page_size 必须是正整数")
 		}
 		pageSize = parsed
+	}
+	if err := validatePageSize(pageSize); err != nil {
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, err.Error())
 	}
 
 	result, err := h.queryService.Query(models.LocalSearchParams{
@@ -433,6 +444,12 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 	}
 
 	api := h.newAPIClient(token, authOptions)
+	if payload.CheckpointTemplate != "" {
+		if err := validateCheckpointTemplate(payload.CheckpointTemplate); err != nil {
+			return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, err.Error())
+		}
+	}
+
 	err = h.syncManager.Start(api, service.SyncStartRequest{
 		Mode:               models.SyncMode(payload.Mode),
 		RootFolderIDs:      payload.RootFolderIDs,

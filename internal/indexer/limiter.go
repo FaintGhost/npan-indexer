@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -16,6 +17,7 @@ type RequestLimiter struct {
 	concurrency chan struct{}
 	limiter     *rate.Limiter
 	baseRate    rate.Limit
+	checkerMu   sync.Mutex
 	checker     ActivityChecker
 }
 
@@ -42,14 +44,19 @@ func NewRequestLimiter(maxConcurrent int, minTimeMS int) *RequestLimiter {
 }
 
 func (l *RequestLimiter) SetActivityChecker(checker ActivityChecker) {
+	l.checkerMu.Lock()
+	defer l.checkerMu.Unlock()
 	l.checker = checker
 }
 
 func (l *RequestLimiter) adjustRate() {
-	if l.checker == nil {
+	l.checkerMu.Lock()
+	checker := l.checker
+	l.checkerMu.Unlock()
+	if checker == nil {
 		return
 	}
-	if l.checker.IsActive() {
+	if checker.IsActive() {
 		l.limiter.SetLimit(l.baseRate / 2)
 	} else {
 		l.limiter.SetLimit(l.baseRate)
@@ -57,7 +64,11 @@ func (l *RequestLimiter) adjustRate() {
 }
 
 func (l *RequestLimiter) Schedule(ctx context.Context, fn func() error) error {
-	l.concurrency <- struct{}{}
+	select {
+	case l.concurrency <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	defer func() { <-l.concurrency }()
 
 	l.adjustRate()

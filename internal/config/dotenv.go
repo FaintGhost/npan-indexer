@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"sync"
 
@@ -21,5 +22,7 @@ func loadDotEnv() {
 		if errors.As(err, &pathErr) && errors.Is(pathErr.Err, os.ErrNotExist) {
 			return
 		}
+
+		slog.Warn("加载 .env 文件异常", "error", err)
 	})
 }

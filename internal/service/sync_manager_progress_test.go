@@ -12,9 +12,6 @@ import (
 // active (m.running == true) but the progress store has no file yet (race
 // window between Start() and the first progressStore.Save()), GetProgress
 // returns a non-nil result with status "running".
-//
-// Currently this FAILS because GetProgress returns (nil, nil) when the store
-// file does not exist, without checking whether a goroutine is active.
 func TestGetProgress_RunningButStoreEmpty(t *testing.T) {
   t.Parallel()
 
@@ -42,9 +39,6 @@ func TestGetProgress_RunningButStoreEmpty(t *testing.T) {
 // active but the progress store still contains a stale record with
 // status="done" (e.g. from a previous run), GetProgress returns status
 // "running" to reflect the actual in-flight sync.
-//
-// Currently this FAILS because GetProgress passes through the stored "done"
-// status without checking the live goroutine state.
 func TestGetProgress_RunningButStoreDone(t *testing.T) {
   t.Parallel()
 
@@ -84,10 +78,6 @@ func TestGetProgress_RunningButStoreDone(t *testing.T) {
 // status="interrupted" (e.g. written after a previous crash), GetProgress
 // returns status "running" with an empty LastError to reflect the newly
 // active sync.
-//
-// Currently this FAILS because GetProgress only handles the inverse case
-// (store says "running" but goroutine is NOT active) and does not reconcile
-// other stale statuses when a goroutine IS active.
 func TestGetProgress_RunningButStoreInterrupted(t *testing.T) {
   t.Parallel()
 

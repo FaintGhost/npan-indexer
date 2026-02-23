@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -100,7 +101,7 @@ func (m *SyncManager) IsRunning() bool {
 func (m *SyncManager) GetProgress() (*models.SyncProgressState, error) {
 	progress, err := m.progressStore.Load()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load progress: %w", err)
 	}
 
 	isRunning := m.IsRunning()
@@ -128,7 +129,9 @@ func (m *SyncManager) GetProgress() (*models.SyncProgressState, error) {
 		progress.LastError = "进程重启，同步中断"
 		progress.ActiveRoot = nil
 		progress.UpdatedAt = time.Now().UnixMilli()
-		_ = m.progressStore.Save(progress)
+		if err := m.progressStore.Save(progress); err != nil {
+			slog.Warn("保存进度失败", "error", err)
+		}
 	}
 
 	// Goroutine is running but hasn't overwritten old progress yet.
@@ -241,7 +244,7 @@ func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, req
 		if len(departmentIDs) == 0 {
 			deps, err := api.ListUserDepartments(ctx)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, fmt.Errorf("list user departments: %w", err)
 			}
 			for _, dep := range deps {
 				departmentIDs = append(departmentIDs, dep.ID)
@@ -251,7 +254,7 @@ func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, req
 		for _, departmentID := range departmentIDs {
 			folders, err := api.ListDepartmentFolders(ctx, departmentID)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, fmt.Errorf("list department folders (dept %d): %w", departmentID, err)
 			}
 			for _, folder := range folders {
 				roots = append(roots, folder.ID)
@@ -473,7 +476,9 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 			rp.Error = ctx.Err().Error()
 			rp.UpdatedAt = time.Now().UnixMilli()
 			updateAggregateFromRoots(progress)
-			_ = m.progressStore.Save(progress)
+			if err := m.progressStore.Save(progress); err != nil {
+				slog.Warn("保存进度失败", "error", err)
+			}
 			return err
 		}
 
@@ -483,7 +488,9 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 		progress.Status = "error"
 		progress.LastError = err.Error()
 		updateAggregateFromRoots(progress)
-		_ = m.progressStore.Save(progress)
+		if err := m.progressStore.Save(progress); err != nil {
+			slog.Warn("保存进度失败", "error", err)
+		}
 		return err
 	}
 
@@ -557,7 +564,7 @@ func (m *SyncManager) runIncremental(ctx context.Context, api npan.API, progress
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("fetch incremental changes: %w", err)
 	}
 
 	var upserts []models.IndexDocument
@@ -751,7 +758,9 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		progress.LastError = firstErr.Error()
 		progress.ActiveRoot = nil
 		updateAggregateFromRoots(progress)
-		_ = m.progressStore.Save(progress)
+		if err := m.progressStore.Save(progress); err != nil {
+			slog.Warn("保存进度失败", "error", err)
+		}
 		if m.metricsReporter != nil {
 			m.metricsReporter.ReportSyncFinished(metrics.SyncEvent{
 				Mode:     models.SyncModeFull,
@@ -768,7 +777,9 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		progress.LastError = ctx.Err().Error()
 		progress.ActiveRoot = nil
 		updateAggregateFromRoots(progress)
-		_ = m.progressStore.Save(progress)
+		if err := m.progressStore.Save(progress); err != nil {
+			slog.Warn("保存进度失败", "error", err)
+		}
 		if m.metricsReporter != nil {
 			m.metricsReporter.ReportSyncFinished(metrics.SyncEvent{
 				Mode:     models.SyncModeFull,

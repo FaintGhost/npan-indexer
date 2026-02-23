@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -67,6 +68,7 @@ func readInt(key string, fallback int) int {
 	}
 	parsed, err := strconv.Atoi(raw)
 	if err != nil {
+		slog.Warn("环境变量格式错误，使用默认值", "key", key, "value", raw, "fallback", fallback)
 		return fallback
 	}
 	return parsed
@@ -79,6 +81,7 @@ func readInt64(key string, fallback int64) int64 {
 	}
 	parsed, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
+		slog.Warn("环境变量格式错误，使用默认值", "key", key, "value", raw, "fallback", fallback)
 		return fallback
 	}
 	return parsed
@@ -99,6 +102,7 @@ func readDuration(key string, fallback time.Duration) time.Duration {
 	}
 	parsed, err := time.ParseDuration(raw)
 	if err != nil {
+		slog.Warn("环境变量格式错误，使用默认值", "key", key, "value", raw, "fallback", fallback)
 		return fallback
 	}
 	return parsed

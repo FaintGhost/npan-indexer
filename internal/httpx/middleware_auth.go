@@ -11,11 +11,20 @@ import (
 // APIKeyAuth 验证 X-API-Key header 或 Authorization: Bearer token。
 // 使用 constant-time 比较防止计时攻击。
 func APIKeyAuth(adminKey string) echo.MiddlewareFunc {
+  if adminKey == "" {
+    panic("httpx: APIKeyAuth called with empty adminKey")
+  }
+
   return func(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c *echo.Context) error {
       provided := strings.TrimSpace(c.Request().Header.Get("X-API-Key"))
       if provided == "" {
         provided = parseBearerHeaderValue(c.Request().Header.Get("Authorization"))
+      }
+
+      if provided == "" {
+        return writeErrorResponse(c, http.StatusUnauthorized, ErrCodeUnauthorized,
+          "未授权：缺少或无效的 API Key")
       }
 
       if subtle.ConstantTimeCompare([]byte(provided), []byte(adminKey)) != 1 {

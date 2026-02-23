@@ -170,6 +170,17 @@ func (c *HTTPClient) request(ctx context.Context, method string, path string, qu
 	}
 }
 
+func toString(v any) string {
+	if v == nil {
+		return ""
+	}
+	s, ok := v.(string)
+	if ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
+}
+
 func mapFolder(row map[string]any) models.NpanFolder {
 	parentID := int64(0)
 	if parentRaw, ok := row["parent"].(map[string]any); ok {
@@ -178,7 +189,7 @@ func mapFolder(row map[string]any) models.NpanFolder {
 
 	return models.NpanFolder{
 		ID:         toInt64(row["id"], 0),
-		Name:       fmt.Sprintf("%v", row["name"]),
+		Name:       toString(row["name"]),
 		ParentID:   parentID,
 		ItemCount:  toInt64(row["item_count"], 0),
 		ModifiedAt: toInt64(row["modified_at"], 0),
@@ -195,12 +206,12 @@ func mapFile(row map[string]any) models.NpanFile {
 
 	return models.NpanFile{
 		ID:         toInt64(row["id"], 0),
-		Name:       fmt.Sprintf("%v", row["name"]),
+		Name:       toString(row["name"]),
 		ParentID:   parentID,
 		Size:       toInt64(row["size"], 0),
 		ModifiedAt: toInt64(row["modified_at"], 0),
 		CreatedAt:  toInt64(row["created_at"], 0),
-		SHA1:       fmt.Sprintf("%v", row["sha1"]),
+		SHA1:       toString(row["sha1"]),
 		InTrash:    toBool(row["in_trash"]),
 		IsDeleted:  toBool(row["is_deleted"]),
 	}
@@ -297,7 +308,7 @@ func (c *HTTPClient) ListUserDepartments(ctx context.Context) ([]models.NpanDepa
 	for _, dep := range body.Departments {
 		departments = append(departments, models.NpanDepartment{
 			ID:   toInt64(dep["id"], 0),
-			Name: fmt.Sprintf("%v", dep["name"]),
+			Name: toString(dep["name"]),
 		})
 	}
 
@@ -320,7 +331,7 @@ func (c *HTTPClient) ListDepartmentFolders(ctx context.Context, departmentID int
 	for _, folder := range body.Folders {
 		result = append(result, models.NpanFolder{
 			ID:        toInt64(folder["id"], 0),
-			Name:      fmt.Sprintf("%v", folder["name"]),
+			Name:      toString(folder["name"]),
 			ItemCount: toInt64(folder["item_count"], 0),
 		})
 	}
@@ -359,7 +370,7 @@ func (c *HTTPClient) SearchItems(ctx context.Context, params models.RemoteSearch
 	for _, item := range body.Files {
 		files = append(files, models.RemoteSearchItem{
 			ID:   toInt64(item["id"], 0),
-			Name: fmt.Sprintf("%v", item["name"]),
+			Name: toString(item["name"]),
 			Type: "file",
 		})
 	}
@@ -368,7 +379,7 @@ func (c *HTTPClient) SearchItems(ctx context.Context, params models.RemoteSearch
 	for _, item := range body.Folders {
 		folders = append(folders, models.RemoteSearchItem{
 			ID:   toInt64(item["id"], 0),
-			Name: fmt.Sprintf("%v", item["name"]),
+			Name: toString(item["name"]),
 			Type: "folder",
 		})
 	}

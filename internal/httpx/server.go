@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -116,6 +117,8 @@ func prometheusMiddleware(reg prometheus.Registerer) echo.MiddlewareFunc {
 func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg prometheus.Registerer) *echo.Echo {
 	e := echo.New()
 	e.Logger = slog.Default()
+	e.IPExtractor = echo.ExtractIPDirect()
+	e.HTTPErrorHandler = customHTTPErrorHandler
 
 	if promReg != nil {
 		e.Use(prometheusMiddleware(promReg))
@@ -123,8 +126,10 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 
 	e.Use(middleware.RequestID())
 	e.Use(middleware.Recover())
+	e.Use(SecureHeaders())
 	e.Use(middleware.RequestLogger())
-	e.Use(RateLimitMiddleware(20, 40))
+	e.Use(middleware.BodyLimit(1 << 20))
+	e.Use(RateLimitMiddleware(context.Background(), 20, 40))
 
 	// Public endpoints (no auth)
 	e.GET("/healthz", handlers.Health)
@@ -148,7 +153,7 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 	api.GET("/download-url", handlers.DownloadURL)
 
 	// Admin (requires API key, uses server-configured credentials for upstream API)
-	admin := e.Group("/api/v1/admin", APIKeyAuth(adminAPIKey), ConfigFallbackAuth(), RateLimitMiddleware(5, 10))
+	admin := e.Group("/api/v1/admin", APIKeyAuth(adminAPIKey), ConfigFallbackAuth(), RateLimitMiddleware(context.Background(), 5, 10))
 	admin.POST("/sync", handlers.StartFullSync)
 	admin.GET("/sync", handlers.GetFullSyncProgress)
 	admin.DELETE("/sync", handlers.CancelFullSync)
