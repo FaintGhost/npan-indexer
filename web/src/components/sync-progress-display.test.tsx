@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { SyncProgressDisplay } from "./sync-progress-display";
 import type { SyncProgress } from "@/lib/sync-schemas";
 
@@ -148,5 +149,38 @@ describe("SyncProgressDisplay", () => {
     expect(screen.getByText("删除").closest("div")).toHaveTextContent("5");
     expect(screen.getByText("跳过写入").closest("div")).toHaveTextContent("3");
     expect(screen.getByText("跳过删除").closest("div")).toHaveTextContent("1");
+  });
+
+  it("shows root estimate and actual stats when estimate is present", async () => {
+    const progress: SyncProgress = {
+      ...baseProgress,
+      rootNames: { 100: "PIXELHUE" },
+      rootProgress: {
+        "100": {
+          rootFolderId: 100,
+          status: "done",
+          estimatedTotalDocs: 4152,
+          stats: {
+            foldersVisited: 119,
+            filesIndexed: 393,
+            filesDiscovered: 393,
+            skippedFiles: 0,
+            pagesFetched: 119,
+            failedRequests: 0,
+            startedAt: 0,
+            endedAt: 0,
+          },
+          updatedAt: 0,
+        },
+      },
+      roots: [100],
+      completedRoots: [100],
+    };
+
+    render(<SyncProgressDisplay progress={progress} />);
+    await userEvent.click(screen.getByRole("button", { name: /展开/i }));
+
+    expect(screen.getByText(/估计 4,152/)).toBeInTheDocument();
+    expect(screen.getByText(/实际 512/)).toBeInTheDocument();
   });
 });

@@ -48,6 +48,10 @@ func (m *mockCrawlAPI) SearchItems(_ context.Context, _ models.RemoteSearchParam
   panic("not implemented")
 }
 
+func (m *mockCrawlAPI) GetFolderInfo(_ context.Context, folderID int64) (models.NpanFolder, error) {
+  return models.NpanFolder{ID: folderID}, nil
+}
+
 // mockCrawlIndexWriter implements IndexWriter.
 // It tracks call count and can be configured to fail on specific call numbers.
 type mockCrawlIndexWriter struct {

@@ -99,7 +99,68 @@ func TestBuildVerification_AllMatchNoWarnings(t *testing.T) {
   }
   result := buildVerification(120, stats)
 
-  if len(result.Warnings) != 0 {
-    t.Errorf("expected len(Warnings)==0, got %v", result.Warnings)
-  }
+	if len(result.Warnings) != 0 {
+		t.Errorf("expected len(Warnings)==0, got %v", result.Warnings)
+	}
+}
+
+func TestAppendRootEstimateWarnings_AddsWarningOnLargeGap(t *testing.T) {
+	t.Parallel()
+
+	estimate := int64(4152)
+	progress := &models.SyncProgressState{
+		Roots:     []int64{123456},
+		RootNames: map[int64]string{123456: "PIXELHUE"},
+		RootProgress: map[string]*models.RootSyncProgress{
+			"123456": {
+				RootFolderID:       123456,
+				EstimatedTotalDocs: &estimate,
+				Stats: models.CrawlStats{
+					FilesIndexed:   393,
+					FoldersVisited: 119,
+				},
+			},
+		},
+	}
+	v := &models.SyncVerification{Warnings: []string{}}
+
+	appendRootEstimateWarnings(v, progress)
+
+	found := false
+	for _, warning := range v.Warnings {
+		if strings.Contains(warning, "PIXELHUE") && strings.Contains(warning, "4152") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected root estimate mismatch warning, got %v", v.Warnings)
+	}
+}
+
+func TestAppendRootEstimateWarnings_IgnoresSmallGap(t *testing.T) {
+	t.Parallel()
+
+	estimate := int64(4152)
+	progress := &models.SyncProgressState{
+		Roots:     []int64{123456},
+		RootNames: map[int64]string{123456: "PIXELHUE"},
+		RootProgress: map[string]*models.RootSyncProgress{
+			"123456": {
+				RootFolderID:       123456,
+				EstimatedTotalDocs: &estimate,
+				Stats: models.CrawlStats{
+					FilesIndexed:   4032,
+					FoldersVisited: 120,
+				},
+			},
+		},
+	}
+	v := &models.SyncVerification{Warnings: []string{}}
+
+	appendRootEstimateWarnings(v, progress)
+
+	if len(v.Warnings) != 0 {
+		t.Fatalf("expected no warning for small gap, got %v", v.Warnings)
+	}
 }

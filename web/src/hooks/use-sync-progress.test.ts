@@ -165,6 +165,33 @@ describe("useSyncProgress", () => {
     expect(capturedBody!.resume_progress).toBe(false);
   });
 
+  it("sends include_departments=false when root_folder_ids is provided", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    server.use(
+      http.get("/api/v1/admin/sync", () => {
+        return HttpResponse.json(validProgress);
+      }),
+      http.post("/api/v1/admin/sync", async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ message: "Sync started" });
+      }),
+    );
+
+    const { result } = renderHook(() => useSyncProgress(headers));
+
+    await waitFor(() => {
+      expect(result.current.progress).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.startSync([123456], "full");
+    });
+
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody!.root_folder_ids).toEqual([123456]);
+    expect(capturedBody!.include_departments).toBe(false);
+  });
+
   it("omits force_rebuild when forceRebuild is false", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(

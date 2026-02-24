@@ -11,12 +11,39 @@ const SYNC_MODES = [
   { value: "incremental", label: "增量", description: "仅同步最近变更" },
 ] as const;
 
+function parseRootFolderIDs(raw: string): { ids: number[]; error?: string } {
+  const value = raw.trim();
+  if (value === "") {
+    return { ids: [] };
+  }
+
+  const parts = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const ids: number[] = [];
+  const seen = new Set<number>();
+  for (const part of parts) {
+    const parsed = Number(part);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return { ids: [], error: `目录 ID 格式错误: ${part}` };
+    }
+    if (!seen.has(parsed)) {
+      seen.add(parsed);
+      ids.push(parsed);
+    }
+  }
+  return { ids };
+}
+
 export function AdminSyncPage() {
   const auth = useAdminAuth();
   const sync = useSyncProgress(auth.getHeaders());
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<string>("auto");
   const [forceRebuild, setForceRebuild] = useState(false);
+  const [rootIDsInput, setRootIDsInput] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -57,7 +84,12 @@ export function AdminSyncPage() {
 
   const doStartSync = async () => {
     setMessage(null);
-    await sync.startSync([], mode, forceRebuild);
+    const parsed = parseRootFolderIDs(rootIDsInput);
+    if (parsed.error) {
+      setMessage(parsed.error);
+      return;
+    }
+    await sync.startSync(parsed.ids, mode, forceRebuild);
     if (!sync.error) {
       setMessage("同步任务已启动");
       setTimeout(() => setMessage(null), 4000);
@@ -130,6 +162,28 @@ export function AdminSyncPage() {
                 {m.label}
               </button>
             ))}
+          </div>
+        )}
+        {!isRunning && (
+          <div className="space-y-1">
+            <label
+              htmlFor="root-folder-ids"
+              className="block text-sm font-medium text-slate-700"
+            >
+              目录 ID（可选）
+            </label>
+            <input
+              id="root-folder-ids"
+              type="text"
+              value={rootIDsInput}
+              onChange={(event) => setRootIDsInput(event.target.value)}
+              placeholder="例如: 123456, 789012"
+              disabled={isBusy}
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-offset-2 placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+            />
+            <p className="text-xs text-slate-400">
+              留空表示按默认根目录同步；填写后仅同步这些目录。
+            </p>
           </div>
         )}
         {!isRunning && mode === "full" && (

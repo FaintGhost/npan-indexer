@@ -103,4 +103,36 @@ describe('AdminSyncPage', () => {
       expect(screen.getByText(/300/)).toBeInTheDocument()
     })
   })
+
+  it('submits parsed root folder ids to start sync payload', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+
+    let capturedBody: Record<string, unknown> | null = null
+    server.use(
+      http.get('/api/v1/admin/sync', () => {
+        return HttpResponse.json(validProgress)
+      }),
+      http.post('/api/v1/admin/sync', async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ message: 'Sync started' }, { status: 202 })
+      }),
+    )
+
+    render(<AdminSyncPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/启动同步/)).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText(/目录 ID/i), '1001, 1002,1003')
+    await user.click(screen.getByRole('button', { name: /启动同步/i }))
+
+    await waitFor(() => {
+      expect(capturedBody).not.toBeNull()
+    })
+
+    expect(capturedBody?.root_folder_ids).toEqual([1001, 1002, 1003])
+    expect(capturedBody?.include_departments).toBe(false)
+  })
 })

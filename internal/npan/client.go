@@ -217,6 +217,28 @@ func mapFile(row map[string]any) models.NpanFile {
 	}
 }
 
+func (c *HTTPClient) GetFolderInfo(ctx context.Context, folderID int64) (models.NpanFolder, error) {
+	body := map[string]any{}
+	err := c.request(ctx, http.MethodGet, "/api/v2/folder/"+strconv.FormatInt(folderID, 10)+"/info", nil, &body)
+	if err != nil {
+		return models.NpanFolder{}, err
+	}
+
+	// Be tolerant to both payload shapes:
+	// 1) direct folder fields
+	// 2) wrapped object: {"folder": {...}}
+	row := body
+	if wrapped, ok := body["folder"].(map[string]any); ok {
+		row = wrapped
+	}
+
+	folder := mapFolder(row)
+	if folder.ID <= 0 {
+		folder.ID = folderID
+	}
+	return folder, nil
+}
+
 func (c *HTTPClient) ListFolderChildren(ctx context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
 	var body struct {
 		Files        []map[string]any `json:"files"`

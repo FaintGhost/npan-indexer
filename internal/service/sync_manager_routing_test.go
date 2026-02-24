@@ -22,6 +22,7 @@ import (
 
 type mockAPIForRouting struct {
 	listFolderChildrenFn func(ctx context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error)
+	getFolderInfoFn      func(ctx context.Context, folderID int64) (models.NpanFolder, error)
 }
 
 func (m *mockAPIForRouting) ListFolderChildren(ctx context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
@@ -51,6 +52,13 @@ func (m *mockAPIForRouting) SearchItems(_ context.Context, _ models.RemoteSearch
 	return models.RemoteSearchResponse{}, nil
 }
 
+func (m *mockAPIForRouting) GetFolderInfo(ctx context.Context, folderID int64) (models.NpanFolder, error) {
+	if m.getFolderInfoFn != nil {
+		return m.getFolderInfoFn(ctx, folderID)
+	}
+	return models.NpanFolder{ID: folderID}, nil
+}
+
 // ---------------------------------------------------------------------------
 // Stub meilisearch.IndexManager for routing tests
 //
@@ -66,6 +74,10 @@ type routingStubIndex struct {
 	docCount int64
 }
 
+type forceRebuildStubIndex struct {
+	routingStubIndex
+}
+
 // ---------- functional stubs ----------
 
 func (s *routingStubIndex) AddDocumentsWithContext(_ context.Context, _ any, _ *meilisearch.DocumentOptions) (*meilisearch.TaskInfo, error) {
@@ -78,6 +90,14 @@ func (s *routingStubIndex) WaitForTaskWithContext(_ context.Context, _ int64, _ 
 
 func (s *routingStubIndex) GetStatsWithContext(_ context.Context) (*meilisearch.StatsIndex, error) {
 	return &meilisearch.StatsIndex{NumberOfDocuments: s.docCount}, nil
+}
+
+func (s *forceRebuildStubIndex) DeleteAllDocumentsWithContext(_ context.Context, _ *meilisearch.DocumentOptions) (*meilisearch.TaskInfo, error) {
+	return &meilisearch.TaskInfo{TaskUID: 1}, nil
+}
+
+func (s *forceRebuildStubIndex) UpdateSettingsWithContext(_ context.Context, _ *meilisearch.Settings) (*meilisearch.TaskInfo, error) {
+	return &meilisearch.TaskInfo{TaskUID: 1}, nil
 }
 
 // ---------- remaining IndexManager stubs (panic on call) ----------
@@ -679,7 +699,7 @@ func (s *routingStubIndex) GetSearch() meilisearch.SearchReader             { re
 // Helper: build a SyncManager wired to temp-dir-based stores
 // ---------------------------------------------------------------------------
 
-func newRoutingTestSyncManager(t *testing.T, stubIndex *routingStubIndex) *SyncManager {
+func newRoutingTestSyncManager(t *testing.T, stubIndex meilisearch.IndexManager) *SyncManager {
 	t.Helper()
 
 	tmpDir := t.TempDir()
@@ -822,6 +842,131 @@ func TestCursorUpdate_FullCrawlFailure(t *testing.T) {
 		t.Log("OK: sync state file does not exist (expected after failed crawl)")
 	} else {
 		t.Logf("OK: sync state exists but LastSyncTime = %d (expected 0)", state.LastSyncTime)
+	}
+}
+
+func TestCheckpointReset_ForceRebuildClearsCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	const (
+		rootID       int64 = 1
+		staleFolderID int64 = 999
+	)
+
+	var firstFolderID int64
+	api := &mockAPIForRouting{
+		listFolderChildrenFn: func(_ context.Context, folderID int64, _ int64) (models.FolderChildrenPage, error) {
+			if firstFolderID == 0 {
+				firstFolderID = folderID
+			}
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	mgr := newRoutingTestSyncManager(t, &forceRebuildStubIndex{routingStubIndex{docCount: 0}})
+	checkpointStore := storage.NewJSONCheckpointStore(mgr.defaultCheckpointTemplate)
+	if err := checkpointStore.Save(&models.CrawlCheckpoint{Queue: []int64{staleFolderID}}); err != nil {
+		t.Fatalf("seed checkpoint failed: %v", err)
+	}
+
+	includeDepartments := false
+	resume := true
+	forceRebuild := true
+	err := mgr.run(context.Background(), api, SyncStartRequest{
+		Mode:               models.SyncModeFull,
+		RootFolderIDs:      []int64{rootID},
+		IncludeDepartments: &includeDepartments,
+		ResumeProgress:     &resume,
+		ForceRebuild:       &forceRebuild,
+	})
+	if err != nil {
+		t.Fatalf("run() returned unexpected error: %v", err)
+	}
+
+	if firstFolderID != rootID {
+		t.Fatalf("expected first crawled folder to be root %d after force rebuild, got %d", rootID, firstFolderID)
+	}
+}
+
+func TestCheckpointReset_ResumeFalseClearsCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	const (
+		rootID       int64 = 1
+		staleFolderID int64 = 888
+	)
+
+	var firstFolderID int64
+	api := &mockAPIForRouting{
+		listFolderChildrenFn: func(_ context.Context, folderID int64, _ int64) (models.FolderChildrenPage, error) {
+			if firstFolderID == 0 {
+				firstFolderID = folderID
+			}
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	mgr := newRoutingTestSyncManager(t, &routingStubIndex{docCount: 0})
+	checkpointStore := storage.NewJSONCheckpointStore(mgr.defaultCheckpointTemplate)
+	if err := checkpointStore.Save(&models.CrawlCheckpoint{Queue: []int64{staleFolderID}}); err != nil {
+		t.Fatalf("seed checkpoint failed: %v", err)
+	}
+
+	includeDepartments := false
+	resume := false
+	err := mgr.run(context.Background(), api, SyncStartRequest{
+		Mode:               models.SyncModeFull,
+		RootFolderIDs:      []int64{rootID},
+		IncludeDepartments: &includeDepartments,
+		ResumeProgress:     &resume,
+	})
+	if err != nil {
+		t.Fatalf("run() returned unexpected error: %v", err)
+	}
+
+	if firstFolderID != rootID {
+		t.Fatalf("expected first crawled folder to be root %d when resume=false, got %d", rootID, firstFolderID)
+	}
+}
+
+func TestCheckpointReset_ResumeTrueKeepsCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	const (
+		rootID       int64 = 1
+		staleFolderID int64 = 777
+	)
+
+	var firstFolderID int64
+	api := &mockAPIForRouting{
+		listFolderChildrenFn: func(_ context.Context, folderID int64, _ int64) (models.FolderChildrenPage, error) {
+			if firstFolderID == 0 {
+				firstFolderID = folderID
+			}
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	mgr := newRoutingTestSyncManager(t, &routingStubIndex{docCount: 0})
+	checkpointStore := storage.NewJSONCheckpointStore(mgr.defaultCheckpointTemplate)
+	if err := checkpointStore.Save(&models.CrawlCheckpoint{Queue: []int64{staleFolderID}}); err != nil {
+		t.Fatalf("seed checkpoint failed: %v", err)
+	}
+
+	includeDepartments := false
+	resume := true
+	err := mgr.run(context.Background(), api, SyncStartRequest{
+		Mode:               models.SyncModeFull,
+		RootFolderIDs:      []int64{rootID},
+		IncludeDepartments: &includeDepartments,
+		ResumeProgress:     &resume,
+	})
+	if err != nil {
+		t.Fatalf("run() returned unexpected error: %v", err)
+	}
+
+	if firstFolderID != staleFolderID {
+		t.Fatalf("expected resume=true to keep checkpoint folder %d, got %d", staleFolderID, firstFolderID)
 	}
 }
 

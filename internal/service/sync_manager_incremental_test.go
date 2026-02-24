@@ -55,6 +55,10 @@ func (m *mockAPI) SearchItems(_ context.Context, _ models.RemoteSearchParams) (m
 	return models.RemoteSearchResponse{}, nil
 }
 
+func (m *mockAPI) GetFolderInfo(_ context.Context, folderID int64) (models.NpanFolder, error) {
+	return models.NpanFolder{ID: folderID}, nil
+}
+
 // ---------------------------------------------------------------------------
 // mock: meilisearch.IndexManager for incremental tests
 //

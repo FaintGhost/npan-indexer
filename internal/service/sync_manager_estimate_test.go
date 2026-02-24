@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"npan/internal/models"
@@ -68,5 +70,78 @@ func TestRestoreProgress_RefreshesEstimatedTotalDocs(t *testing.T) {
 	rp := restored.RootProgress["1001"]
 	if rp == nil || rp.EstimatedTotalDocs == nil || *rp.EstimatedTotalDocs != 333 {
 		t.Fatalf("expected refreshed estimate=333, got %#v", rp)
+	}
+}
+
+func TestDiscoverRootFolders_ExplicitRootsUseFolderInfoEstimate(t *testing.T) {
+	t.Parallel()
+
+	mgr := newRoutingTestSyncManager(t, &routingStubIndex{})
+	includeDepartments := false
+
+	api := &mockAPIForRouting{
+		getFolderInfoFn: func(_ context.Context, folderID int64) (models.NpanFolder, error) {
+			if folderID != 123456 {
+				t.Fatalf("unexpected folderID: %d", folderID)
+			}
+			return models.NpanFolder{
+				ID:        folderID,
+				Name:      "PIXELHUE",
+				ItemCount: 4151,
+			}, nil
+		},
+	}
+
+	roots, estimates, names, err := mgr.discoverRootFolders(context.Background(), api, SyncStartRequest{
+		RootFolderIDs:      []int64{123456},
+		IncludeDepartments: &includeDepartments,
+	})
+	if err != nil {
+		t.Fatalf("discoverRootFolders returned error: %v", err)
+	}
+
+	if len(roots) != 1 || roots[0] != 123456 {
+		t.Fatalf("unexpected roots: %#v", roots)
+	}
+	if got := estimates[123456]; got != 4152 {
+		t.Fatalf("expected estimate 4152, got %d", got)
+	}
+	if got := names[123456]; got != "PIXELHUE" {
+		t.Fatalf("expected root name PIXELHUE, got %q", got)
+	}
+}
+
+func TestDiscoverRootFolders_FolderInfoFailureDegradesGracefully(t *testing.T) {
+	t.Parallel()
+
+	mgr := newRoutingTestSyncManager(t, &routingStubIndex{})
+	includeDepartments := false
+	called := false
+
+	api := &mockAPIForRouting{
+		getFolderInfoFn: func(_ context.Context, folderID int64) (models.NpanFolder, error) {
+			called = true
+			return models.NpanFolder{}, errors.New("folder info failed")
+		},
+	}
+
+	roots, estimates, names, err := mgr.discoverRootFolders(context.Background(), api, SyncStartRequest{
+		RootFolderIDs:      []int64{123456},
+		IncludeDepartments: &includeDepartments,
+	})
+	if err != nil {
+		t.Fatalf("discoverRootFolders should degrade gracefully, got error: %v", err)
+	}
+	if !called {
+		t.Fatal("expected discoverRootFolders to attempt GetFolderInfo for explicit root")
+	}
+	if len(roots) != 1 || roots[0] != 123456 {
+		t.Fatalf("unexpected roots: %#v", roots)
+	}
+	if _, ok := estimates[123456]; ok {
+		t.Fatalf("expected no estimate on folder info failure, got %+v", estimates)
+	}
+	if _, ok := names[123456]; ok {
+		t.Fatalf("expected no name on folder info failure, got %+v", names)
 	}
 }

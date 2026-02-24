@@ -202,6 +202,8 @@ function RootDetails({ progress }: { progress: SyncProgress }) {
                   : 'text-slate-500'
 
             const rootName = progress.rootNames?.[key]
+            const estimated = root.estimatedTotalDocs
+            const actualDocs = root.stats.filesIndexed + root.stats.foldersVisited
 
             return (
               <div key={key} className="px-4 py-3">
@@ -223,6 +225,12 @@ function RootDetails({ progress }: { progress: SyncProgress }) {
                     <span className="text-rose-400">{root.stats.failedRequests} 失败</span>
                   )}
                 </div>
+                {estimated != null && (
+                  <div className="mt-1 flex gap-4 text-xs text-slate-500">
+                    <span>估计 {estimated.toLocaleString()}</span>
+                    <span>实际 {actualDocs.toLocaleString()}</span>
+                  </div>
+                )}
               </div>
             )
           })}

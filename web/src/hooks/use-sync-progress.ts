@@ -80,6 +80,8 @@ export function useSyncProgress(headers: Record<string, string>) {
           "/api/v1/admin/sync",
           {
             root_folder_ids: rootFolderIds,
+            include_departments:
+              rootFolderIds.length > 0 ? false : undefined,
             resume_progress: mode !== "full" && !forceRebuild,
             force_rebuild: forceRebuild || undefined,
             mode,

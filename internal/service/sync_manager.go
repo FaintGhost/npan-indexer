@@ -239,6 +239,27 @@ func (m *SyncManager) discoverRootFolders(ctx context.Context, api npan.API, req
 	rootEstimateMap := map[int64]int64{}
 	rootNameMap := map[int64]string{}
 
+	for _, rootID := range request.RootFolderIDs {
+		// Synthetic root entry; don't call upstream folder info endpoint.
+		if rootID == 0 {
+			rootNameMap[rootID] = "全部文件"
+			continue
+		}
+
+		folder, err := api.GetFolderInfo(ctx, rootID)
+		if err != nil {
+			slog.Warn("获取根目录信息失败，降级继续", "root_id", rootID, "error", err)
+			continue
+		}
+		if folder.Name != "" {
+			rootNameMap[rootID] = folder.Name
+		}
+		estimate := folder.ItemCount + 1
+		if estimate > 0 {
+			rootEstimateMap[rootID] = estimate
+		}
+	}
+
 	includeDepartments := request.IncludeDepartments == nil || *request.IncludeDepartments
 	if includeDepartments {
 		departmentIDs := append([]int64{}, request.DepartmentIDs...)
@@ -656,6 +677,17 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		resume = false
 	}
 
+	// Force rebuild and explicit non-resume runs must start from a clean
+	// crawl checkpoint, otherwise full crawl may resume from a stale queue.
+	if forceRebuild || !resume {
+		for _, rootID := range roots {
+			checkpointStore := storage.NewJSONCheckpointStore(rootCheckpointMap[rootID])
+			if err := checkpointStore.Clear(); err != nil {
+				return fmt.Errorf("clear checkpoint for root %d: %w", rootID, err)
+			}
+		}
+	}
+
 	existing, err := m.progressStore.Load()
 	if err != nil {
 		return err
@@ -821,6 +853,7 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	meiliCount, err := m.index.DocumentCount(ctx)
 	if err == nil {
 		progress.Verification = buildVerification(meiliCount, progress.AggregateStats)
+		appendRootEstimateWarnings(progress.Verification, progress)
 	}
 
 	if m.metricsReporter != nil {
@@ -953,4 +986,43 @@ func buildVerification(meiliCount int64, stats models.CrawlStats) *models.SyncVe
 	}
 
 	return v
+}
+
+func appendRootEstimateWarnings(verification *models.SyncVerification, progress *models.SyncProgressState) {
+	if verification == nil || progress == nil {
+		return
+	}
+
+	const (
+		minAbsGap   int64   = 20
+		minGapRatio float64 = 0.05
+	)
+
+	for _, rootID := range progress.Roots {
+		root := progress.RootProgress[fmt.Sprintf("%d", rootID)]
+		if root == nil || root.EstimatedTotalDocs == nil || *root.EstimatedTotalDocs <= 0 {
+			continue
+		}
+
+		estimated := *root.EstimatedTotalDocs
+		actual := root.Stats.FilesIndexed + root.Stats.FoldersVisited
+		gap := estimated - actual
+		if gap <= 0 {
+			continue
+		}
+
+		gapRatio := float64(gap) / float64(estimated)
+		if gap <= minAbsGap && gapRatio <= minGapRatio {
+			continue
+		}
+
+		name := progress.RootNames[rootID]
+		if name == "" {
+			name = fmt.Sprintf("%d", rootID)
+		}
+		verification.Warnings = append(verification.Warnings, fmt.Sprintf(
+			"根目录 %s(%d) 估计文档数(%d) 与实际索引统计(%d) 差异较大，差值=%d",
+			name, rootID, estimated, actual, gap,
+		))
+	}
 }
