@@ -16,3 +16,8 @@
     - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright`
     - `docker compose -f docker-compose.ci.yml --profile e2e down --volumes`
   - 若环境缺失依赖（如 `make`/Docker 权限），需明确说明并给出等价命令或申请提权后执行。
+- 用户纠正：Docker Publish workflow 出现 `Skip output ... may contain secret` 与 `tag is needed when pushing to registry`。
+- 规则：
+  - 禁止将由 `secrets.*` 参与拼接得到的值作为 **job outputs** 跨 job 传递。
+  - 镜像名（尤其含 DockerHub 用户名）统一在各 job 内本地计算并使用 **step outputs**。
+  - 出现 `buildx tag is needed` 时，优先排查 `name=` 是否为空（变量/输出被跳过）。

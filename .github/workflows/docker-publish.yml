@@ -17,34 +17,8 @@ permissions:
   packages: write
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    outputs:
-      dockerhub_image: ${{ steps.prep.outputs.dockerhub_image }}
-      ghcr_image: ${{ steps.prep.outputs.ghcr_image }}
-    steps:
-      - name: Validate Docker Hub secrets
-        run: |
-          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-            echo "Missing required secrets: DOCKERHUB_USERNAME and/or DOCKERHUB_TOKEN"
-            exit 1
-          fi
-
-      - name: Prepare image names
-        id: prep
-        shell: bash
-        run: |
-          repo_name="${GITHUB_REPOSITORY#*/}"
-          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          repo_lc="$(echo "${repo_name}" | tr '[:upper:]' '[:lower:]')"
-          dockerhub_user_lc="$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr '[:upper:]' '[:lower:]')"
-
-          echo "dockerhub_image=${dockerhub_user_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
-          echo "ghcr_image=ghcr.io/${owner_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
-
   build:
     name: Build ${{ matrix.platform }}
-    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +48,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare image names
+        id: prep
+        shell: bash
+        run: |
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo_lc="$(echo "${repo_name}" | tr '[:upper:]' '[:lower:]')"
+          dockerhub_user_lc="$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr '[:upper:]' '[:lower:]')"
+
+          echo "dockerhub_image=${dockerhub_user_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
+          echo "ghcr_image=ghcr.io/${owner_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push image by digest
         id: build
         uses: docker/build-push-action@v6
@@ -82,8 +68,8 @@ jobs:
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           outputs: |
-            type=image,name=${{ needs.prepare.outputs.dockerhub_image }},push-by-digest=true,name-canonical=true,push=true
-            type=image,name=${{ needs.prepare.outputs.ghcr_image }},push-by-digest=true,name-canonical=true,push=true
+            type=image,name=${{ steps.prep.outputs.dockerhub_image }},push-by-digest=true,name-canonical=true,push=true
+            type=image,name=${{ steps.prep.outputs.ghcr_image }},push-by-digest=true,name-canonical=true,push=true
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -107,7 +93,6 @@ jobs:
   merge:
     name: Merge multi-platform image
     needs:
-      - prepare
       - build
     runs-on: ubuntu-latest
     steps:
@@ -133,13 +118,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare image names
+        id: prep
+        shell: bash
+        run: |
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          owner_lc="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          repo_lc="$(echo "${repo_name}" | tr '[:upper:]' '[:lower:]')"
+          dockerhub_user_lc="$(echo "${{ secrets.DOCKERHUB_USERNAME }}" | tr '[:upper:]' '[:lower:]')"
+
+          echo "dockerhub_image=${dockerhub_user_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
+          echo "ghcr_image=ghcr.io/${owner_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ needs.prepare.outputs.dockerhub_image }}
-            ${{ needs.prepare.outputs.ghcr_image }}
+            ${{ steps.prep.outputs.dockerhub_image }}
+            ${{ steps.prep.outputs.ghcr_image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -150,7 +147,7 @@ jobs:
         working-directory: /tmp/digests
         env:
           DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
-          TARGET_IMAGE: ${{ needs.prepare.outputs.dockerhub_image }}
+          TARGET_IMAGE: ${{ steps.prep.outputs.dockerhub_image }}
         run: |
           sources="$(printf '%s@sha256:%s ' "${TARGET_IMAGE}" *)"
           tags="$(jq -cr '.tags | map(select(startswith(env.TARGET_IMAGE + ":")) | "-t " + .) | join(" ")' <<<"${DOCKER_METADATA_OUTPUT_JSON}")"
@@ -160,7 +157,7 @@ jobs:
         working-directory: /tmp/digests
         env:
           DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
-          TARGET_IMAGE: ${{ needs.prepare.outputs.ghcr_image }}
+          TARGET_IMAGE: ${{ steps.prep.outputs.ghcr_image }}
         run: |
           sources="$(printf '%s@sha256:%s ' "${TARGET_IMAGE}" *)"
           tags="$(jq -cr '.tags | map(select(startswith(env.TARGET_IMAGE + ":")) | "-t " + .) | join(" ")' <<<"${DOCKER_METADATA_OUTPUT_JSON}")"

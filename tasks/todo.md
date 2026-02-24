@@ -48,6 +48,12 @@
 - [x] 3. 新增 manifest 合并步骤，确保两平台标签统一推送到 Docker Hub + GHCR
 - [x] 4. 更新 README 对 runner 前置条件说明并完成工作流静态自检
 
+## 新任务：修复 Docker Publish Action 的 secret output 警告与构建失败
+
+- [x] 1. 分析 GitHub Actions 注解与失败日志，确认 `prepare` job output 被 secret 保护跳过的根因
+- [x] 2. 改造 workflow，移除跨 job 传递镜像名（含 secret 风险），改为各 job 内本地计算
+- [x] 3. 静态自检 workflow 改动并回填验证记录
+
 ## Review（Docker 发布流水线）
 
 - 已新增 workflow：`.github/workflows/docker-publish.yml`
@@ -73,6 +79,18 @@
   - 容器化链路（`docker compose ... up --wait` + `./tests/smoke/smoke_test.sh` + `docker compose --profile e2e run --rm playwright`）通过
     - 冒烟：34/34
     - E2E：32/32
+
+## Review（Docker Publish secret output 修复）
+
+- 根因：
+  - `prepare` job 输出 `dockerhub_image` / `ghcr_image` 时，GitHub 判定输出值“可能包含 secret”（`DOCKERHUB_USERNAME` 参与拼接），因此跳过 job output。
+  - 下游 `build` job 中 `docker/build-push-action` 的 `outputs` 里 `name=` 变为空字符串，触发 `ERROR: tag is needed when pushing to registry`。
+- 修复：
+  - 删除 `prepare` job 的跨 job 镜像名输出依赖。
+  - 在 `build` / `merge` job 内分别通过 `Prepare image names` 步骤计算并使用 step outputs。
+- 预期结果：
+  - 消除 `prepare` 的 2 个 warning（skip output）
+  - 消除 `Build linux/amd64` 与 `Build linux/arm64` 的 2 个 buildx error
 
 ## Review（本轮实施结果）
 
