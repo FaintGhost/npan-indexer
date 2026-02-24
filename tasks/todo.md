@@ -723,3 +723,58 @@
   - `cd web && bun vitest run src/components/search-page.test.tsx src/components/admin-page.test.tsx src/tests/accessibility.test.tsx` 通过（17 tests）
   - `cd web && bun vitest run` 通过（20 files / 166 tests）
   - `git diff --check` 通过
+
+## 新任务：迁移收尾测试盘点与全量验证（阶段收尾）
+
+- [x] 1. 盘点当前前后端测试、smoke、e2e 与 Connect/Buf 迁移后的契约匹配情况
+- [x] 2. 执行后端全量单测（`go test ./...`）并记录结果
+- [x] 3. 执行前端全量单测（`cd web && bun vitest run`）并记录结果
+- [x] 4. 执行容器化冒烟 + Playwright E2E 完整链路并记录结果
+- [x] 5. 回填 `tasks/todo.md` Review（覆盖范围、风险与后续建议）
+
+## Review（迁移收尾测试盘点与全量验证）
+
+- 盘点结论（契约匹配）：
+  - 后端仍保留 REST 兼容路由，`tests/smoke/smoke_test.sh` 覆盖的 REST 路径仍可用，smoke 与迁移后代码兼容。
+  - 前端单测（Search/Admin/Auth）已主要迁移至 Connect 路径（`/npan.v1.*`）并与 `buf + connect-go/connect-es` 契约一致。
+  - E2E 原始失配点在测试断言：仍等待旧 REST 路径 `/api/v1/app/search`、`/api/v1/admin/sync`，而页面实际请求已切到 Connect 路径（`/npan.v1.AppService/AppSearch`、`/npan.v1.AdminService/StartSync|CancelSync`）。
+- 本轮修复：
+  - 更新 `web/e2e/tests/admin.spec.ts` 为 Connect 路径断言，并将取消同步请求从旧 `DELETE /api/v1/admin/sync` 改为等待 `POST /npan.v1.AdminService/CancelSync`。
+  - 更新 `web/e2e/pages/search-page.ts` 与 `web/e2e/tests/search.spec.ts`，将搜索等待条件改为 Connect `POST` 响应，并从 `URL query/page` 断言改为读取 request JSON body（兼容 Connect POST JSON）。
+  - 按场景收紧 E2E 等待超时（网络等待优先 5s，保留少量 10s 场景）。
+  - 补充 `tasks/lessons.md`：E2E 超时分级与“先核对等待条件是否匹配协议/路径”的规则。
+- 验证结果：
+  - `GOCACHE=/tmp/go-build go test ./...` 通过。
+  - `cd web && bun vitest run` 通过（20 files / 166 tests）。
+  - `docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120` 通过。
+  - `BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh` 通过（34/34）。
+  - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright` 通过（32 passed）。
+- 风险与后续建议：
+  - `smoke_test.sh` 默认端口（1323/9091）与 `docker-compose.ci.yml` 映射端口（11323/19091）不一致；若未显式传 `BASE_URL/METRICS_URL` 会出现全量 `HTTP 000`。后续可统一默认值或在脚本中自动读取 compose 端口，避免误判。
+
+## 新任务：迁移收尾清理与文档重写（交接友好）
+
+- [x] 1. 修复 `tests/smoke/smoke_test.sh` 默认端口与 `docker-compose.ci.yml` 不一致问题
+- [x] 2. 盘点并删除迁移过程遗留的临时/无用文件（不误删运行所需产物）
+- [x] 3. 整理 codebase 结构说明，沉淀到 `CLAUDE.md`（面向 coding agent，配合平台级 AGENTS 规则）
+- [x] 4. 重写 `README.md`（面向普通用户，突出快速部署、验证与常见操作）
+- [x] 5. 进行必要验证（脚本语法/关键命令可执行性检查）并回填 Review
+
+## Review（迁移收尾清理与文档重写）
+
+- 代码与脚本整理：
+  - 修复 `tests/smoke/smoke_test.sh` 默认地址为 CI compose 实际映射端口：`11323` / `19091`。
+  - 保留 `docker-compose.yml`（开发/部署）端口 `1323` / `9091` 不变，仅修正 smoke 默认值以避免 `HTTP 000` 误判。
+- 清理结果（删除临时遗留）：
+  - 删除 `migration_plan.md`
+  - 删除 `repomix-output.xml`
+  - 删除临时 buf 二进制 `.bin/buf`
+  - 删除误生成且未跟踪的 `gen/ts/buf/validate/validate_pb.ts`
+  - 恢复 `web/package-lock.json` 的意外漂移（避免将 npm 安装副作用带入提交）
+- 文档重写：
+  - `CLAUDE.md`：改为“agent 接手手册”，补充目录地图、Connect/REST 共存路由、Buf/OpenAPI 双生成链路、验证闭环、常见坑（E2E Connect 路径/超时）。
+  - `README.md`：改为“用户部署手册”，突出 Docker 快速部署、首次同步、API 概览、开发/测试命令、CI 端口说明与常见问题。
+- 验证：
+  - `bash -n tests/smoke/smoke_test.sh` 通过
+  - `git diff --check` 通过
+  - `docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120 && ./tests/smoke/smoke_test.sh` 通过（34/34，使用脚本默认参数）

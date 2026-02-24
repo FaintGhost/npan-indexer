@@ -2,6 +2,21 @@ import { test, expect } from '../fixtures/auth'
 import { SearchPage } from '../pages/search-page'
 import { seedMeilisearch, clearMeilisearch } from '../fixtures/seed'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getStringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key]
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  return null
+}
+
 test.describe('搜索流程', () => {
   let searchPage: SearchPage
 
@@ -55,9 +70,7 @@ test.describe('搜索流程', () => {
 
   // Test 4: 按 Enter 键立即搜索
   test('按 Enter 键立即搜索', async () => {
-    const responsePromise = searchPage.page.waitForResponse(
-      r => r.url().includes('/api/v1/app/search') && r.status() === 200
-    )
+    const responsePromise = searchPage.waitForSearchResponse({ query: 'design' })
     await searchPage.searchInput.fill('design')
     await searchPage.searchInput.press('Enter')
     const response = await responsePromise
@@ -96,9 +109,10 @@ test.describe('搜索流程', () => {
     // First page should load 30 results
     await expect(searchPage.resultArticles).toHaveCount(30, { timeout: 10_000 })
     // Scroll to sentinel to trigger infinite scroll
-    const secondPageResponse = searchPage.page.waitForResponse(
-      r => r.url().includes('/api/v1/app/search') && r.url().includes('page=2') && r.status() === 200
-    )
+    const secondPageResponse = searchPage.waitForSearchResponse({
+      query: 'test-file',
+      page: 2,
+    })
     await searchPage.scrollToLoadMore()
     await secondPageResponse
     // Total should be 35
@@ -272,39 +286,42 @@ test.describe('边界场景', () => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
 
-    const responsePromise = page.waitForResponse(
-      (r) => r.url().includes('/api/v1/app/search') && r.status() === 200,
-    )
+    const responsePromise = searchPage.waitForSearchResponse({ query: 'C++ & .NET' })
     await searchPage.searchInput.fill('C++ & .NET')
     await searchPage.searchButton.click()
     const response = await responsePromise
 
-    // Should have proper URL encoding
-    expect(response.url()).toContain('query=')
+    const payload: unknown = response.request().postDataJSON()
+    expect(isRecord(payload)).toBe(true)
+    if (!isRecord(payload)) {
+      return
+    }
+    expect(getStringField(payload, 'query')).toBe('C++ & .NET')
+
     // No JS errors
     expect(errors).toHaveLength(0)
   })
 
-  test('非常长的搜索查询', async ({ page }) => {
+  test('非常长的搜索查询', async () => {
     const longQuery = 'a'.repeat(200)
 
-    const responsePromise = page.waitForResponse(
-      (r) => r.url().includes('/api/v1/app/search') && r.status() === 200,
-    )
+    const responsePromise = searchPage.waitForSearchResponse({ query: longQuery })
     await searchPage.searchInput.fill(longQuery)
     await searchPage.searchButton.click()
     const response = await responsePromise
 
-    // Request should contain the full query
-    expect(response.url()).toContain('query=')
+    const payload: unknown = response.request().postDataJSON()
+    expect(isRecord(payload)).toBe(true)
+    if (!isRecord(payload)) {
+      return
+    }
+    expect(getStringField(payload, 'query')).toBe(longQuery)
     expect(response.status()).toBe(200)
   })
 
-  test('快速连续搜索（防抖竞态）', async ({ page }) => {
+  test('快速连续搜索（防抖竞态）', async () => {
     // Set up response listener BEFORE typing
-    const responsePromise = page.waitForResponse(
-      (r) => r.url().includes('/api/v1/app/search') && r.url().includes('query=abc') && r.status() === 200,
-    )
+    const responsePromise = searchPage.waitForSearchResponse({ query: 'abc' })
 
     // Type rapidly
     await searchPage.searchInput.fill('a')
@@ -321,19 +338,19 @@ test.describe('边界场景', () => {
 
   test('网络错误时显示错误状态', async ({ page }) => {
     // Mock search API to abort (network error)
-    await page.route('**/api/v1/app/search**', (route) => route.abort())
+    await page.route('**/npan.v1.AppService/AppSearch**', (route) => route.abort())
 
     await searchPage.searchInput.fill('test')
     await searchPage.searchButton.click()
 
     // Should show error state
-    await expect(page.locator('.border-rose-200')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.border-rose-200')).toBeVisible({ timeout: 5_000 })
   })
 
   test('搜索框纯空格不触发搜索', async ({ page }) => {
     // Track API calls
     let apiCallCount = 0
-    await page.route('**/api/v1/app/search**', (route) => {
+    await page.route('**/npan.v1.AppService/AppSearch**', (route) => {
       apiCallCount++
       return route.continue()
     })

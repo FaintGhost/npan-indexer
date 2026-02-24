@@ -6,8 +6,10 @@ set -euo pipefail
 # Expects the stack from docker-compose.ci.yml to be running.
 # ---------------------------------------------------------------------------
 
-BASE_URL="${BASE_URL:-http://localhost:1323}"
-METRICS_URL="${METRICS_URL:-http://localhost:9091}"
+# docker-compose.ci.yml maps container ports to 11323/19091 on host.
+# Defaults are aligned so smoke tests work out-of-the-box in CI/local Docker flow.
+BASE_URL="${BASE_URL:-http://localhost:11323}"
+METRICS_URL="${METRICS_URL:-http://localhost:19091}"
 API_KEY="${API_KEY:-ci-test-admin-api-key-1234}"
 
 passed=0

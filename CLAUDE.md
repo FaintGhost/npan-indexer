@@ -1,51 +1,247 @@
-IMPORTANT: USE BUN
+# CLAUDE.md
 
-## Testing
+> 面向代码代理（coding agent）的项目接手说明。请与平台级 `AGENTS.md` 一起阅读：
+> - `AGENTS.md` 负责通用协作规则/工作流
+> - 本文件负责仓库事实、入口位置、验证命令、常见坑
 
-### Unit Tests
+## 0. 一句话说明
+
+`npan` 是一个将 Npan 云盘文件元数据同步到 Meilisearch 的服务，提供：
+- Web 搜索页面（React + Vite）
+- 管理后台（同步启动/取消/进度）
+- REST API（兼容层）
+- Connect-RPC API（迁移后的主路径）
+
+当前迁移状态：
+- 已接入 `buf` 生成链路
+- 后端使用 `connect-go`
+- 前端使用 `connect-es` + `connect-query`
+- REST 路由仍保留（兼容 smoke / 部分脚本 / 旧客户端）
+
+## 1. 技术栈与运行边界
+
+- 后端：Go 1.25+, Echo v5, Meilisearch, Prometheus
+- 前端：React 19, Vite, TanStack Router, Bun, Vitest, Playwright
+- RPC：Buf + Protobuf + Connect-RPC（Connect/gRPC/gRPC-Web handler 由 connect-go 生成）
+- 契约：
+  - Protobuf（Connect 路径）：`proto/npan/v1/api.proto`
+  - OpenAPI（REST/Zod/Go DTO）：`api/openapi.yaml`
+
+## 2. 目录地图（优先阅读）
+
+### 服务端核心
+
+- `cmd/server`：HTTP 服务启动入口（加载配置、启动 Echo、嵌入前端）
+- `cmd/cli`：CLI 入口（同步、进度查询等）
+- `internal/httpx`：HTTP 路由、鉴权、中间件、Connect server adapter
+- `internal/service`：业务服务层（同步编排、搜索等）
+- `internal/npan`：Npan API/OAuth 客户端封装
+- `internal/search`：Meilisearch 查询与索引交互
+- `internal/indexer`：同步/抓取/索引写入逻辑
+- `internal/config`：环境变量配置与校验
+
+### 前端核心
+
+- `web/src/routes`：页面路由（搜索页 `/`、管理页 `/admin`）
+- `web/src/components`：页面与 UI 组件
+- `web/src/hooks`：前端 hooks（下载、鉴权、热键等）
+- `web/src/lib/connect-transport.ts`：Connect transport / QueryClient 配置
+- `web/src/lib/*adapter.ts`：Proto <-> UI domain 映射
+- `web/e2e`：Playwright E2E（admin/search/download/边界场景）
+
+### 契约与生成代码
+
+- `proto/npan/v1/api.proto`：Connect/Buf 主契约（RPC + message）
+- `buf.yaml` / `buf.gen.yaml`：Buf lint/codegen 配置
+- `gen/go/npan/v1`：Buf 生成的 Go protobuf / connect-go 代码
+- `web/src/gen`：Buf 生成的前端 protobuf / connect-es / connect-query 代码
+- `api/openapi.yaml`：REST 契约（兼容层 + Zod schema 源）
+- `api/types.gen.go`：OpenAPI 生成的 Go DTO
+- `web/src/api/generated`：OpenAPI 生成的 TS types + Zod schemas
+
+## 3. 路由现状（迁移后很关键）
+
+在 `internal/httpx/server.go` 中，当前是“Connect + REST 共存”：
+
+- Connect-RPC（新主路径）
+  - `/npan.v1.HealthService/*`
+  - `/npan.v1.AppService/*`
+  - `/npan.v1.AuthService/*`
+  - `/npan.v1.SearchService/*`
+  - `/npan.v1.AdminService/*`
+- REST（兼容层，仍被 smoke 覆盖）
+  - `/api/v1/app/*`
+  - `/api/v1/*`
+  - `/api/v1/admin/*`
+
+实践建议：
+- 前端新逻辑优先接 Connect
+- REST 仅在兼容性/外部调用场景保留或补丁修复
+- 改 E2E 时优先检查等待条件是否仍写成旧 REST 路径
+
+## 4. 生成链路（改契约时必须看）
+
+### 4.1 Connect / Protobuf（Buf）
+
+修改 `proto/npan/v1/api.proto` 后：
 
 ```bash
-# Go backend
-go test ./...
+buf lint
+buf generate
+```
 
-# Frontend (bun)
+会更新：
+- `gen/go/npan/v1/*.pb.go`
+- `gen/go/npan/v1/npanv1connect/*.connect.go`
+- `web/src/gen/**/*`
+
+### 4.2 REST / OpenAPI（兼容 DTO + Zod）
+
+修改 `api/openapi.yaml` 后：
+
+```bash
+make generate
+```
+
+会更新：
+- `api/types.gen.go`
+- `web/src/api/generated/*`
+
+校验生成产物是否提交完整：
+
+```bash
+make generate-check
+```
+
+## 5. 开发与验证命令（默认使用 Bun）
+
+### 本地开发
+
+```bash
+# 启动依赖（Meilisearch）
+docker compose up -d meilisearch
+
+# 后端
+go run ./cmd/server
+
+# 前端（可选独立 dev）
+cd web && bun install && bun run dev
+```
+
+### 单元测试
+
+```bash
+# Go
+GOCACHE=/tmp/go-build go test ./...
+
+# Frontend
 cd web && bun vitest run
 ```
 
-### Smoke Tests (Docker)
-
-Requires Docker. Starts meilisearch + npan containers, runs 34 API endpoint checks.
+### Docker 冒烟 / E2E（推荐回归链）
 
 ```bash
+# 冒烟（34 项）
 docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
-BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh
-docker compose -f docker-compose.ci.yml down --volumes
-```
+./tests/smoke/smoke_test.sh
 
-### E2E Tests (Docker + Playwright)
-
-Requires Docker. Uses `mcr.microsoft.com/playwright` container against running services.
-The `playwright` service is behind the `e2e` profile.
-
-```bash
-# Start services (if not already running from smoke tests)
-docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
-
-# Run Playwright E2E (32 tests: admin auth, sync control, search, download, edge cases)
+# Playwright E2E（32 项）
 docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright
 
-# Cleanup
+# 清理
 docker compose -f docker-compose.ci.yml --profile e2e down --volumes
 ```
 
-Key env vars in `docker-compose.ci.yml`:
-- `E2E_ADMIN_API_KEY`: admin API key for authenticated tests
-- `BASE_URL`: target URL for Playwright (defaults to `http://npan:1323` inside Docker network)
-- `NPA_TOKEN`: dummy token (sync will start but upstream calls fail — expected)
+注意：
+- `tests/smoke/smoke_test.sh` 默认端口已对齐 `docker-compose.ci.yml`（`11323` / `19091`）
+- `docker-compose.yml`（开发/部署）端口仍是 `1323` / `9091`
 
-### CI
+## 6. 常见坑（迁移后高频）
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs in order:
-1. `unit-test-go` + `unit-test-frontend` + `generate-check` (parallel)
-2. `smoke-test` (needs all above)
-3. `e2e-test` (needs smoke-test)
+### 6.1 E2E 等待条件失效
+
+现象：`waitForRequest` / `waitForResponse` 大量超时。
+
+高概率原因：
+- 页面已经改为 Connect `POST /npan.v1.*`，但测试仍在等 REST `/api/v1/*`
+- Connect 请求参数在 JSON body 中，不在 URL query 上（例如 `page=2`）
+
+处理方式：
+- 先核对真实请求路径与 method
+- 优先校验 request body，而不是 URL query
+- 超时按场景收紧（3s/5s/10s），不要默认 30s
+
+### 6.2 生成代码不一致
+
+现象：测试通过但 CI `generate-check` 失败。
+
+排查顺序：
+1. 是否同时改了 `proto/...` 与 `api/openapi.yaml`（需要双链路生成）
+2. 是否漏跑 `buf generate`
+3. 是否漏跑 `make generate`
+4. 是否把生成目录完整提交（`gen/go`, `web/src/gen`, `web/src/api/generated`, `api/types.gen.go`）
+
+### 6.3 `go:embed` / 前端产物
+
+后端会嵌入前端构建产物（`web/dist`）。
+- 本地 `go run ./cmd/server` 前若无 `web/dist`，需要先构建前端或使用仓库已有产物
+- Dockerfile 会自动构建前端并复制到镜像
+
+## 7. 改动建议（给接手 agent）
+
+### 如果你在改前端功能
+
+优先阅读：
+- `web/src/routes/index.lazy.tsx`
+- `web/src/components/admin-sync-page.tsx`
+- `web/src/lib/connect-transport.ts`
+- `web/src/lib/connect-*-adapter.ts`
+
+并执行至少：
+```bash
+cd web && bun vitest run
+```
+
+### 如果你在改后端 API / 同步逻辑
+
+优先阅读：
+- `internal/httpx/server.go`
+- `internal/httpx/handlers*.go`
+- `internal/service/*`
+- `internal/indexer/*`
+
+并执行至少：
+```bash
+GOCACHE=/tmp/go-build go test ./...
+```
+
+### 如果你在改契约（字段/RPC）
+
+请同时考虑：
+- Connect protobuf 契约（Buf）
+- REST/OpenAPI 契约（OpenAPI + Zod）
+- E2E 与 smoke 的断言路径/请求格式是否需要更新
+
+## 8. 提交前最小检查单
+
+```bash
+# 1) 契约生成（如改了契约）
+buf lint && buf generate
+make generate-check
+
+# 2) 单测
+GOCACHE=/tmp/go-build go test ./...
+cd web && bun vitest run
+
+# 3) 长链路（改了接口/页面/鉴权/同步流程时）
+docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
+./tests/smoke/smoke_test.sh
+docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright
+docker compose -f docker-compose.ci.yml --profile e2e down --volumes
+```
+
+---
+
+如果你刚接手这个仓库，建议第一轮只做两件事：
+1. 跑通 `go test ./...` 与 `cd web && bun vitest run`
+2. 阅读 `internal/httpx/server.go` 和 `web/src/routes/index.lazy.tsx`，确认 Connect/REST 共存结构

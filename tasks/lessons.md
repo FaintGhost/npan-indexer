@@ -45,3 +45,8 @@
   - 当 `lint`/`typecheck` 失败时，先修复本轮引入的问题，再进入 smoke/E2E 长链路测试。
   - 测试代码中读取 `request.json()` 一律先用 `unknown`，再通过类型守卫收窄（如 `assertRecord`/`getRecord`）。
   - 禁止通过 `as` 或 `any` 绕过类型系统；若需从可空值读取，使用返回值型守卫（如 `requireValue`）而非断言。
+- 用户纠正：E2E 不应默认拉满超时，很多场景应快速失败。
+- 规则：
+  - `waitForRequest`/`waitForResponse` 默认使用短超时（优先 3s-5s），仅对已知慢路径使用 10s+。
+  - UI 断言超时按场景分级：即时交互 3s、常规异步 5s、确实重负载流程才给 10s。
+  - 出现批量超时时先检查“等待条件是否匹配当前协议/路径”（如 REST -> Connect 迁移），再考虑放宽超时。

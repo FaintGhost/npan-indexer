@@ -1,6 +1,26 @@
 import { test, expect, ADMIN_API_KEY } from "../fixtures/auth";
 import { AdminPage } from "../pages/admin-page";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAdminMethodRequest(
+  url: string,
+  methodName: "StartSync" | "CancelSync",
+): boolean {
+  return url.includes(`/npan.v1.AdminService/${methodName}`);
+}
+
+function isFullSyncMode(value: unknown): boolean {
+  return (
+    value === "SYNC_MODE_FULL" ||
+    value === "FULL" ||
+    value === 2 ||
+    value === "2"
+  );
+}
+
 test.describe("Admin 认证流程", () => {
   let adminPage: AdminPage;
 
@@ -38,7 +58,7 @@ test.describe("Admin 认证流程", () => {
     await adminPage.submitApiKey("wrong-key-00000");
     // Wait for server response and error
     await expect(page.getByText("API Key 无效")).toBeVisible({
-      timeout: 10_000,
+      timeout: 5_000,
     });
     // Dialog should still be visible
     await expect(adminPage.dialog).toBeVisible();
@@ -129,7 +149,8 @@ test.describe("Admin 同步控制", () => {
     // Monitor the POST request
     const syncRequest = authenticatedPage.waitForRequest(
       (req) =>
-        req.url().includes("/api/v1/admin/sync") && req.method() === "POST",
+        req.method() === "POST" && isAdminMethodRequest(req.url(), "StartSync"),
+      { timeout: 5_000 },
     );
 
     // Click start sync
@@ -138,16 +159,21 @@ test.describe("Admin 同步控制", () => {
 
     // Verify request has correct headers and body
     expect(request.headers()["x-api-key"]).toBeTruthy();
-    const body = request.postDataJSON();
-    expect(body.mode).toBe("full");
+    const body: unknown = request.postDataJSON();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) {
+      return;
+    }
+    expect(isFullSyncMode(body.mode)).toBe(true);
   });
 
   test("取消同步触发确认对话框", async ({ authenticatedPage }) => {
     // Start sync first
     const syncResponse = authenticatedPage.waitForResponse(
       (r) =>
-        r.url().includes("/api/v1/admin/sync") &&
-        r.request().method() === "POST",
+        r.request().method() === "POST" &&
+        isAdminMethodRequest(r.url(), "StartSync"),
+      { timeout: 5_000 },
     );
     await adminPage.startSyncButton.click();
     await syncResponse;
@@ -175,23 +201,25 @@ test.describe("Admin 同步控制", () => {
       "确认取消当前正在进行的同步任务",
     );
 
-    // Monitor DELETE request
-    const deleteRequest = authenticatedPage.waitForRequest(
+    // Monitor CancelSync Connect request (POST)
+    const cancelRequest = authenticatedPage.waitForRequest(
       (req) =>
-        req.url().includes("/api/v1/admin/sync") && req.method() === "DELETE",
+        req.method() === "POST" && isAdminMethodRequest(req.url(), "CancelSync"),
+      { timeout: 5_000 },
     );
 
     // Click confirm button in dialog
     await authenticatedPage.getByRole("button", { name: "确认取消" }).click();
-    await deleteRequest;
+    await cancelRequest;
   });
 
   test("取消确认框点击取消不发请求", async ({ authenticatedPage }) => {
     // Start sync first
     const syncResponse = authenticatedPage.waitForResponse(
       (r) =>
-        r.url().includes("/api/v1/admin/sync") &&
-        r.request().method() === "POST",
+        r.request().method() === "POST" &&
+        isAdminMethodRequest(r.url(), "StartSync"),
+      { timeout: 5_000 },
     );
     await adminPage.startSyncButton.click();
     await syncResponse;
@@ -213,14 +241,14 @@ test.describe("Admin 同步控制", () => {
     // Wait for confirm dialog to appear
     await expect(adminPage.dialog).toBeVisible();
 
-    // Track if DELETE is sent
-    let deleteSent = false;
+    // Track if CancelSync request is sent
+    let cancelSent = false;
     authenticatedPage.on("request", (req) => {
       if (
-        req.url().includes("/api/v1/admin/sync") &&
-        req.method() === "DELETE"
+        req.method() === "POST" &&
+        isAdminMethodRequest(req.url(), "CancelSync")
       ) {
-        deleteSent = true;
+        cancelSent = true;
       }
     });
 
@@ -230,17 +258,18 @@ test.describe("Admin 同步控制", () => {
     // Dialog should close
     await expect(adminPage.dialog).not.toBeVisible();
 
-    // Wait briefly and verify no DELETE was sent
-    await authenticatedPage.waitForTimeout(1000);
-    expect(deleteSent).toBe(false);
+    // Wait briefly and verify no CancelSync request was sent
+    await authenticatedPage.waitForTimeout(500);
+    expect(cancelSent).toBe(false);
   });
 
   test("启动同步后 UI 自动显示 running 状态", async ({ authenticatedPage }) => {
     // Monitor POST request and response
     const syncResponse = authenticatedPage.waitForResponse(
       (r) =>
-        r.url().includes("/api/v1/admin/sync") &&
-        r.request().method() === "POST",
+        r.request().method() === "POST" &&
+        isAdminMethodRequest(r.url(), "StartSync"),
+      { timeout: 5_000 },
     );
 
     // Click start sync
@@ -252,7 +281,7 @@ test.describe("Admin 同步控制", () => {
     // UI should automatically show "同步进行中" without page.reload()
     // The button text changes to "同步进行中" when isRunning is true
     await expect(adminPage.startSyncButton).toContainText("同步进行中", {
-      timeout: 10_000,
+      timeout: 5_000,
     });
   });
 });
