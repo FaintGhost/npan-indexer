@@ -24,33 +24,13 @@ describe('useAdminAuth', () => {
 
   it('validates and stores valid key', async () => {
     server.use(
-      http.get('/api/v1/admin/sync', ({ request }) => {
+      http.post('/npan.v1.AdminService/GetSyncProgress', ({ request }) => {
         const key = request.headers.get('X-API-Key')
         if (key === 'valid-key') {
-          return HttpResponse.json({
-            status: 'idle',
-            startedAt: 0,
-            updatedAt: 0,
-            meiliHost: 'http://localhost:7700',
-            meiliIndex: 'documents',
-            checkpointTemplate: '',
-            roots: [],
-            completedRoots: [],
-            aggregateStats: {
-              foldersVisited: 0,
-              filesIndexed: 0,
-              filesDiscovered: 0,
-              skippedFiles: 0,
-              pagesFetched: 0,
-              failedRequests: 0,
-              startedAt: 0,
-              endedAt: 0,
-            },
-            rootProgress: {},
-          })
+          return HttpResponse.json({})
         }
         return HttpResponse.json(
-          { code: 'UNAUTHORIZED', message: 'Invalid API key' },
+          { code: 'unauthenticated', message: 'Invalid API key' },
           { status: 401 },
         )
       }),
@@ -69,9 +49,9 @@ describe('useAdminAuth', () => {
 
   it('rejects invalid key', async () => {
     server.use(
-      http.get('/api/v1/admin/sync', () => {
+      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
         return HttpResponse.json(
-          { code: 'UNAUTHORIZED', message: 'Invalid' },
+          { code: 'unauthenticated', message: 'Invalid' },
           { status: 401 },
         )
       }),

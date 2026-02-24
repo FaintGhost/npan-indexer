@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../tests/mocks/server'
+import { createTestProvider } from '../tests/test-providers'
 import { SearchPage } from '../routes/index.lazy'
 
 // Helper to create search response
@@ -27,20 +28,46 @@ function makeSearchResponse(count: number, total: number) {
   }
 }
 
+function toConnectSearchResponse(items: ReturnType<typeof makeSearchResponse>['items'], total: number) {
+  return {
+    result: {
+      items: items.map((item) => ({
+        docId: item.doc_id,
+        sourceId: String(item.source_id),
+        type: item.type === 'folder' ? 'ITEM_TYPE_FOLDER' : 'ITEM_TYPE_FILE',
+        name: item.name,
+        pathText: item.path_text,
+        parentId: String(item.parent_id),
+        modifiedAt: String(item.modified_at),
+        createdAt: String(item.created_at),
+        size: String(item.size),
+        sha1: item.sha1,
+        inTrash: item.in_trash,
+        isDeleted: item.is_deleted,
+        highlightedName: item.highlighted_name,
+      })),
+      total: String(total),
+    },
+  }
+}
+
 describe('SearchPage', () => {
+  const wrapper = createTestProvider()
+
   it('shows initial state on load', () => {
-    render(<SearchPage />)
+    render(<SearchPage />, { wrapper })
     expect(screen.getByText('等待探索')).toBeInTheDocument()
   })
 
   it('shows results after search', async () => {
     server.use(
-      http.get('/api/v1/app/search', () => {
-        return HttpResponse.json(makeSearchResponse(3, 3))
+      http.post('/npan.v1.AppService/AppSearch', () => {
+        const response = makeSearchResponse(3, 3)
+        return HttpResponse.json(toConnectSearchResponse(response.items, response.total))
       }),
     )
 
-    render(<SearchPage />)
+    render(<SearchPage />, { wrapper })
     const user = userEvent.setup()
     const input = screen.getByRole('searchbox')
     await user.type(input, 'test{Enter}')
@@ -54,12 +81,12 @@ describe('SearchPage', () => {
 
   it('shows no results state', async () => {
     server.use(
-      http.get('/api/v1/app/search', () => {
-        return HttpResponse.json({ items: [], total: 0 })
+      http.post('/npan.v1.AppService/AppSearch', () => {
+        return HttpResponse.json(toConnectSearchResponse([], 0))
       }),
     )
 
-    render(<SearchPage />)
+    render(<SearchPage />, { wrapper })
     const user = userEvent.setup()
     await user.type(screen.getByRole('searchbox'), 'nonexistent{Enter}')
 
@@ -71,15 +98,15 @@ describe('SearchPage', () => {
 
   it('shows error state on API failure', async () => {
     server.use(
-      http.get('/api/v1/app/search', () => {
+      http.post('/npan.v1.AppService/AppSearch', () => {
         return HttpResponse.json(
-          { code: 'INTERNAL_ERROR', message: 'Server error' },
+          { code: 'internal', message: 'Server error' },
           { status: 500 },
         )
       }),
     )
 
-    render(<SearchPage />)
+    render(<SearchPage />, { wrapper })
     const user = userEvent.setup()
     await user.type(screen.getByRole('searchbox'), 'test{Enter}')
 
@@ -90,12 +117,13 @@ describe('SearchPage', () => {
 
   it('returns to initial state on clear', async () => {
     server.use(
-      http.get('/api/v1/app/search', () => {
-        return HttpResponse.json(makeSearchResponse(1, 1))
+      http.post('/npan.v1.AppService/AppSearch', () => {
+        const response = makeSearchResponse(1, 1)
+        return HttpResponse.json(toConnectSearchResponse(response.items, response.total))
       }),
     )
 
-    render(<SearchPage />)
+    render(<SearchPage />, { wrapper })
     const user = userEvent.setup()
     await user.type(screen.getByRole('searchbox'), 'test{Enter}')
 
@@ -113,12 +141,13 @@ describe('SearchPage', () => {
 
   it('shows result count', async () => {
     server.use(
-      http.get('/api/v1/app/search', () => {
-        return HttpResponse.json(makeSearchResponse(3, 50))
+      http.post('/npan.v1.AppService/AppSearch', () => {
+        const response = makeSearchResponse(3, 50)
+        return HttpResponse.json(toConnectSearchResponse(response.items, response.total))
       }),
     )
 
-    render(<SearchPage />)
+    render(<SearchPage />, { wrapper })
     const user = userEvent.setup()
     await user.type(screen.getByRole('searchbox'), 'test{Enter}')
 

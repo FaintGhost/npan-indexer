@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
-import { server } from "../tests/mocks/server";
-import { useSyncProgress } from "./use-sync-progress";
-import type { InspectRootsResponse } from "@/lib/sync-schemas";
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, act, waitFor } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
+import { server } from '../tests/mocks/server'
+import { createTestProvider } from '../tests/test-providers'
+import { useSyncProgress } from './use-sync-progress'
+import type { InspectRootsResponse, SyncProgress } from '@/lib/sync-schemas'
 
 function assertRecord(value: unknown): asserts value is Record<string, unknown> {
   if (typeof value !== "object" || value === null) {
@@ -12,8 +13,8 @@ function assertRecord(value: unknown): asserts value is Record<string, unknown> 
 }
 
 function getRecord(value: unknown): Record<string, unknown> {
-  assertRecord(value);
-  return value;
+  assertRecord(value)
+  return value
 }
 
 function requireValue<T>(
@@ -21,9 +22,9 @@ function requireValue<T>(
   message: string,
 ): NonNullable<T> {
   if (value == null) {
-    throw new Error(message);
+    throw new Error(message)
   }
-  return value;
+  return value
 }
 
 const validProgress = {
@@ -43,23 +44,69 @@ const validProgress = {
     endedAt: 0,
   },
   rootProgress: {},
-};
+}
+
+function toProtoStatus(status: SyncProgress['status']) {
+  switch (status) {
+    case 'running':
+      return 'SYNC_STATUS_RUNNING'
+    case 'done':
+      return 'SYNC_STATUS_DONE'
+    case 'error':
+      return 'SYNC_STATUS_ERROR'
+    case 'cancelled':
+      return 'SYNC_STATUS_CANCELLED'
+    case 'interrupted':
+      return 'SYNC_STATUS_INTERRUPTED'
+    case 'idle':
+    default:
+      return 'SYNC_STATUS_IDLE'
+  }
+}
+
+function toProtoMode(mode: NonNullable<SyncProgress['mode']>) {
+  switch (mode) {
+    case 'full':
+      return 'SYNC_MODE_FULL'
+    case 'incremental':
+      return 'SYNC_MODE_INCREMENTAL'
+    case 'auto':
+    default:
+      return 'SYNC_MODE_AUTO'
+  }
+}
+
+function toConnectProgressResponse(progress: Record<string, unknown>) {
+  const state = { ...progress }
+  if (typeof state.status === 'string') {
+    state.status = toProtoStatus(state.status as SyncProgress['status'])
+  }
+  if (typeof state.mode === 'string') {
+    state.mode = toProtoMode(state.mode as NonNullable<SyncProgress['mode']>)
+  }
+  return { state }
+}
 
 describe("useSyncProgress", () => {
-  const headers = { "X-API-Key": "test-key" };
+  const headers = { 'X-API-Key': 'test-key' }
+  const wrapper = createTestProvider(headers)
+
+  function renderSyncHook() {
+    return renderHook(() => useSyncProgress(headers), { wrapper })
+  }
 
   beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-  });
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
 
   afterEach(() => {
-    vi.useRealTimers();
-  });
+    vi.useRealTimers()
+  })
 
   it("fetches initial progress", async () => {
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json({
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse({
           ...validProgress,
           status: "done",
           roots: [100, 200],
@@ -68,11 +115,11 @@ describe("useSyncProgress", () => {
             ...validProgress.aggregateStats,
             filesIndexed: 500,
           },
-        });
+        }));
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -83,25 +130,25 @@ describe("useSyncProgress", () => {
 
   it("prefers timestamp sidecar fields when present", async () => {
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json({
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse({
           ...validProgress,
           startedAt: 1,
           updatedAt: 2,
-          startedAtTs: { seconds: 1700000000, nanos: 123000000 },
-          updatedAtTs: { seconds: 1700000005, nanos: 456000000 },
+          startedAtTs: "2023-11-14T22:13:20.123Z",
+          updatedAtTs: "2023-11-14T22:13:25.456Z",
           aggregateStats: {
             ...validProgress.aggregateStats,
             startedAt: 3,
             endedAt: 4,
-            startedAtTs: { seconds: 1700000001, nanos: 0 },
-            endedAtTs: { seconds: 1700000002, nanos: 250000000 },
+            startedAtTs: "2023-11-14T22:13:21Z",
+            endedAtTs: "2023-11-14T22:13:22.250Z",
           },
-        });
+        }));
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -119,16 +166,16 @@ describe("useSyncProgress", () => {
   it("starts sync", async () => {
     let postCalled = false;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json(validProgress);
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress));
       }),
-      http.post("/api/v1/admin/sync", () => {
+      http.post("/npan.v1.AdminService/StartSync", () => {
         postCalled = true;
         return HttpResponse.json({ message: "Sync started" });
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -141,13 +188,13 @@ describe("useSyncProgress", () => {
     expect(postCalled).toBe(true);
   });
 
-  it("sends resume_progress=false when mode is full", async () => {
+  it("sends resumeProgress=false when mode is full", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json(validProgress);
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress));
       }),
-      http.post("/api/v1/admin/sync", async ({ request }) => {
+      http.post("/npan.v1.AdminService/StartSync", async ({ request }) => {
         const body: unknown = await request.json();
         assertRecord(body);
         capturedBody = body;
@@ -155,7 +202,7 @@ describe("useSyncProgress", () => {
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -167,17 +214,17 @@ describe("useSyncProgress", () => {
 
     expect(capturedBody).not.toBeNull();
     const payload = getRecord(capturedBody);
-    expect(payload.resume_progress).toBe(false);
-    expect(payload.mode).toBe("full");
+    expect(payload.resumeProgress).toBe(false);
+    expect(payload.mode).toBe("SYNC_MODE_FULL");
   });
 
-  it("sends resume_progress=true when mode is auto", async () => {
+  it("sends resumeProgress=true when mode is auto", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json(validProgress);
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress));
       }),
-      http.post("/api/v1/admin/sync", async ({ request }) => {
+      http.post("/npan.v1.AdminService/StartSync", async ({ request }) => {
         const body: unknown = await request.json();
         assertRecord(body);
         capturedBody = body;
@@ -185,7 +232,7 @@ describe("useSyncProgress", () => {
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -197,17 +244,17 @@ describe("useSyncProgress", () => {
 
     expect(capturedBody).not.toBeNull();
     const payload = getRecord(capturedBody);
-    expect(payload.resume_progress).toBe(true);
-    expect(payload.mode).toBe("auto");
+    expect(payload.resumeProgress).toBe(true);
+    expect(payload.mode).toBe("SYNC_MODE_AUTO");
   });
 
-  it("sends force_rebuild when forceRebuild is true", async () => {
+  it("sends forceRebuild when forceRebuild is true", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json(validProgress);
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress));
       }),
-      http.post("/api/v1/admin/sync", async ({ request }) => {
+      http.post("/npan.v1.AdminService/StartSync", async ({ request }) => {
         const body: unknown = await request.json();
         assertRecord(body);
         capturedBody = body;
@@ -215,7 +262,7 @@ describe("useSyncProgress", () => {
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -227,17 +274,17 @@ describe("useSyncProgress", () => {
 
     expect(capturedBody).not.toBeNull();
     const payload = getRecord(capturedBody);
-    expect(payload.force_rebuild).toBe(true);
-    expect(payload.resume_progress).toBe(false);
+    expect(payload.forceRebuild).toBe(true);
+    expect(payload.resumeProgress).toBe(false);
   });
 
-  it("sends include_departments=false when root_folder_ids is provided", async () => {
+  it("sends includeDepartments=false when rootFolderIds is provided", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json(validProgress);
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress));
       }),
-      http.post("/api/v1/admin/sync", async ({ request }) => {
+      http.post("/npan.v1.AdminService/StartSync", async ({ request }) => {
         const body: unknown = await request.json();
         assertRecord(body);
         capturedBody = body;
@@ -245,7 +292,7 @@ describe("useSyncProgress", () => {
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -257,42 +304,42 @@ describe("useSyncProgress", () => {
 
     expect(capturedBody).not.toBeNull();
     const payload = getRecord(capturedBody);
-    expect(payload.root_folder_ids).toEqual([123456]);
-    expect(payload.include_departments).toBe(false);
-    expect(payload.preserve_root_catalog).toBe(true);
+    expect(payload.rootFolderIds).toEqual(["123456"]);
+    expect(payload.includeDepartments).toBe(false);
+    expect(payload.preserveRootCatalog).toBe(true);
   });
 
   it("inspects roots without starting sync", async () => {
     let inspectCalled = false;
     let syncPostCalled = false;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json(validProgress);
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress));
       }),
-      http.post("/api/v1/admin/roots/inspect", async ({ request }) => {
+      http.post("/npan.v1.AdminService/InspectRoots", async ({ request }) => {
         inspectCalled = true;
         const body: unknown = await request.json();
         assertRecord(body);
-        expect(body.folder_ids).toEqual([1001, 1002]);
+        expect(body.folderIds).toEqual(["1001", "1002"]);
         return HttpResponse.json({
           items: [
             {
-              folder_id: 1001,
+              folderId: "1001",
               name: "A",
-              item_count: 10,
-              estimated_total_docs: 11,
+              itemCount: "10",
+              estimatedTotalDocs: "11",
             },
           ],
-          errors: [{ folder_id: 1002, message: "获取目录信息失败" }],
+          errors: [{ folderId: "1002", message: "获取目录信息失败" }],
         });
       }),
-      http.post("/api/v1/admin/sync", () => {
+      http.post("/npan.v1.AdminService/StartSync", () => {
         syncPostCalled = true;
         return HttpResponse.json({ message: "Sync started" });
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -317,13 +364,13 @@ describe("useSyncProgress", () => {
     expect(result.current.progress?.catalogRoots).toContain(1001);
   });
 
-  it("omits force_rebuild when forceRebuild is false", async () => {
+  it("omits forceRebuild when forceRebuild is false", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json(validProgress);
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress));
       }),
-      http.post("/api/v1/admin/sync", async ({ request }) => {
+      http.post("/npan.v1.AdminService/StartSync", async ({ request }) => {
         const body: unknown = await request.json();
         assertRecord(body);
         capturedBody = body;
@@ -331,7 +378,7 @@ describe("useSyncProgress", () => {
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -343,22 +390,22 @@ describe("useSyncProgress", () => {
 
     expect(capturedBody).not.toBeNull();
     const payload = getRecord(capturedBody);
-    expect(payload.force_rebuild).toBeUndefined();
+    expect(payload.forceRebuild).toBeUndefined();
   });
 
   it("cancels sync", async () => {
     let cancelCalled = false;
     server.use(
-      http.get("/api/v1/admin/sync", () => {
-        return HttpResponse.json({ ...validProgress, status: "running" });
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
+        return HttpResponse.json(toConnectProgressResponse({ ...validProgress, status: "running" }));
       }),
-      http.delete("/api/v1/admin/sync", () => {
+      http.post("/npan.v1.AdminService/CancelSync", () => {
         cancelCalled = true;
         return HttpResponse.json({ message: "Cancelled" });
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.progress).not.toBeNull();
@@ -373,15 +420,15 @@ describe("useSyncProgress", () => {
 
   it("sets error on failed request", async () => {
     server.use(
-      http.get("/api/v1/admin/sync", () => {
+      http.post("/npan.v1.AdminService/GetSyncProgress", () => {
         return HttpResponse.json(
-          { code: "INTERNAL_ERROR", message: "Server error" },
+          { code: "internal", message: "Server error" },
           { status: 500 },
         );
       }),
     );
 
-    const { result } = renderHook(() => useSyncProgress(headers));
+    const { result } = renderSyncHook();
 
     await waitFor(() => {
       expect(result.current.error).toBeTruthy();
@@ -405,16 +452,16 @@ describe("useSyncProgress", () => {
     it("startSync 后 progress 立即变为 running（乐观更新）", async () => {
       let getCalls = 0;
       server.use(
-        http.get("/api/v1/admin/sync", () => {
+        http.post("/npan.v1.AdminService/GetSyncProgress", () => {
           getCalls++;
-          return HttpResponse.json(doneProgress);
+          return HttpResponse.json(toConnectProgressResponse(doneProgress));
         }),
-        http.post("/api/v1/admin/sync", () => {
-          return HttpResponse.json({ message: "ok" }, { status: 202 });
+        http.post("/npan.v1.AdminService/StartSync", () => {
+          return HttpResponse.json({ message: "ok" });
         }),
       );
 
-      const { result } = renderHook(() => useSyncProgress(headers));
+      const { result } = renderSyncHook();
 
       // Wait for initial fetch
       await waitFor(() => {
@@ -433,16 +480,16 @@ describe("useSyncProgress", () => {
     it("startSync 后轮询不因旧数据停止（宽限期内）", async () => {
       let getCalls = 0;
       server.use(
-        http.get("/api/v1/admin/sync", () => {
+        http.post("/npan.v1.AdminService/GetSyncProgress", () => {
           getCalls++;
-          return HttpResponse.json(doneProgress);
+          return HttpResponse.json(toConnectProgressResponse(doneProgress));
         }),
-        http.post("/api/v1/admin/sync", () => {
-          return HttpResponse.json({ message: "ok" }, { status: 202 });
+        http.post("/npan.v1.AdminService/StartSync", () => {
+          return HttpResponse.json({ message: "ok" });
         }),
       );
 
-      const { result } = renderHook(() => useSyncProgress(headers));
+      const { result } = renderSyncHook();
 
       // Wait for initial fetch
       await waitFor(() => {
@@ -477,16 +524,16 @@ describe("useSyncProgress", () => {
     it("宽限期结束后轮询正常停止", async () => {
       let getCalls = 0;
       server.use(
-        http.get("/api/v1/admin/sync", () => {
+        http.post("/npan.v1.AdminService/GetSyncProgress", () => {
           getCalls++;
-          return HttpResponse.json(doneProgress);
+          return HttpResponse.json(toConnectProgressResponse(doneProgress));
         }),
-        http.post("/api/v1/admin/sync", () => {
-          return HttpResponse.json({ message: "ok" }, { status: 202 });
+        http.post("/npan.v1.AdminService/StartSync", () => {
+          return HttpResponse.json({ message: "ok" });
         }),
       );
 
-      const { result } = renderHook(() => useSyncProgress(headers));
+      const { result } = renderSyncHook();
 
       // Wait for initial fetch
       await waitFor(() => {

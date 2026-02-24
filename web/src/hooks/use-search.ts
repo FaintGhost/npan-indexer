@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { apiGet } from '@/lib/api-client'
-import { SearchResponseSchema } from '@/lib/schemas'
+import { ConnectError } from '@connectrpc/connect'
+import { useMutation } from '@connectrpc/connect-query'
+import { appSearch as appSearchMethod } from '@/gen/npan/v1/api-AppService_connectquery'
+import { fromProtoAppSearchResponse } from '@/lib/connect-app-adapter'
 import type { IndexDocument } from '@/lib/schemas'
 
 const DEBOUNCE_MS = 280
@@ -15,30 +17,27 @@ export function useSearch() {
   const [error, setError] = useState<string | null>(null)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
   const seqRef = useRef(0)
+  const searchMutation = useMutation(appSearchMethod, {
+    retry: false,
+  })
 
   const hasMore = items.length < total
 
   const doSearch = useCallback(async (q: string, p: number, append: boolean) => {
     if (!q.trim()) return
 
-    // Cancel any in-flight request
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-
     const seq = ++seqRef.current
     setLoading(true)
     setError(null)
 
     try {
-      const result = await apiGet(
-        '/api/v1/app/search',
-        { query: q, page: p, page_size: PAGE_SIZE },
-        SearchResponseSchema,
-        { signal: controller.signal },
-      )
+      const response = await searchMutation.mutateAsync({
+        query: q,
+        page: BigInt(p),
+        pageSize: BigInt(PAGE_SIZE),
+      })
+      const result = fromProtoAppSearchResponse(response)
 
       // Ignore stale responses
       if (seq !== seqRef.current) return
@@ -56,14 +55,17 @@ export function useSearch() {
       setPage(p)
     } catch (err) {
       if (seq !== seqRef.current) return
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      if (err instanceof ConnectError) {
+        setError(err.rawMessage || err.message)
+      } else {
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      }
     } finally {
       if (seq === seqRef.current) {
         setLoading(false)
       }
     }
-  }, [])
+  }, [searchMutation])
 
   const setQuery = useCallback((q: string) => {
     setQueryState(q)
@@ -98,7 +100,6 @@ export function useSearch() {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
-    abortRef.current?.abort()
     setQueryState('')
     setItems([])
     setTotal(0)
@@ -112,7 +113,6 @@ export function useSearch() {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current)
       }
-      abortRef.current?.abort()
     }
   }, [])
 

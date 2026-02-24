@@ -1,8 +1,11 @@
 import { useState, useCallback } from 'react'
-import { apiGet, ApiError } from '@/lib/api-client'
-import { SyncProgressSchema } from '@/lib/sync-schemas'
-
-const STORAGE_KEY = 'npan_admin_api_key'
+import { Code, ConnectError } from '@connectrpc/connect'
+import { callUnaryMethod } from '@connectrpc/connect-query-core'
+import { getSyncProgress as getSyncProgressMethod } from '@/gen/npan/v1/api-AdminService_connectquery'
+import {
+  ADMIN_API_KEY_STORAGE_KEY as STORAGE_KEY,
+  createNpanTransport,
+} from '@/lib/connect-transport'
 
 export function useAdminAuth() {
   const [apiKey, setApiKey] = useState<string | null>(
@@ -23,25 +26,21 @@ export function useAdminAuth() {
     setError(null)
 
     try {
-      await apiGet(
-        '/api/v1/admin/sync',
-        {},
-        SyncProgressSchema,
-        { headers: { 'X-API-Key': key } },
-      )
+      const transport = createNpanTransport({ 'X-API-Key': key })
+      await callUnaryMethod(transport, getSyncProgressMethod, {})
       localStorage.setItem(STORAGE_KEY, key)
       setApiKey(key)
       setLoading(false)
       return true
     } catch (err) {
       setLoading(false)
-      if (err instanceof ApiError && err.status === 404) {
+      if (err instanceof ConnectError && err.code === Code.NotFound) {
         // 404 means auth passed but no sync progress yet — treat as success
         localStorage.setItem(STORAGE_KEY, key)
         setApiKey(key)
         return true
       }
-      if (err instanceof ApiError && err.status === 401) {
+      if (err instanceof ConnectError && err.code === Code.Unauthenticated) {
         setError('API Key 无效')
       } else {
         setError(err instanceof Error ? err.message : '验证失败')

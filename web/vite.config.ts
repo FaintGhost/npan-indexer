@@ -33,6 +33,10 @@ export default defineConfig({
         target: 'http://localhost:1323',
         changeOrigin: true,
       },
+      '^/npan\\.v1\\.': {
+        target: 'http://localhost:1323',
+        changeOrigin: true,
+      },
     },
   },
 })

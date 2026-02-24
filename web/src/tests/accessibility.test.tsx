@@ -7,8 +7,11 @@ import { ApiKeyDialog } from '../components/api-key-dialog'
 import { SearchInput } from '../components/search-input'
 import { http, HttpResponse } from 'msw'
 import { server } from './mocks/server'
+import { createTestProvider } from './test-providers'
 
 describe('Accessibility', () => {
+  const wrapper = createTestProvider()
+
   it('search input has proper aria-label', () => {
     render(
       <SearchInput value="" onChange={() => {}} onSubmit={() => {}} onClear={() => {}} />,
@@ -44,11 +47,11 @@ describe('Accessibility', () => {
 
   it('search page results area exists', () => {
     server.use(
-      http.get('/api/v1/app/search', () => {
-        return HttpResponse.json({ items: [], total: 0 })
+      http.post('/npan.v1.AppService/AppSearch', () => {
+        return HttpResponse.json({ result: { items: [], total: '0' } })
       }),
     )
-    render(<SearchPage />)
+    render(<SearchPage />, { wrapper })
     // Initial state should render without errors
     expect(screen.getByText('等待探索')).toBeInTheDocument()
   })

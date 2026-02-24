@@ -547,3 +547,100 @@
   - 当前改动覆盖的是 CORS 配置 helper；若未来需要跨域直连（非同源/非 dev proxy），需确认服务启动路径已实际挂载 `middleware.CORSWithConfig(CORSConfig(...))`。
 - 非本轮（记录）：
   - Validation 错误结构化为 `errdetails.BadRequest` 属体验优化项，后续单独设计实施。
+
+## 新任务：Connect-Query 前端迁移（Stage 4 / Admin 第一批）
+
+- [x] 1. 复核新 review 与当前代码状态，确认 CORS 项已完成、迁移入口为 Admin
+- [x] 2. 在 `web/src/main.tsx` 接入 `TransportProvider + QueryClientProvider`
+- [x] 3. 将 `useSyncProgress` 的网络层迁移为 `@connectrpc/connect-query`（保持外部 API 不变）
+- [x] 4. 增加 proto-to-UI 适配层，处理 enum/int64/timestamp 到现有 UI 数据结构
+- [x] 5. 更新 Admin 相关单测（provider wrapper + Connect 路由 mock）并通过回归
+- [x] 6. 回填本轮 Review 结果与验证命令
+
+## Review（Connect-Query 前端迁移 / 实施结果）
+
+- 目标：
+  - 开始 Stage 4 前端迁移，优先替换 Admin 同步链路，减少手写 REST fetch 逻辑。
+- 范围（第一批）：
+  - `web/src/main.tsx`
+  - `web/src/hooks/use-sync-progress.ts`
+  - `web/src/components/admin-page.test.tsx`
+  - `web/src/hooks/use-sync-progress.test.ts`
+  - 新增 Connect 适配层/测试辅助文件（按实现落地）
+- 关键实现：
+  - 全局接入 Connect Query Provider：
+    - `web/src/main.tsx` 包裹 `TransportProvider + QueryClientProvider`
+    - 新增 `web/src/lib/connect-transport.ts`（全局 `QueryClient` / Connect transport / API Key 拦截器）
+  - Admin Hook 网络层迁移：
+    - `web/src/hooks/use-sync-progress.ts` 改为使用 `@connectrpc/connect-query` 的 `useQuery/useMutation`
+    - 保留外部返回 API 与轮询/乐观更新行为，`AdminSyncPage` 无需重写
+  - Proto 适配层：
+    - 新增 `web/src/lib/connect-admin-adapter.ts`
+    - 处理 `enum`（`SyncStatus`/`SyncMode`）、`int64(bigint)`、`Timestamp` 到现有 UI schema 结构的映射
+  - 生成产物与路径修复：
+    - `buf.gen.yaml` 中 TS 插件输出路径切换到 `web/src/gen`
+    - `buf.build/bufbuild/es` 插件开启 `include_imports: true`，补齐 `buf/validate/validate_pb.ts`
+    - 解决前端导入 `api_pb.ts` 时的 `buf/validate` 悬空依赖问题
+  - 测试辅助：
+    - 新增 `web/src/tests/test-providers.tsx`，为组件/Hook 测试提供 QueryClient + Transport Provider
+  - 本地开发代理：
+    - `web/vite.config.ts` 增加 `^/npan\\.v1\\.` 代理到后端，支持 Vite dev 下 Connect 路由
+- 测试改造：
+  - `web/src/hooks/use-sync-progress.test.ts`
+    - 增加 Provider wrapper
+    - 将 Admin 同步链路 mock 从 REST 路由切换到 Connect 路由
+    - 适配 Connect 的 proto JSON（enum 名称、int64 字符串、Timestamp RFC3339）
+  - `web/src/components/admin-page.test.tsx`
+    - 增加 Provider wrapper
+    - Admin 进度/启动/目录详情改为 Connect mock（`useAdminAuth` 在下一批次已迁移到 Connect）
+- 验证：
+  - `XDG_CACHE_HOME=/tmp/.cache BUF_CACHE_DIR=/tmp/.cache/buf ./.bin/buf generate` 通过
+  - `XDG_CACHE_HOME=/tmp/.cache BUF_CACHE_DIR=/tmp/.cache/buf ./.bin/buf lint` 通过
+  - `cd web && bun vitest run src/hooks/use-sync-progress.test.ts src/components/admin-page.test.tsx` 通过（19 tests）
+  - `cd web && bun vitest run` 通过（22 files / 189 tests）
+  - `git diff --check` 通过
+- 备注：
+  - `cd web && bun run typecheck` 当前仍失败（缺少 `routeTree.gen` / 路由类型未生成），与本轮 Connect 迁移改动无直接关系，属于现有前端生成链路前置条件问题。
+- 兼容原则：
+  - `AdminSyncPage` 组件层尽量不改，先保持 `useSyncProgress` 返回结构稳定；
+  - 先完成 Admin，再评估 Search 迁移与旧 `api-client` 清理窗口。
+
+## 新任务：Connect-Query 前端迁移（Stage 4 / Search + Admin Auth）
+
+- [x] 1. 盘点 `api-client` 在前端的剩余使用点，确认目标为 `use-search` + `use-admin-auth`
+- [x] 2. 新增 App proto-to-UI 适配层（搜索结果映射）
+- [x] 3. 将 `use-search` 迁移到 Connect（保持 debounce/分页/去重行为）
+- [x] 4. 将 `use-admin-auth` 的 API Key 校验迁移到 Connect 调用
+- [x] 5. 更新 Search/AdminAuth 相关测试（Connect 路由 mock / provider wrapper）并回归
+- [x] 6. 回填本轮 Review 结果与验证记录
+
+## Review（Connect-Query 前端迁移 / Search + Admin Auth）
+
+- 目标：
+  - 将 Search 与 Admin 鉴权链路从 `api-client` 切到 Connect，收敛手写 REST 调用。
+- 范围：
+  - `web/src/hooks/use-search.ts`
+  - `web/src/hooks/use-admin-auth.ts`
+  - `web/src/lib/connect-app-adapter.ts`
+  - `web/src/hooks/use-search.test.ts`
+  - `web/src/components/search-page.test.tsx`
+  - `web/src/hooks/use-admin-auth.test.ts`
+  - `web/src/components/admin-page.test.tsx`
+  - `web/src/tests/accessibility.test.tsx`
+- 关键改动：
+  - `use-search` 改为 `@connectrpc/connect-query` 的 `useMutation(appSearch)`，保留：
+    - debounce（280ms）
+    - loadMore 分页
+    - 按 `source_id` 去重
+    - `searchImmediate`/`reset` 行为
+  - 新增 `connect-app-adapter`，把 `AppSearchResponse`（enum/int64/camelCase）映射到现有 UI `SearchResponse`（number/snake_case）。
+  - `use-admin-auth` 改为 `callUnaryMethod(..., getSyncProgress)` 进行 API Key 校验：
+    - `Code.NotFound` 仍视为“鉴权通过但暂无进度”
+    - `Code.Unauthenticated` 映射“API Key 无效”
+  - Search/Admin/Auth 相关测试统一改为 Connect 路由 mock，且对依赖 Connect Query 的测试挂载 provider wrapper。
+- 清理结果：
+  - `api-client` 在业务代码中已不再用于 Admin/Search（仅 `use-download` 仍在使用）。
+- 验证：
+  - `cd web && bun vitest run src/hooks/use-search.test.ts src/components/search-page.test.tsx src/hooks/use-admin-auth.test.ts src/components/admin-page.test.tsx` 通过（26 tests）
+  - `cd web && bun vitest run` 通过（22 files / 189 tests）
+  - `git diff --check` 通过

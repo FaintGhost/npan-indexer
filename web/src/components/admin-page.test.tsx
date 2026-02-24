@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../tests/mocks/server'
+import { createTestProvider } from '../tests/test-providers'
 import { AdminSyncPage } from './admin-sync-page'
 
 const STORAGE_KEY = 'npan_admin_api_key'
@@ -16,6 +17,34 @@ function assertRecord(value: unknown): asserts value is Record<string, unknown> 
 function getRecord(value: unknown): Record<string, unknown> {
   assertRecord(value)
   return value
+}
+
+function toProtoStatus(status: string) {
+  switch (status) {
+    case 'running':
+      return 'SYNC_STATUS_RUNNING'
+    case 'done':
+      return 'SYNC_STATUS_DONE'
+    case 'error':
+      return 'SYNC_STATUS_ERROR'
+    case 'cancelled':
+      return 'SYNC_STATUS_CANCELLED'
+    case 'interrupted':
+      return 'SYNC_STATUS_INTERRUPTED'
+    case 'idle':
+    default:
+      return 'SYNC_STATUS_IDLE'
+  }
+}
+
+function toConnectProgressResponse(progress: Record<string, unknown>) {
+  return {
+    state: {
+      ...progress,
+      status: toProtoStatus(String(progress.status ?? 'idle')),
+      mode: progress.mode ? 'SYNC_MODE_AUTO' : undefined,
+    },
+  }
 }
 
 const validProgress = {
@@ -41,24 +70,26 @@ const validProgress = {
 }
 
 describe('AdminSyncPage', () => {
+  const wrapper = createTestProvider()
+
   beforeEach(() => {
     localStorage.clear()
   })
 
   it('shows API key dialog when no stored key', () => {
-    render(<AdminSyncPage />)
+    render(<AdminSyncPage />, { wrapper })
     expect(screen.getByPlaceholderText(/API Key/i)).toBeInTheDocument()
   })
 
   it('shows admin panel when key is stored', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     server.use(
-      http.get('/api/v1/admin/sync', () => {
-        return HttpResponse.json(validProgress)
+      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
+        return HttpResponse.json(toConnectProgressResponse(validProgress))
       }),
     )
 
-    render(<AdminSyncPage />)
+    render(<AdminSyncPage />, { wrapper })
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
@@ -67,19 +98,19 @@ describe('AdminSyncPage', () => {
 
   it('closes dialog after valid key input', async () => {
     server.use(
-      http.get('/api/v1/admin/sync', ({ request }) => {
+      http.post('/npan.v1.AdminService/GetSyncProgress', ({ request }) => {
         const key = request.headers.get('X-API-Key')
         if (key === 'valid-key') {
-          return HttpResponse.json(validProgress)
+          return HttpResponse.json({})
         }
         return HttpResponse.json(
-          { code: 'UNAUTHORIZED', message: 'Invalid' },
+          { code: 'unauthenticated', message: 'Invalid' },
           { status: 401 },
         )
       }),
     )
 
-    render(<AdminSyncPage />)
+    render(<AdminSyncPage />, { wrapper })
 
     const user = userEvent.setup()
     await user.type(screen.getByPlaceholderText(/API Key/i), 'valid-key')
@@ -93,8 +124,8 @@ describe('AdminSyncPage', () => {
   it('shows progress when sync is running', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     server.use(
-      http.get('/api/v1/admin/sync', () => {
-        return HttpResponse.json({
+      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
+        return HttpResponse.json(toConnectProgressResponse({
           ...validProgress,
           status: 'running',
           roots: [100, 200],
@@ -103,11 +134,11 @@ describe('AdminSyncPage', () => {
             ...validProgress.aggregateStats,
             filesIndexed: 300,
           },
-        })
+        }))
       }),
     )
 
-    render(<AdminSyncPage />)
+    render(<AdminSyncPage />, { wrapper })
 
     await waitFor(() => {
       expect(screen.getByText('运行中')).toBeInTheDocument()
@@ -121,8 +152,8 @@ describe('AdminSyncPage', () => {
     let inspectCalled = false
     let capturedBody: Record<string, unknown> | null = null
     server.use(
-      http.get('/api/v1/admin/sync', () => {
-        return HttpResponse.json({
+      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
+        return HttpResponse.json(toConnectProgressResponse({
           ...validProgress,
           catalogRoots: [1001, 1002, 1003],
           catalogRootNames: {
@@ -180,23 +211,23 @@ describe('AdminSyncPage', () => {
               updatedAt: 0,
             },
           },
-        })
+        }))
       }),
-      http.post('/api/v1/admin/roots/inspect', async ({ request }) => {
+      http.post('/npan.v1.AdminService/InspectRoots', async ({ request }) => {
         inspectCalled = true
         const body: unknown = await request.json()
         assertRecord(body)
-        expect(body.folder_ids).toEqual([1001, 1002, 1003])
+        expect(body.folderIds).toEqual(['1001', '1002', '1003'])
         return HttpResponse.json({
           items: [
-            { folder_id: 1001, name: 'A', item_count: 10, estimated_total_docs: 11 },
-            { folder_id: 1002, name: 'B', item_count: 20, estimated_total_docs: 21 },
-            { folder_id: 1003, name: 'C', item_count: 30, estimated_total_docs: 31 },
+            { folderId: '1001', name: 'A', itemCount: '10', estimatedTotalDocs: '11' },
+            { folderId: '1002', name: 'B', itemCount: '20', estimatedTotalDocs: '21' },
+            { folderId: '1003', name: 'C', itemCount: '30', estimatedTotalDocs: '31' },
           ],
           errors: [],
         })
       }),
-      http.post('/api/v1/admin/sync', async ({ request }) => {
+      http.post('/npan.v1.AdminService/StartSync', async ({ request }) => {
         const body: unknown = await request.json()
         assertRecord(body)
         capturedBody = body
@@ -204,7 +235,7 @@ describe('AdminSyncPage', () => {
       }),
     )
 
-    render(<AdminSyncPage />)
+    render(<AdminSyncPage />, { wrapper })
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
@@ -226,8 +257,8 @@ describe('AdminSyncPage', () => {
     })
 
     const payload = getRecord(capturedBody)
-    expect(payload.root_folder_ids).toEqual([1001, 1003])
-    expect(payload.include_departments).toBe(false)
-    expect(payload.preserve_root_catalog).toBe(true)
+    expect(payload.rootFolderIds).toEqual(['1001', '1003'])
+    expect(payload.includeDepartments).toBe(false)
+    expect(payload.preserveRootCatalog).toBe(true)
   })
 })
