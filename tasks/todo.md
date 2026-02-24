@@ -319,3 +319,31 @@
   - 仅前端改动（`web/src/components/admin-sync-page.tsx`、`web/src/components/admin-page.test.tsx`），后端接口保持兼容。
 - 验证：
   - `cd web && bun vitest run src/components/admin-page.test.tsx src/components/sync-progress-display.test.tsx src/hooks/use-sync-progress.test.ts` 通过（33 tests）。
+
+## 新任务：Connect-RPC 新 review 收敛（Brainstorming 设计）
+
+- [x] 1. 读取最新 `review.md`，对照当前 Connect-RPC 迁移状态做建议分流（已完成/待采纳/暂缓）
+- [x] 2. 并行调研现有代码架构、schema 最佳实践与 BDD 场景（子代理）
+- [x] 3. 产出设计文档包到 `docs/plans/2026-02-24-connect-rpc-review-alignment-design/`
+- [x] 4. 回填评审结论与后续执行边界（避免重复返工）
+
+## Review（Connect-RPC 新 review 收敛 / Brainstorming 设计）
+
+- 结论：
+  - 新 `review.md` 中关于 `enum 0 值使用 *_UNSPECIFIED`、`connect-es/query-es`、Connect 后端渐进接入的建议，当前分支已基本落地。
+  - 本轮真正需要规划的后续项是：
+    - 在 `.proto` 中补 `protovalidate` 规则注解（利用已接入的 validation interceptor）
+    - 明确 `google.protobuf.Timestamp` 迁移策略与触发条件（继续暂缓到后续批次）
+- 明确不做（本设计批次）：
+  - 不立即把时间戳字段从 `int64` 全量切到 `Timestamp`
+  - 不新建 `internal/rpc` 包并搬迁现有 Connect handler（避免与功能推进耦合）
+  - 不改 Connect 路由路径前缀（保持现有生成路径与 Echo 挂载方式）
+- 设计产物：
+  - `docs/plans/2026-02-24-connect-rpc-review-alignment-design/_index.md`
+  - `docs/plans/2026-02-24-connect-rpc-review-alignment-design/architecture.md`
+  - `docs/plans/2026-02-24-connect-rpc-review-alignment-design/bdd-specs.md`
+  - `docs/plans/2026-02-24-connect-rpc-review-alignment-design/best-practices.md`
+- 后续建议（进入 writing-plans 前的推荐范围）：
+  - 优先做 `protovalidate` 注解的增量落地（先覆盖 `StartSyncRequest`、`InspectRootsRequest`、分页类请求）
+  - 为 validation interceptor 增加正反向测试（命中规则 / 无规则 no-op）
+  - 将 Timestamp 迁移单独立项，先完成影响面清点与兼容方案选择
