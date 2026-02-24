@@ -347,3 +347,24 @@
   - 优先做 `protovalidate` 注解的增量落地（先覆盖 `StartSyncRequest`、`InspectRootsRequest`、分页类请求）
   - 为 validation interceptor 增加正反向测试（命中规则 / 无规则 no-op）
   - 将 Timestamp 迁移单独立项，先完成影响面清点与兼容方案选择
+
+## 新任务：Connect-RPC protovalidate 增量落地（Writing Plans）
+
+- [x] 1. 基于 `docs/plans/2026-02-24-connect-rpc-review-alignment-design/` 输出实施计划目录
+- [x] 2. 按 BDD 场景拆分 Red/Green 任务（Admin 规则、分页规则、兼容性守门）
+- [x] 3. 为每个任务补齐依赖、影响文件与验证命令
+- [x] 4. 回填执行移交说明（下一步进入 `executing-plans`）
+
+## Review（Connect-RPC protovalidate 增量落地 / 实施计划）
+
+- 计划目录：
+  - `docs/plans/2026-02-24-connect-rpc-protovalidate-plan/_index.md`
+  - `docs/plans/2026-02-24-connect-rpc-protovalidate-plan/task-001-red-admin-validation-hit-tests.md`
+  - `docs/plans/2026-02-24-connect-rpc-protovalidate-plan/task-002-green-admin-proto-validation-rules.md`
+  - `docs/plans/2026-02-24-connect-rpc-protovalidate-plan/task-003-red-search-pagination-validation-hit-tests.md`
+  - `docs/plans/2026-02-24-connect-rpc-protovalidate-plan/task-004-green-search-pagination-proto-validation-rules.md`
+  - `docs/plans/2026-02-24-connect-rpc-protovalidate-plan/task-005-green-noop-and-business-guard-regression.md`
+  - `docs/plans/2026-02-24-connect-rpc-protovalidate-plan/task-006-verification-and-timestamp-compat-gate.md`
+- 范围收敛：
+  - 本批次只做 `protovalidate` 注解与校验测试补齐。
+  - 明确不做 `Timestamp` 字段迁移与 `internal/rpc` 包抽离。
