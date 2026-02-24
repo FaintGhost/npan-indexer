@@ -692,3 +692,34 @@
   - `cd web && bun vitest run src/components/admin-page.test.tsx` 通过（5 tests）
   - `cd web && bun vitest run` 通过（21 files / 175 tests）
   - `git diff --check` 通过
+
+## 新任务：Stage 4 双线重构（Search InfiniteQuery + Admin Query 化）
+
+- [x] 1. 将 `SearchPage` 从 `use-search` 迁移到 `useInfiniteQuery(appSearch)`，保留防抖、提交搜索、无限滚动、去重与状态文案
+- [x] 2. 删除遗留 `web/src/hooks/use-search.ts` 及其测试，收敛到页面内 Query 状态
+- [x] 3. 将 `AdminSyncPage` 从手写 `setInterval/refetch` 状态机收敛为 `useQuery` 内建 `refetchInterval`
+- [x] 4. 回归验证（`search-page` / `admin-page` / 全量 vitest）并回填 Review
+
+## Review（Stage 4 / 双线重构）
+
+- Search 线：
+  - `web/src/routes/index.lazy.tsx` 已移除 `use-search` 依赖，改为组件内 `useInfiniteQuery(appSearch)`。
+  - 保留并验证：
+    - 输入防抖（280ms）与回车/按钮立即搜索
+    - 无限滚动 `fetchNextPage`
+    - 按 `source_id` 跨页去重
+    - 结果计数、空态、错误态、清空回初始态
+  - 清理：
+    - 删除 `web/src/hooks/use-search.ts`
+    - 删除 `web/src/hooks/use-search.test.ts`
+- Admin 线：
+  - `web/src/components/admin-sync-page.tsx` 去除手写 `setInterval` 轮询与手动 `enabled:false + refetch` 主流程。
+  - 改为 `useQuery(getSyncProgress)`：
+    - `enabled: hasAuth`
+    - `select` 内完成 proto->domain 映射与时间戳归一化
+    - `refetchInterval` 按 `status === running` 自动轮询
+  - 保留原有交互：启动/取消/目录详情刷新/强制重建约束/确认弹窗与提示文案。
+- 验证：
+  - `cd web && bun vitest run src/components/search-page.test.tsx src/components/admin-page.test.tsx src/tests/accessibility.test.tsx` 通过（17 tests）
+  - `cd web && bun vitest run` 通过（20 files / 166 tests）
+  - `git diff --check` 通过
