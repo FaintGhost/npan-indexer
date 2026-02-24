@@ -13,6 +13,8 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"npan/gen/go/npan/v1/npanv1connect"
 )
 
 // spaHandler serves the Vite build output with SPA fallback.
@@ -134,6 +136,19 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 	// Public endpoints (no auth)
 	e.GET("/healthz", handlers.Health)
 	e.GET("/readyz", handlers.Readyz)
+
+	// Connect-RPC endpoints (gradual migration, coexist with REST).
+	healthPath, healthConnectHandler := npanv1connect.NewHealthServiceHandler(newHealthConnectServer(handlers))
+	e.Any(healthPath+"*", echo.WrapHandler(healthConnectHandler))
+	appPath, appConnectHandler := npanv1connect.NewAppServiceHandler(newAppConnectServer(handlers))
+	e.Group(strings.TrimRight(appPath, "/"), EmbeddedAuth()).
+		Any("/*", echo.WrapHandler(appConnectHandler))
+	authPath, authConnectHandler := npanv1connect.NewAuthServiceHandler(newAuthConnectServer(handlers))
+	e.Group(strings.TrimRight(authPath, "/"), APIKeyAuth(adminAPIKey)).
+		Any("/*", echo.WrapHandler(authConnectHandler))
+	searchPath, searchConnectHandler := npanv1connect.NewSearchServiceHandler(newSearchConnectServer(handlers))
+	e.Group(strings.TrimRight(searchPath, "/"), APIKeyAuth(adminAPIKey)).
+		Any("/*", echo.WrapHandler(searchConnectHandler))
 
 	// SPA frontend served from embedded Vite build output.
 	// Specific routes (/api, /healthz, /readyz) take priority over the catch-all.

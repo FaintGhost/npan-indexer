@@ -1,0 +1,306 @@
+syntax = "proto3";
+
+package npan.v1;
+
+option go_package = "npan/gen/go/npan/v1;npanv1";
+
+enum ItemType {
+  ITEM_TYPE_UNSPECIFIED = 0;
+  ITEM_TYPE_FILE = 1;
+  ITEM_TYPE_FOLDER = 2;
+}
+
+enum SyncStatus {
+  SYNC_STATUS_UNSPECIFIED = 0;
+  SYNC_STATUS_IDLE = 1;
+  SYNC_STATUS_RUNNING = 2;
+  SYNC_STATUS_DONE = 3;
+  SYNC_STATUS_ERROR = 4;
+  SYNC_STATUS_CANCELLED = 5;
+  SYNC_STATUS_INTERRUPTED = 6;
+}
+
+enum SyncMode {
+  SYNC_MODE_UNSPECIFIED = 0;
+  SYNC_MODE_AUTO = 1;
+  SYNC_MODE_FULL = 2;
+  SYNC_MODE_INCREMENTAL = 3;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_UNAUTHORIZED = 1;
+  ERROR_CODE_BAD_REQUEST = 2;
+  ERROR_CODE_NOT_FOUND = 3;
+  ERROR_CODE_CONFLICT = 4;
+  ERROR_CODE_RATE_LIMITED = 5;
+  ERROR_CODE_INTERNAL_ERROR = 6;
+}
+
+enum ReadyStatus {
+  READY_STATUS_UNSPECIFIED = 0;
+  READY_STATUS_READY = 1;
+  READY_STATUS_NOT_READY = 2;
+}
+
+message IndexDocument {
+  string doc_id = 1;
+  int64 source_id = 2;
+  ItemType type = 3;
+  string name = 4;
+  string path_text = 5;
+  int64 parent_id = 6;
+  int64 modified_at = 7;
+  int64 created_at = 8;
+  int64 size = 9;
+  string sha1 = 10;
+  bool in_trash = 11;
+  bool is_deleted = 12;
+  optional string highlighted_name = 13;
+}
+
+message QueryResult {
+  repeated IndexDocument items = 1;
+  int64 total = 2;
+}
+
+message CrawlStats {
+  int64 folders_visited = 1;
+  int64 files_indexed = 2;
+  int64 files_discovered = 3;
+  int64 skipped_files = 4;
+  int64 pages_fetched = 5;
+  int64 failed_requests = 6;
+  int64 started_at = 7;
+  int64 ended_at = 8;
+}
+
+message RootSyncProgress {
+  int64 root_folder_id = 1;
+  string status = 2;
+  optional int64 estimated_total_docs = 3;
+  CrawlStats stats = 4;
+  int64 updated_at = 5;
+}
+
+message IncrementalSyncStats {
+  int64 changes_fetched = 1;
+  int64 upserted = 2;
+  int64 deleted = 3;
+  int64 skipped_upserts = 4;
+  int64 skipped_deletes = 5;
+  int64 cursor_before = 6;
+  int64 cursor_after = 7;
+}
+
+message SyncVerification {
+  int64 meili_doc_count = 1;
+  int64 crawled_doc_count = 2;
+  int64 discovered_doc_count = 3;
+  int64 skipped_count = 4;
+  bool verified = 5;
+  repeated string warnings = 6;
+}
+
+message SyncProgressState {
+  SyncStatus status = 1;
+  optional SyncMode mode = 2;
+  int64 started_at = 3;
+  int64 updated_at = 4;
+  repeated int64 roots = 5;
+  map<string, string> root_names = 6;
+  repeated int64 completed_roots = 7;
+  optional int64 active_root = 8;
+  CrawlStats aggregate_stats = 9;
+  map<string, RootSyncProgress> root_progress = 10;
+  repeated int64 catalog_roots = 11;
+  map<string, string> catalog_root_names = 12;
+  map<string, RootSyncProgress> catalog_root_progress = 13;
+  optional IncrementalSyncStats incremental_stats = 14;
+  optional string last_error = 15;
+  optional SyncVerification verification = 16;
+}
+
+message ErrorResponse {
+  ErrorCode code = 1;
+  string message = 2;
+  optional string request_id = 3;
+}
+
+message DownloadURLResult {
+  int64 file_id = 1;
+  string download_url = 2;
+}
+
+message RemoteSearchItem {
+  int64 id = 1;
+  string name = 2;
+  string type = 3;
+}
+
+message RemoteSearchResponse {
+  repeated RemoteSearchItem files = 1;
+  repeated RemoteSearchItem folders = 2;
+  int64 total_count = 3;
+  int64 page_id = 4;
+  int64 page_capacity = 5;
+  int64 page_count = 6;
+}
+
+message InspectRootItem {
+  int64 folder_id = 1;
+  string name = 2;
+  int64 item_count = 3;
+  int64 estimated_total_docs = 4;
+}
+
+message InspectRootError {
+  int64 folder_id = 1;
+  string message = 2;
+}
+
+service HealthService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Readyz(ReadyzRequest) returns (ReadyzResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  bool running_sync = 2;
+}
+
+message ReadyzRequest {}
+
+message ReadyzResponse {
+  ReadyStatus status = 1;
+  optional string meili = 2;
+}
+
+service AppService {
+  rpc AppSearch(AppSearchRequest) returns (AppSearchResponse);
+  rpc AppDownloadURL(AppDownloadURLRequest) returns (AppDownloadURLResponse);
+}
+
+message AppSearchRequest {
+  string query = 1;
+  optional int64 page = 2;
+  optional int64 page_size = 3;
+}
+
+message AppSearchResponse {
+  QueryResult result = 1;
+}
+
+message AppDownloadURLRequest {
+  int64 file_id = 1;
+  optional int64 valid_period = 2;
+}
+
+message AppDownloadURLResponse {
+  DownloadURLResult result = 1;
+}
+
+service AuthService {
+  rpc CreateToken(CreateTokenRequest) returns (CreateTokenResponse);
+}
+
+message CreateTokenRequest {
+  optional string token = 1;
+  optional string client_id = 2;
+  optional string client_secret = 3;
+  optional int64 sub_id = 4;
+  optional string sub_type = 5;
+  optional string oauth_host = 6;
+}
+
+message CreateTokenResponse {
+  string token = 1;
+}
+
+service SearchService {
+  rpc RemoteSearch(RemoteSearchRequest) returns (RemoteSearchResponse);
+  rpc LocalSearch(LocalSearchRequest) returns (LocalSearchResponse);
+  rpc DownloadURL(DownloadURLRequest) returns (DownloadURLResponse);
+}
+
+message RemoteSearchRequest {
+  string query = 1;
+  optional string type = 2;
+  optional int64 page_id = 3;
+  optional string query_filter = 4;
+  optional int64 search_in_folder = 5;
+  optional string updated_time_range = 6;
+}
+
+message LocalSearchRequest {
+  string query = 1;
+  optional int64 page = 2;
+  optional int64 page_size = 3;
+  optional string type = 4;
+  optional int64 parent_id = 5;
+  optional int64 updated_after = 6;
+  optional int64 updated_before = 7;
+  optional bool include_deleted = 8;
+}
+
+message LocalSearchResponse {
+  QueryResult result = 1;
+}
+
+message DownloadURLRequest {
+  int64 file_id = 1;
+  optional int64 valid_period = 2;
+}
+
+message DownloadURLResponse {
+  DownloadURLResult result = 1;
+}
+
+service AdminService {
+  rpc StartSync(StartSyncRequest) returns (StartSyncResponse);
+  rpc InspectRoots(InspectRootsRequest) returns (InspectRootsResponse);
+  rpc GetSyncProgress(GetSyncProgressRequest) returns (GetSyncProgressResponse);
+  rpc CancelSync(CancelSyncRequest) returns (CancelSyncResponse);
+}
+
+message StartSyncRequest {
+  optional SyncMode mode = 1;
+  repeated int64 root_folder_ids = 2;
+  optional bool include_departments = 3;
+  optional bool preserve_root_catalog = 4;
+  repeated int64 department_ids = 5;
+  optional bool resume_progress = 6;
+  optional bool force_rebuild = 7;
+  optional int64 root_workers = 8;
+  optional int64 progress_every = 9;
+  optional string checkpoint_template = 10;
+  optional int64 window_overlap_ms = 11;
+  optional string incremental_query = 12;
+}
+
+message StartSyncResponse {
+  string message = 1;
+}
+
+message InspectRootsRequest {
+  repeated int64 folder_ids = 1;
+}
+
+message InspectRootsResponse {
+  repeated InspectRootItem items = 1;
+  repeated InspectRootError errors = 2;
+}
+
+message GetSyncProgressRequest {}
+
+message GetSyncProgressResponse {
+  SyncProgressState state = 1;
+}
+
+message CancelSyncRequest {}
+
+message CancelSyncResponse {
+  string message = 1;
+}

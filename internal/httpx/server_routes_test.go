@@ -18,6 +18,8 @@ func TestRoutes_PublicEndpoints_NoAuthRequired(t *testing.T) {
 	}{
 		{http.MethodGet, "/healthz"},
 		{http.MethodGet, "/readyz"},
+		{http.MethodPost, "/npan.v1.HealthService/Health"},
+		{http.MethodPost, "/npan.v1.AppService/AppSearch"},
 		{http.MethodGet, "/api/v1/app/search?q=test"},
 		{http.MethodGet, "/api/v1/app/download-url?file_id=1"},
 	}
@@ -43,9 +45,11 @@ func TestRoutes_APIEndpoints_RequireAuth(t *testing.T) {
 		path   string
 	}{
 		{http.MethodPost, "/api/v1/token"},
+		{http.MethodPost, "/npan.v1.AuthService/CreateToken"},
 		{http.MethodGet, "/api/v1/search/remote?q=test"},
 		{http.MethodGet, "/api/v1/search/local?q=test"},
 		{http.MethodGet, "/api/v1/download-url?file_id=1"},
+		{http.MethodPost, "/npan.v1.SearchService/LocalSearch"},
 	}
 
 	for _, ep := range endpoints {
@@ -95,9 +99,13 @@ func TestRoutes_APIEndpoints_WithKey_Pass(t *testing.T) {
 		path   string
 	}{
 		{http.MethodPost, "/api/v1/token"},
+		{http.MethodPost, "/npan.v1.AuthService/CreateToken"},
 		{http.MethodGet, "/api/v1/search/remote?q=test"},
 		{http.MethodGet, "/api/v1/search/local?q=test"},
 		{http.MethodGet, "/api/v1/download-url?file_id=1"},
+		{http.MethodPost, "/npan.v1.SearchService/LocalSearch"},
+		{http.MethodPost, "/npan.v1.AppService/AppSearch"},
+		{http.MethodPost, "/npan.v1.HealthService/Health"},
 		{http.MethodPost, "/api/v1/admin/sync/full"},
 		{http.MethodGet, "/api/v1/admin/sync/full/progress"},
 		{http.MethodPost, "/api/v1/admin/sync/full/cancel"},
