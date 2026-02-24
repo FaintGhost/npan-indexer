@@ -515,3 +515,35 @@
   - 旧 `int64` 字段仍保留在 `proto/npan/v1/api.proto`（未做破坏式替换）。
   - `internal/models` 与 `internal/storage` 持久化结构未改为 `Timestamp`，仍沿用 `int64` 存储。
   - 服务端仅在 Connect DTO 输出层新增 sidecar 双写，符合“最小影响面”策略。
+
+## 新任务：Connect-ES 兼容性补强（Review 跟进）
+
+- [x] 1. 复核 review 与现有后端实现，确认阻塞项范围
+- [x] 2. 补齐 CORS `AllowHeaders` 与 `ExposeHeaders`，覆盖 Connect-ES 浏览器调用场景
+- [x] 3. 新增/更新单测，锁定 CORS 配置回归
+- [x] 4. 运行 `go test ./internal/httpx -count=1` 并回填结果
+
+## Review（Connect-ES 兼容性补强 / 实施结果）
+
+- 目标：
+  - 处理 review 中标记的阻塞项：Connect 协议自定义 Header 未放行、错误头未暴露给浏览器。
+- 范围：
+  - `internal/httpx/middleware_security.go`
+  - `internal/httpx/middleware_security_test.go`
+- 变更：
+  - `CORSConfig(...).AllowHeaders` 新增：
+    - `Connect-Protocol-Version`
+    - `Connect-Timeout-Ms`
+    - `Grpc-Timeout`
+  - `CORSConfig(...).ExposeHeaders` 新增：
+    - `Connect-Error-Reason`
+    - `Connect-Error-Details`
+  - 新增单测：
+    - `TestCORSConfig_ConnectHeadersIncluded`
+    - `TestParseCORSOrigins_TrimEmpty`
+- 验证：
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go-mod go test ./internal/httpx -count=1` 通过
+- 备注：
+  - 当前改动覆盖的是 CORS 配置 helper；若未来需要跨域直连（非同源/非 dev proxy），需确认服务启动路径已实际挂载 `middleware.CORSWithConfig(CORSConfig(...))`。
+- 非本轮（记录）：
+  - Validation 错误结构化为 `errdetails.BadRequest` 属体验优化项，后续单独设计实施。
