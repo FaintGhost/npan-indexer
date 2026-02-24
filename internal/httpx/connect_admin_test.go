@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -74,6 +75,9 @@ func TestConnectAdminStartSync_ForceRebuildWithRoots_ReturnsInvalidArgument(t *t
 	}
 	if got := connect.CodeOf(err); got != connect.CodeInvalidArgument {
 		t.Fatalf("expected invalid_argument, got %v", got)
+	}
+	if !strings.Contains(err.Error(), "force_rebuild") {
+		t.Fatalf("expected business guard message to mention force_rebuild, got %q", err.Error())
 	}
 }
 

@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package npan.v1;
 
+import "buf/validate/validate.proto";
+
 option go_package = "npan/gen/go/npan/v1;npanv1";
 
 enum ItemType {
@@ -185,8 +187,8 @@ service AppService {
 
 message AppSearchRequest {
   string query = 1;
-  optional int64 page = 2;
-  optional int64 page_size = 3;
+  optional int64 page = 2 [(buf.validate.field).int64.gt = 0];
+  optional int64 page_size = 3 [(buf.validate.field).int64 = {gt: 0, lte: 100}];
 }
 
 message AppSearchResponse {
@@ -236,8 +238,8 @@ message RemoteSearchRequest {
 
 message LocalSearchRequest {
   string query = 1;
-  optional int64 page = 2;
-  optional int64 page_size = 3;
+  optional int64 page = 2 [(buf.validate.field).int64.gt = 0];
+  optional int64 page_size = 3 [(buf.validate.field).int64 = {gt: 0, lte: 100}];
   optional string type = 4;
   optional int64 parent_id = 5;
   optional int64 updated_after = 6;
@@ -267,16 +269,24 @@ service AdminService {
 
 message StartSyncRequest {
   optional SyncMode mode = 1;
-  repeated int64 root_folder_ids = 2;
+  repeated int64 root_folder_ids = 2 [
+    (buf.validate.field).repeated = {
+      items: { int64: { gt: 0 } }
+    }
+  ];
   optional bool include_departments = 3;
   optional bool preserve_root_catalog = 4;
-  repeated int64 department_ids = 5;
+  repeated int64 department_ids = 5 [
+    (buf.validate.field).repeated = {
+      items: { int64: { gt: 0 } }
+    }
+  ];
   optional bool resume_progress = 6;
   optional bool force_rebuild = 7;
-  optional int64 root_workers = 8;
-  optional int64 progress_every = 9;
+  optional int64 root_workers = 8 [(buf.validate.field).int64.gt = 0];
+  optional int64 progress_every = 9 [(buf.validate.field).int64.gt = 0];
   optional string checkpoint_template = 10;
-  optional int64 window_overlap_ms = 11;
+  optional int64 window_overlap_ms = 11 [(buf.validate.field).int64.gte = 0];
   optional string incremental_query = 12;
 }
 
@@ -285,7 +295,12 @@ message StartSyncResponse {
 }
 
 message InspectRootsRequest {
-  repeated int64 folder_ids = 1;
+  repeated int64 folder_ids = 1 [
+    (buf.validate.field).repeated = {
+      min_items: 1
+      items: { int64: { gt: 0 } }
+    }
+  ];
 }
 
 message InspectRootsResponse {

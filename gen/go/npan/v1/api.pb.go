@@ -7,6 +7,7 @@
 package npanv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -2641,7 +2642,7 @@ var File_npan_v1_api_proto protoreflect.FileDescriptor
 
 const file_npan_v1_api_proto_rawDesc = "" +
 	"\n" +
-	"\x11npan/v1/api.proto\x12\anpan.v1\"\x9f\x03\n" +
+	"\x11npan/v1/api.proto\x12\anpan.v1\x1a\x1bbuf/validate/validate.proto\"\x9f\x03\n" +
 	"\rIndexDocument\x12\x15\n" +
 	"\x06doc_id\x18\x01 \x01(\tR\x05docId\x12\x1b\n" +
 	"\tsource_id\x18\x02 \x01(\x03R\bsourceId\x12%\n" +
@@ -2778,11 +2779,11 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x0eReadyzResponse\x12,\n" +
 	"\x06status\x18\x01 \x01(\x0e2\x14.npan.v1.ReadyStatusR\x06status\x12\x19\n" +
 	"\x05meili\x18\x02 \x01(\tH\x00R\x05meili\x88\x01\x01B\b\n" +
-	"\x06_meili\"z\n" +
+	"\x06_meili\"\x8e\x01\n" +
 	"\x10AppSearchRequest\x12\x14\n" +
-	"\x05query\x18\x01 \x01(\tR\x05query\x12\x17\n" +
-	"\x04page\x18\x02 \x01(\x03H\x00R\x04page\x88\x01\x01\x12 \n" +
-	"\tpage_size\x18\x03 \x01(\x03H\x01R\bpageSize\x88\x01\x01B\a\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x12 \n" +
+	"\x04page\x18\x02 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x04page\x88\x01\x01\x12+\n" +
+	"\tpage_size\x18\x03 \x01(\x03B\t\xbaH\x06\"\x04\x18d \x00H\x01R\bpageSize\x88\x01\x01B\a\n" +
 	"\x05_pageB\f\n" +
 	"\n" +
 	"_page_size\"A\n" +
@@ -2823,11 +2824,11 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\b_page_idB\x0f\n" +
 	"\r_query_filterB\x13\n" +
 	"\x11_search_in_folderB\x15\n" +
-	"\x13_updated_time_range\"\x8b\x03\n" +
+	"\x13_updated_time_range\"\x9f\x03\n" +
 	"\x12LocalSearchRequest\x12\x14\n" +
-	"\x05query\x18\x01 \x01(\tR\x05query\x12\x17\n" +
-	"\x04page\x18\x02 \x01(\x03H\x00R\x04page\x88\x01\x01\x12 \n" +
-	"\tpage_size\x18\x03 \x01(\x03H\x01R\bpageSize\x88\x01\x01\x12\x17\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x12 \n" +
+	"\x04page\x18\x02 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x04page\x88\x01\x01\x12+\n" +
+	"\tpage_size\x18\x03 \x01(\x03B\t\xbaH\x06\"\x04\x18d \x00H\x01R\bpageSize\x88\x01\x01\x12\x17\n" +
 	"\x04type\x18\x04 \x01(\tH\x02R\x04type\x88\x01\x01\x12 \n" +
 	"\tparent_id\x18\x05 \x01(\x03H\x03R\bparentId\x88\x01\x01\x12(\n" +
 	"\rupdated_after\x18\x06 \x01(\x03H\x04R\fupdatedAfter\x88\x01\x01\x12*\n" +
@@ -2849,20 +2850,20 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\fvalid_period\x18\x02 \x01(\x03H\x00R\vvalidPeriod\x88\x01\x01B\x0f\n" +
 	"\r_valid_period\"I\n" +
 	"\x13DownloadURLResponse\x122\n" +
-	"\x06result\x18\x01 \x01(\v2\x1a.npan.v1.DownloadURLResultR\x06result\"\x8a\x06\n" +
+	"\x06result\x18\x01 \x01(\v2\x1a.npan.v1.DownloadURLResultR\x06result\"\xc1\x06\n" +
 	"\x10StartSyncRequest\x12*\n" +
-	"\x04mode\x18\x01 \x01(\x0e2\x11.npan.v1.SyncModeH\x00R\x04mode\x88\x01\x01\x12&\n" +
-	"\x0froot_folder_ids\x18\x02 \x03(\x03R\rrootFolderIds\x124\n" +
+	"\x04mode\x18\x01 \x01(\x0e2\x11.npan.v1.SyncModeH\x00R\x04mode\x88\x01\x01\x124\n" +
+	"\x0froot_folder_ids\x18\x02 \x03(\x03B\f\xbaH\t\x92\x01\x06\"\x04\"\x02 \x00R\rrootFolderIds\x124\n" +
 	"\x13include_departments\x18\x03 \x01(\bH\x01R\x12includeDepartments\x88\x01\x01\x127\n" +
-	"\x15preserve_root_catalog\x18\x04 \x01(\bH\x02R\x13preserveRootCatalog\x88\x01\x01\x12%\n" +
-	"\x0edepartment_ids\x18\x05 \x03(\x03R\rdepartmentIds\x12,\n" +
+	"\x15preserve_root_catalog\x18\x04 \x01(\bH\x02R\x13preserveRootCatalog\x88\x01\x01\x123\n" +
+	"\x0edepartment_ids\x18\x05 \x03(\x03B\f\xbaH\t\x92\x01\x06\"\x04\"\x02 \x00R\rdepartmentIds\x12,\n" +
 	"\x0fresume_progress\x18\x06 \x01(\bH\x03R\x0eresumeProgress\x88\x01\x01\x12(\n" +
-	"\rforce_rebuild\x18\a \x01(\bH\x04R\fforceRebuild\x88\x01\x01\x12&\n" +
-	"\froot_workers\x18\b \x01(\x03H\x05R\vrootWorkers\x88\x01\x01\x12*\n" +
-	"\x0eprogress_every\x18\t \x01(\x03H\x06R\rprogressEvery\x88\x01\x01\x124\n" +
+	"\rforce_rebuild\x18\a \x01(\bH\x04R\fforceRebuild\x88\x01\x01\x12/\n" +
+	"\froot_workers\x18\b \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x05R\vrootWorkers\x88\x01\x01\x123\n" +
+	"\x0eprogress_every\x18\t \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x06R\rprogressEvery\x88\x01\x01\x124\n" +
 	"\x13checkpoint_template\x18\n" +
-	" \x01(\tH\aR\x12checkpointTemplate\x88\x01\x01\x12/\n" +
-	"\x11window_overlap_ms\x18\v \x01(\x03H\bR\x0fwindowOverlapMs\x88\x01\x01\x120\n" +
+	" \x01(\tH\aR\x12checkpointTemplate\x88\x01\x01\x128\n" +
+	"\x11window_overlap_ms\x18\v \x01(\x03B\a\xbaH\x04\"\x02(\x00H\bR\x0fwindowOverlapMs\x88\x01\x01\x120\n" +
 	"\x11incremental_query\x18\f \x01(\tH\tR\x10incrementalQuery\x88\x01\x01B\a\n" +
 	"\x05_modeB\x16\n" +
 	"\x14_include_departmentsB\x18\n" +
@@ -2875,10 +2876,10 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x12_window_overlap_msB\x14\n" +
 	"\x12_incremental_query\"-\n" +
 	"\x11StartSyncResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage\"4\n" +
-	"\x13InspectRootsRequest\x12\x1d\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\"D\n" +
+	"\x13InspectRootsRequest\x12-\n" +
 	"\n" +
-	"folder_ids\x18\x01 \x03(\x03R\tfolderIds\"y\n" +
+	"folder_ids\x18\x01 \x03(\x03B\x0e\xbaH\v\x92\x01\b\b\x01\"\x04\"\x02 \x00R\tfolderIds\"y\n" +
 	"\x14InspectRootsResponse\x12.\n" +
 	"\x05items\x18\x01 \x03(\v2\x18.npan.v1.InspectRootItemR\x05items\x121\n" +
 	"\x06errors\x18\x02 \x03(\v2\x19.npan.v1.InspectRootErrorR\x06errors\"\x18\n" +

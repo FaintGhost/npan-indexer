@@ -368,3 +368,46 @@
 - 范围收敛：
   - 本批次只做 `protovalidate` 注解与校验测试补齐。
   - 明确不做 `Timestamp` 字段迁移与 `internal/rpc` 包抽离。
+
+## 新任务：Connect-RPC protovalidate 增量落地（Executing Plans）
+
+- [x] 1. 新增 validation interceptor 级测试（Admin 规则命中、分页规则命中、无规则 no-op）
+- [x] 2. 在 `buf.yaml` 增加 protovalidate 依赖并更新 `buf.lock`
+- [x] 3. 在 `proto/npan/v1/api.proto` 补充 Admin 请求规则（`StartSyncRequest`、`InspectRootsRequest`）
+- [x] 4. 在 `proto/npan/v1/api.proto` 补充分页请求规则（`AppSearchRequest`、`LocalSearchRequest`）
+- [x] 5. 回归业务语义防线测试（`force_rebuild + scoped roots`）
+- [x] 6. 执行 lint/generate/测试回归并确认 Timestamp 守门条件
+
+## Review（Connect-RPC protovalidate 增量落地 / 实施结果）
+
+- 代码改动：
+  - 新增 `internal/httpx/connect_validation_interceptor_test.go`：
+    - `TestConnectValidationInterceptor_AdminStartSyncHitRule`
+    - `TestConnectValidationInterceptor_PaginationHitRule`
+    - `TestConnectValidationInterceptor_NoRuleMessageNoop`
+  - 更新 `internal/httpx/connect_admin_test.go`：
+    - 强化 `force_rebuild + scoped roots` 业务防线断言（错误信息包含 `force_rebuild`）
+  - 更新 `buf.yaml` 并新增 `buf.lock`，引入 `buf.build/bufbuild/protovalidate` 依赖。
+  - 更新 `proto/npan/v1/api.proto`：
+    - 引入 `buf/validate/validate.proto`
+    - `StartSyncRequest` 增加 root/dept IDs 与 worker 参数范围约束
+    - `InspectRootsRequest` 增加 `folder_ids` 非空+正整数约束
+    - `AppSearchRequest`、`LocalSearchRequest` 增加分页范围约束
+  - 生成产物更新：
+    - `gen/go/npan/v1/api.pb.go`
+    - `gen/ts/npan/v1/api_pb.ts`
+- BDD Red/Green 证据：
+  - Red（Task 001）：`TestConnectValidationInterceptor_AdminStartSyncHitRule` 初次运行失败（预期 `invalid_argument` 未命中）
+  - Green（Task 002）：补 Admin 规则后同用例转绿
+  - Red（Task 003）：`TestConnectValidationInterceptor_PaginationHitRule` 初次运行失败（预期 `invalid_argument` 未命中）
+  - Green（Task 004）：补分页规则后同用例转绿
+- 验证结果：
+  - `XDG_CACHE_HOME=/tmp/.cache BUF_CACHE_DIR=/tmp/.cache/buf ./.bin/buf dep update` 通过
+  - `XDG_CACHE_HOME=/tmp/.cache BUF_CACHE_DIR=/tmp/.cache/buf ./.bin/buf lint` 通过
+  - `XDG_CACHE_HOME=/tmp/.cache BUF_CACHE_DIR=/tmp/.cache/buf ./.bin/buf generate` 通过
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go-mod go test ./internal/httpx -run 'Connect.*(Validation|Admin).*' -count=1` 通过
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go-mod go test ./internal/httpx -run 'Connect|Routes|Health|Admin' -count=1` 通过
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go-mod go test ./... -count=1` 通过（先创建 `web/dist/.gitkeep` 占位）
+  - `git diff --check` 通过
+- Timestamp 守门结论：
+  - 本批次未引入 `google.protobuf.Timestamp`，`proto/npan/v1/api.proto` 中相关时间字段仍为 `int64`（`started_at` / `updated_at` 等），符合“兼容性优先、暂缓迁移”的约束。
