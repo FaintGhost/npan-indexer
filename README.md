@@ -161,6 +161,14 @@ go run ./cmd/cli sync --mode incremental --incremental-query-words "* OR *" --wi
 
 > GHCR 使用 `GITHUB_TOKEN` 推送，workflow 已配置 `packages: write` 权限。
 
+### Runner 要求（ARM64）
+
+- workflow 会拆分 `amd64` / `arm64` 构建：
+  - `amd64` 使用 GitHub 托管 `ubuntu-latest`
+  - `arm64` 使用 self-hosted runner，标签要求：
+    `self-hosted`, `Linux`, `ARM64`, `debian13`, `trixie`
+- 如果 ARM64 runner 离线或标签不匹配，`arm64` build job 会处于 `pending`，最终导致 manifest 合并阶段无法完成。
+
 ### 标签策略
 
 - `latest`（仅默认分支）

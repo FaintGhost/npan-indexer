@@ -41,6 +41,13 @@
 - [x] 3. 补充仓库配置说明（Secrets、触发条件、镜像标签策略）
 - [x] 4. 自检工作流语法与影响范围
 
+## 新任务：ARM64 构建切换到 Self-hosted Runner
+
+- [x] 1. 调整 `docker-publish` workflow 为分平台构建（amd64 / arm64）
+- [x] 2. 将 `linux/arm64` 任务绑定到 `self-hosted Linux ARM64 debian13 trixie`
+- [x] 3. 新增 manifest 合并步骤，确保两平台标签统一推送到 Docker Hub + GHCR
+- [x] 4. 更新 README 对 runner 前置条件说明并完成工作流静态自检
+
 ## Review（Docker 发布流水线）
 
 - 已新增 workflow：`.github/workflows/docker-publish.yml`
@@ -51,6 +58,21 @@
 - 自检结果：
   - `git diff --check -- .github/workflows/docker-publish.yml README.md ...` 通过
   - 本地无法直接模拟 GitHub 托管运行环境；首次真实验证需在 GitHub 上触发 workflow。
+
+## Review（ARM64 Self-hosted Runner 切换）
+
+- Workflow 已拆分为 `prepare`、`build(matrix)`、`merge` 三段：
+  - `amd64` 继续使用 GitHub 托管 `ubuntu-latest`
+  - `arm64` 改为 `runs-on: [self-hosted, Linux, ARM64, debian13, trixie]`
+- `build` 阶段按平台 push by digest，`merge` 阶段统一创建多架构 manifest 并打标签（Docker Hub + GHCR）。
+- 文档已补充 ARM64 self-hosted runner 标签要求，避免 workflow 因 runner 不匹配而 pending。
+- 验证结果：
+  - `git diff --check -- .github/workflows/docker-publish.yml README.md tasks/todo.md` 通过
+  - `GOCACHE=/tmp/go-build go test ./...` 通过（本机默认 `/root/.cache/go-build` 无写权限）
+  - `cd web && bun vitest run` 通过（22 files / 184 tests）
+  - 容器化链路（`docker compose ... up --wait` + `./tests/smoke/smoke_test.sh` + `docker compose --profile e2e run --rm playwright`）通过
+    - 冒烟：34/34
+    - E2E：32/32
 
 ## Review（本轮实施结果）
 
