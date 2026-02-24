@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { SyncProgress } from '@/lib/sync-schemas'
+import { preferTimestampMillis, type SyncProgress } from '@/lib/sync-schemas'
 
 interface SyncProgressDisplayProps {
   progress: SyncProgress
@@ -25,6 +25,8 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
   const config = statusConfig[progress.status] ?? defaultConfig
   const stats = progress.aggregateStats
   const isRunning = progress.status === 'running'
+  const startedAt = preferTimestampMillis(progress.startedAt, progress.startedAtTs)
+  const endedAt = preferTimestampMillis(stats.endedAt, stats.endedAtTs)
   const rootNames = progress.catalogRootNames ?? progress.rootNames
   const rootProgress = progress.catalogRootProgress ?? progress.rootProgress
 
@@ -44,10 +46,10 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
             {config.label}
           </span>
         </div>
-        {progress.startedAt > 0 && (
+        {startedAt > 0 && (
           <ElapsedTime
-            startedAt={progress.startedAt}
-            endedAt={stats.endedAt}
+            startedAt={startedAt}
+            endedAt={endedAt}
             isRunning={isRunning}
           />
         )}

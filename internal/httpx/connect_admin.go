@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
 	npanv1 "npan/gen/go/npan/v1"
 	"npan/internal/models"
 	"npan/internal/service"
@@ -190,7 +192,9 @@ func toProtoSyncProgressState(state *models.SyncProgressState) *npanv1.SyncProgr
 	resp := &npanv1.SyncProgressState{
 		Status:              toProtoSyncStatus(state.Status),
 		StartedAt:           state.StartedAt,
+		StartedAtTs:         millisToProtoTimestamp(state.StartedAt),
 		UpdatedAt:           state.UpdatedAt,
+		UpdatedAtTs:         millisToProtoTimestamp(state.UpdatedAt),
 		Roots:               state.Roots,
 		CompletedRoots:      state.CompletedRoots,
 		ActiveRoot:          state.ActiveRoot,
@@ -277,7 +281,9 @@ func toProtoCrawlStats(stats models.CrawlStats) *npanv1.CrawlStats {
 		PagesFetched:    stats.PagesFetched,
 		FailedRequests:  stats.FailedRequests,
 		StartedAt:       stats.StartedAt,
+		StartedAtTs:     millisToProtoTimestamp(stats.StartedAt),
 		EndedAt:         stats.EndedAt,
+		EndedAtTs:       millisToProtoTimestamp(stats.EndedAt),
 	}
 }
 
@@ -296,6 +302,7 @@ func toProtoRootProgressMap(in map[string]*models.RootSyncProgress) map[string]*
 			EstimatedTotalDocs: value.EstimatedTotalDocs,
 			Stats:              toProtoCrawlStats(value.Stats),
 			UpdatedAt:          value.UpdatedAt,
+			UpdatedAtTs:        millisToProtoTimestamp(value.UpdatedAt),
 		}
 	}
 	return out
@@ -310,4 +317,11 @@ func int64MapToStringKeyMap(in map[int64]string) map[string]string {
 		out[strconv.FormatInt(key, 10)] = value
 	}
 	return out
+}
+
+func millisToProtoTimestamp(raw int64) *timestamppb.Timestamp {
+	if raw <= 0 {
+		return nil
+	}
+	return timestamppb.New(time.UnixMilli(raw))
 }

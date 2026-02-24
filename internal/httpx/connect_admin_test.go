@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -147,5 +148,60 @@ func TestConnectAdminGetSyncProgress_NotFoundAndCancelConflict(t *testing.T) {
 	}
 	if got := connect.CodeOf(err); got != connect.CodeAborted {
 		t.Fatalf("expected aborted, got %v", got)
+	}
+}
+
+func TestToProtoSyncProgressState_PopulatesTimestampSidecar(t *testing.T) {
+	t.Parallel()
+
+	startedAt := int64(1700000000123)
+	updatedAt := int64(1700000005123)
+	rootUpdatedAt := int64(1700000008123)
+	statsStartedAt := int64(1700000001123)
+	statsEndedAt := int64(1700000002123)
+
+	state := &models.SyncProgressState{
+		Status:    "running",
+		StartedAt: startedAt,
+		UpdatedAt: updatedAt,
+		AggregateStats: models.CrawlStats{
+			StartedAt: statsStartedAt,
+			EndedAt:   statsEndedAt,
+		},
+		RootProgress: map[string]*models.RootSyncProgress{
+			"1": {
+				RootFolderID: 1,
+				Status:       "running",
+				Stats: models.CrawlStats{
+					StartedAt: statsStartedAt,
+					EndedAt:   statsEndedAt,
+				},
+				UpdatedAt: rootUpdatedAt,
+			},
+		},
+	}
+
+	got := toProtoSyncProgressState(state)
+	if got == nil {
+		t.Fatalf("expected non-nil response")
+	}
+	if got.GetStartedAtTs() == nil {
+		t.Fatalf("expected started_at_ts to be set")
+	}
+	if got.GetUpdatedAtTs() == nil {
+		t.Fatalf("expected updated_at_ts to be set")
+	}
+	if got.GetAggregateStats() == nil || got.GetAggregateStats().GetStartedAtTs() == nil || got.GetAggregateStats().GetEndedAtTs() == nil {
+		t.Fatalf("expected aggregate stats timestamp sidecars to be set")
+	}
+	root := got.GetRootProgress()["1"]
+	if root == nil || root.GetUpdatedAtTs() == nil {
+		t.Fatalf("expected root progress updated_at_ts to be set")
+	}
+	if got.GetStartedAtTs().AsTime().UnixMilli() != time.UnixMilli(startedAt).UnixMilli() {
+		t.Fatalf("unexpected started_at_ts value")
+	}
+	if got.GetUpdatedAtTs().AsTime().UnixMilli() != time.UnixMilli(updatedAt).UnixMilli() {
+		t.Fatalf("unexpected updated_at_ts value")
 	}
 }

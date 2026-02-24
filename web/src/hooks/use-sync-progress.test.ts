@@ -81,6 +81,41 @@ describe("useSyncProgress", () => {
     });
   });
 
+  it("prefers timestamp sidecar fields when present", async () => {
+    server.use(
+      http.get("/api/v1/admin/sync", () => {
+        return HttpResponse.json({
+          ...validProgress,
+          startedAt: 1,
+          updatedAt: 2,
+          startedAtTs: { seconds: 1700000000, nanos: 123000000 },
+          updatedAtTs: { seconds: 1700000005, nanos: 456000000 },
+          aggregateStats: {
+            ...validProgress.aggregateStats,
+            startedAt: 3,
+            endedAt: 4,
+            startedAtTs: { seconds: 1700000001, nanos: 0 },
+            endedAtTs: { seconds: 1700000002, nanos: 250000000 },
+          },
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => useSyncProgress(headers));
+
+    await waitFor(() => {
+      expect(result.current.progress).not.toBeNull();
+      expect(result.current.progress?.startedAt).toBe(1700000000123);
+      expect(result.current.progress?.updatedAt).toBe(1700000005456);
+      expect(result.current.progress?.aggregateStats.startedAt).toBe(
+        1700000001000,
+      );
+      expect(result.current.progress?.aggregateStats.endedAt).toBe(
+        1700000002250,
+      );
+    });
+  });
+
   it("starts sync", async () => {
     let postCalled = false;
     server.use(

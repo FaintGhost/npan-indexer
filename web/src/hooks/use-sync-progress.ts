@@ -3,10 +3,48 @@ import { apiGet, apiPost, apiDelete, ApiError } from "@/lib/api-client";
 import {
   SyncProgressSchema,
   InspectRootsResponseSchema,
+  preferTimestampMillis,
 } from "@/lib/sync-schemas";
 import type { SyncProgress, InspectRootsResponse } from "@/lib/sync-schemas";
 
 const POLL_INTERVAL = 2000;
+
+function normalizeCrawlStatsTimestamps(
+  stats: SyncProgress["aggregateStats"],
+): SyncProgress["aggregateStats"] {
+  return {
+    ...stats,
+    startedAt: preferTimestampMillis(stats.startedAt, stats.startedAtTs),
+    endedAt: preferTimestampMillis(stats.endedAt, stats.endedAtTs),
+  };
+}
+
+function normalizeRootProgressTimestamps(
+  rootProgress: SyncProgress["rootProgress"],
+): SyncProgress["rootProgress"] {
+  const next: SyncProgress["rootProgress"] = {};
+  for (const [key, value] of Object.entries(rootProgress)) {
+    next[key] = {
+      ...value,
+      updatedAt: preferTimestampMillis(value.updatedAt, value.updatedAtTs),
+      stats: normalizeCrawlStatsTimestamps(value.stats),
+    };
+  }
+  return next;
+}
+
+export function normalizeSyncProgressTimestamps(progress: SyncProgress): SyncProgress {
+  return {
+    ...progress,
+    startedAt: preferTimestampMillis(progress.startedAt, progress.startedAtTs),
+    updatedAt: preferTimestampMillis(progress.updatedAt, progress.updatedAtTs),
+    aggregateStats: normalizeCrawlStatsTimestamps(progress.aggregateStats),
+    rootProgress: normalizeRootProgressTimestamps(progress.rootProgress),
+    catalogRootProgress: progress.catalogRootProgress
+      ? normalizeRootProgressTimestamps(progress.catalogRootProgress)
+      : progress.catalogRootProgress,
+  };
+}
 
 export function useSyncProgress(headers: Record<string, string>) {
   const [progress, setProgress] = useState<SyncProgress | null>(null);
@@ -25,9 +63,10 @@ export function useSyncProgress(headers: Record<string, string>) {
         SyncProgressSchema,
         { headers },
       );
-      setProgress(result as SyncProgress);
+      const normalized = normalizeSyncProgressTimestamps(result as SyncProgress);
+      setProgress(normalized);
       setError(null);
-      return result;
+      return normalized;
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         // No sync progress yet — not an error

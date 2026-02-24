@@ -457,3 +457,61 @@
 - 迁移策略已固化：
   - 先“新增 + 双写 + 回退读取”，再评估后续清理旧字段；
   - 兼容优先，不做同批次破坏式替换。
+
+## 新任务：Connect-RPC Timestamp 迁移（Executing Plans）
+
+- [x] 1. 新增 proto descriptor Red 测试，验证 `*_ts` 字段缺失（Red）
+- [x] 2. 在 `proto/npan/v1/api.proto` 为进度消息新增 Timestamp sidecar 字段并生成代码（Green）
+- [x] 3. 新增后端 progress DTO 映射 Red 测试，验证 `*_ts` 未填充（Red）
+- [x] 4. 在 `internal/httpx/connect_admin.go` 实现 `int64 -> Timestamp` 双字段映射（Green）
+- [x] 5. 新增前端 hook / 组件 Timestamp 优先与回退测试（Red）
+- [x] 6. 实现前端时间兼容适配层，支持 `Timestamp | int64` 消费（Green）
+- [x] 7. 执行 lint/generate/后端/前端回归并完成兼容门槛检查
+
+## Review（Connect-RPC Timestamp 迁移 / 实施结果）
+
+- 代码改动：
+  - `proto/npan/v1/api.proto`
+    - 引入 `google/protobuf/timestamp.proto`
+    - 为以下消息新增 Timestamp sidecar 字段（保留旧 `int64` 不动）：
+      - `CrawlStats.started_at_ts` / `ended_at_ts`
+      - `RootSyncProgress.updated_at_ts`
+      - `SyncProgressState.started_at_ts` / `updated_at_ts`
+  - 生成产物更新：
+    - `gen/go/npan/v1/api.pb.go`
+    - `gen/ts/npan/v1/api_pb.ts`
+  - 新增后端测试：
+    - `internal/httpx/connect_timestamp_descriptor_test.go`（descriptor 字段存在性）
+  - 更新后端实现与测试：
+    - `internal/httpx/connect_admin.go` 新增 `millisToProtoTimestamp(...)` 并在 progress DTO 转换中双写 `*_ts`
+    - `internal/httpx/connect_admin_test.go` 增加 `toProtoSyncProgressState` sidecar 映射断言
+  - 前端兼容适配：
+    - `web/src/lib/sync-schemas.ts`
+      - 扩展 `SyncProgress`/`CrawlStats`/`RootProgress` schema，允许可选 Timestamp sidecar 字段
+      - 新增 `timestampLikeToMillis` / `preferTimestampMillis`
+    - `web/src/hooks/use-sync-progress.ts`
+      - 新增 `normalizeSyncProgressTimestamps(...)`，在拉取 progress 后统一归一化时间字段
+    - `web/src/components/sync-progress-display.tsx`
+      - `ElapsedTime` 改为优先使用 `*_ts` sidecar，回退旧 `int64`
+    - 测试更新：
+      - `web/src/hooks/use-sync-progress.test.ts`
+      - `web/src/components/sync-progress-display.test.tsx`
+- BDD Red/Green 证据：
+  - Red（Task 001）：`TestConnectTimestampDescriptor_ProgressMessagesHaveSidecarFields` 失败，提示 `started_at_ts/updated_at_ts` 字段缺失
+  - Green（Task 002）：新增 proto sidecar 字段并生成后，descriptor 测试转绿
+  - Red（Task 003）：`TestToProtoSyncProgressState_PopulatesTimestampSidecar` 失败，提示 `started_at_ts` 未填充
+  - Green（Task 004）：后端 DTO 映射补齐后测试转绿
+  - Red（Task 005）：前端新增两条用例失败（hook 未优先取 sidecar；组件 elapsed 仍走旧值）
+  - Green（Task 006）：前端适配层上线后两条用例转绿
+- 验证结果：
+  - `XDG_CACHE_HOME=/tmp/.cache BUF_CACHE_DIR=/tmp/.cache/buf ./.bin/buf lint` 通过
+  - `XDG_CACHE_HOME=/tmp/.cache BUF_CACHE_DIR=/tmp/.cache/buf ./.bin/buf generate` 通过
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go-mod go test ./internal/httpx -count=1` 通过
+  - `GOCACHE=/tmp/go-build GOMODCACHE=/tmp/go-mod go test ./... -count=1` 通过（先创建 `web/dist/.gitkeep` 占位）
+  - `cd web && bun vitest run src/hooks/use-sync-progress.test.ts src/components/sync-progress-display.test.tsx` 通过（30 tests）
+  - `cd web && bun vitest run` 通过（22 files / 189 tests）
+  - `git diff --check` 通过
+- 兼容门槛检查（Task 007）：
+  - 旧 `int64` 字段仍保留在 `proto/npan/v1/api.proto`（未做破坏式替换）。
+  - `internal/models` 与 `internal/storage` 持久化结构未改为 `Timestamp`，仍沿用 `int64` 存储。
+  - 服务端仅在 Connect DTO 输出层新增 sidecar 双写，符合“最小影响面”策略。

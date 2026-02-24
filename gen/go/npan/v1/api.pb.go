@@ -10,6 +10,7 @@ import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -496,6 +497,8 @@ type CrawlStats struct {
 	FailedRequests  int64                  `protobuf:"varint,6,opt,name=failed_requests,json=failedRequests,proto3" json:"failed_requests,omitempty"`
 	StartedAt       int64                  `protobuf:"varint,7,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	EndedAt         int64                  `protobuf:"varint,8,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	StartedAtTs     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=started_at_ts,json=startedAtTs,proto3" json:"started_at_ts,omitempty"`
+	EndedAtTs       *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=ended_at_ts,json=endedAtTs,proto3" json:"ended_at_ts,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -586,6 +589,20 @@ func (x *CrawlStats) GetEndedAt() int64 {
 	return 0
 }
 
+func (x *CrawlStats) GetStartedAtTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAtTs
+	}
+	return nil
+}
+
+func (x *CrawlStats) GetEndedAtTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndedAtTs
+	}
+	return nil
+}
+
 type RootSyncProgress struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	RootFolderId       int64                  `protobuf:"varint,1,opt,name=root_folder_id,json=rootFolderId,proto3" json:"root_folder_id,omitempty"`
@@ -593,6 +610,7 @@ type RootSyncProgress struct {
 	EstimatedTotalDocs *int64                 `protobuf:"varint,3,opt,name=estimated_total_docs,json=estimatedTotalDocs,proto3,oneof" json:"estimated_total_docs,omitempty"`
 	Stats              *CrawlStats            `protobuf:"bytes,4,opt,name=stats,proto3" json:"stats,omitempty"`
 	UpdatedAt          int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	UpdatedAtTs        *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at_ts,json=updatedAtTs,proto3" json:"updated_at_ts,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -660,6 +678,13 @@ func (x *RootSyncProgress) GetUpdatedAt() int64 {
 		return x.UpdatedAt
 	}
 	return 0
+}
+
+func (x *RootSyncProgress) GetUpdatedAtTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAtTs
+	}
+	return nil
 }
 
 type IncrementalSyncStats struct {
@@ -856,6 +881,8 @@ type SyncProgressState struct {
 	IncrementalStats    *IncrementalSyncStats        `protobuf:"bytes,14,opt,name=incremental_stats,json=incrementalStats,proto3,oneof" json:"incremental_stats,omitempty"`
 	LastError           *string                      `protobuf:"bytes,15,opt,name=last_error,json=lastError,proto3,oneof" json:"last_error,omitempty"`
 	Verification        *SyncVerification            `protobuf:"bytes,16,opt,name=verification,proto3,oneof" json:"verification,omitempty"`
+	StartedAtTs         *timestamppb.Timestamp       `protobuf:"bytes,17,opt,name=started_at_ts,json=startedAtTs,proto3" json:"started_at_ts,omitempty"`
+	UpdatedAtTs         *timestamppb.Timestamp       `protobuf:"bytes,18,opt,name=updated_at_ts,json=updatedAtTs,proto3" json:"updated_at_ts,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -998,6 +1025,20 @@ func (x *SyncProgressState) GetLastError() string {
 func (x *SyncProgressState) GetVerification() *SyncVerification {
 	if x != nil {
 		return x.Verification
+	}
+	return nil
+}
+
+func (x *SyncProgressState) GetStartedAtTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAtTs
+	}
+	return nil
+}
+
+func (x *SyncProgressState) GetUpdatedAtTs() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAtTs
 	}
 	return nil
 }
@@ -2642,7 +2683,7 @@ var File_npan_v1_api_proto protoreflect.FileDescriptor
 
 const file_npan_v1_api_proto_rawDesc = "" +
 	"\n" +
-	"\x11npan/v1/api.proto\x12\anpan.v1\x1a\x1bbuf/validate/validate.proto\"\x9f\x03\n" +
+	"\x11npan/v1/api.proto\x12\anpan.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9f\x03\n" +
 	"\rIndexDocument\x12\x15\n" +
 	"\x06doc_id\x18\x01 \x01(\tR\x05docId\x12\x1b\n" +
 	"\tsource_id\x18\x02 \x01(\x03R\bsourceId\x12%\n" +
@@ -2664,7 +2705,7 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x11_highlighted_name\"Q\n" +
 	"\vQueryResult\x12,\n" +
 	"\x05items\x18\x01 \x03(\v2\x16.npan.v1.IndexDocumentR\x05items\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\x03R\x05total\"\xb2\x02\n" +
+	"\x05total\x18\x02 \x01(\x03R\x05total\"\xae\x03\n" +
 	"\n" +
 	"CrawlStats\x12'\n" +
 	"\x0ffolders_visited\x18\x01 \x01(\x03R\x0efoldersVisited\x12#\n" +
@@ -2675,14 +2716,18 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x0ffailed_requests\x18\x06 \x01(\x03R\x0efailedRequests\x12\x1d\n" +
 	"\n" +
 	"started_at\x18\a \x01(\x03R\tstartedAt\x12\x19\n" +
-	"\bended_at\x18\b \x01(\x03R\aendedAt\"\xea\x01\n" +
+	"\bended_at\x18\b \x01(\x03R\aendedAt\x12>\n" +
+	"\rstarted_at_ts\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vstartedAtTs\x12:\n" +
+	"\vended_at_ts\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tendedAtTs\"\xaa\x02\n" +
 	"\x10RootSyncProgress\x12$\n" +
 	"\x0eroot_folder_id\x18\x01 \x01(\x03R\frootFolderId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x125\n" +
 	"\x14estimated_total_docs\x18\x03 \x01(\x03H\x00R\x12estimatedTotalDocs\x88\x01\x01\x12)\n" +
 	"\x05stats\x18\x04 \x01(\v2\x13.npan.v1.CrawlStatsR\x05stats\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x05 \x01(\x03R\tupdatedAtB\x17\n" +
+	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\x12>\n" +
+	"\rupdated_at_ts\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\vupdatedAtTsB\x17\n" +
 	"\x15_estimated_total_docs\"\x8f\x02\n" +
 	"\x14IncrementalSyncStats\x12'\n" +
 	"\x0fchanges_fetched\x18\x01 \x01(\x03R\x0echangesFetched\x12\x1a\n" +
@@ -2698,8 +2743,7 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x14discovered_doc_count\x18\x03 \x01(\x03R\x12discoveredDocCount\x12#\n" +
 	"\rskipped_count\x18\x04 \x01(\x03R\fskippedCount\x12\x1a\n" +
 	"\bverified\x18\x05 \x01(\bR\bverified\x12\x1a\n" +
-	"\bwarnings\x18\x06 \x03(\tR\bwarnings\"\xa2\n" +
-	"\n" +
+	"\bwarnings\x18\x06 \x03(\tR\bwarnings\"\xa2\v\n" +
 	"\x11SyncProgressState\x12+\n" +
 	"\x06status\x18\x01 \x01(\x0e2\x13.npan.v1.SyncStatusR\x06status\x12*\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x11.npan.v1.SyncModeH\x00R\x04mode\x88\x01\x01\x12\x1d\n" +
@@ -2722,7 +2766,9 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x11incremental_stats\x18\x0e \x01(\v2\x1d.npan.v1.IncrementalSyncStatsH\x02R\x10incrementalStats\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"last_error\x18\x0f \x01(\tH\x03R\tlastError\x88\x01\x01\x12B\n" +
-	"\fverification\x18\x10 \x01(\v2\x19.npan.v1.SyncVerificationH\x04R\fverification\x88\x01\x01\x1a<\n" +
+	"\fverification\x18\x10 \x01(\v2\x19.npan.v1.SyncVerificationH\x04R\fverification\x88\x01\x01\x12>\n" +
+	"\rstarted_at_ts\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\vstartedAtTs\x12>\n" +
+	"\rupdated_at_ts\x18\x12 \x01(\v2\x1a.google.protobuf.TimestampR\vupdatedAtTs\x1a<\n" +
 	"\x0eRootNamesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aZ\n" +
@@ -2999,63 +3045,69 @@ var file_npan_v1_api_proto_goTypes = []any{
 	nil,                             // 42: npan.v1.SyncProgressState.RootProgressEntry
 	nil,                             // 43: npan.v1.SyncProgressState.CatalogRootNamesEntry
 	nil,                             // 44: npan.v1.SyncProgressState.CatalogRootProgressEntry
+	(*timestamppb.Timestamp)(nil),   // 45: google.protobuf.Timestamp
 }
 var file_npan_v1_api_proto_depIdxs = []int32{
 	0,  // 0: npan.v1.IndexDocument.type:type_name -> npan.v1.ItemType
 	5,  // 1: npan.v1.QueryResult.items:type_name -> npan.v1.IndexDocument
-	7,  // 2: npan.v1.RootSyncProgress.stats:type_name -> npan.v1.CrawlStats
-	1,  // 3: npan.v1.SyncProgressState.status:type_name -> npan.v1.SyncStatus
-	2,  // 4: npan.v1.SyncProgressState.mode:type_name -> npan.v1.SyncMode
-	41, // 5: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
-	7,  // 6: npan.v1.SyncProgressState.aggregate_stats:type_name -> npan.v1.CrawlStats
-	42, // 7: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
-	43, // 8: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
-	44, // 9: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
-	9,  // 10: npan.v1.SyncProgressState.incremental_stats:type_name -> npan.v1.IncrementalSyncStats
-	10, // 11: npan.v1.SyncProgressState.verification:type_name -> npan.v1.SyncVerification
-	3,  // 12: npan.v1.ErrorResponse.code:type_name -> npan.v1.ErrorCode
-	14, // 13: npan.v1.RemoteSearchResponse.files:type_name -> npan.v1.RemoteSearchItem
-	14, // 14: npan.v1.RemoteSearchResponse.folders:type_name -> npan.v1.RemoteSearchItem
-	4,  // 15: npan.v1.ReadyzResponse.status:type_name -> npan.v1.ReadyStatus
-	6,  // 16: npan.v1.AppSearchResponse.result:type_name -> npan.v1.QueryResult
-	13, // 17: npan.v1.AppDownloadURLResponse.result:type_name -> npan.v1.DownloadURLResult
-	6,  // 18: npan.v1.LocalSearchResponse.result:type_name -> npan.v1.QueryResult
-	13, // 19: npan.v1.DownloadURLResponse.result:type_name -> npan.v1.DownloadURLResult
-	2,  // 20: npan.v1.StartSyncRequest.mode:type_name -> npan.v1.SyncMode
-	16, // 21: npan.v1.InspectRootsResponse.items:type_name -> npan.v1.InspectRootItem
-	17, // 22: npan.v1.InspectRootsResponse.errors:type_name -> npan.v1.InspectRootError
-	11, // 23: npan.v1.GetSyncProgressResponse.state:type_name -> npan.v1.SyncProgressState
-	8,  // 24: npan.v1.SyncProgressState.RootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
-	8,  // 25: npan.v1.SyncProgressState.CatalogRootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
-	18, // 26: npan.v1.HealthService.Health:input_type -> npan.v1.HealthRequest
-	20, // 27: npan.v1.HealthService.Readyz:input_type -> npan.v1.ReadyzRequest
-	22, // 28: npan.v1.AppService.AppSearch:input_type -> npan.v1.AppSearchRequest
-	24, // 29: npan.v1.AppService.AppDownloadURL:input_type -> npan.v1.AppDownloadURLRequest
-	26, // 30: npan.v1.AuthService.CreateToken:input_type -> npan.v1.CreateTokenRequest
-	28, // 31: npan.v1.SearchService.RemoteSearch:input_type -> npan.v1.RemoteSearchRequest
-	29, // 32: npan.v1.SearchService.LocalSearch:input_type -> npan.v1.LocalSearchRequest
-	31, // 33: npan.v1.SearchService.DownloadURL:input_type -> npan.v1.DownloadURLRequest
-	33, // 34: npan.v1.AdminService.StartSync:input_type -> npan.v1.StartSyncRequest
-	35, // 35: npan.v1.AdminService.InspectRoots:input_type -> npan.v1.InspectRootsRequest
-	37, // 36: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
-	39, // 37: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
-	19, // 38: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
-	21, // 39: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
-	23, // 40: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
-	25, // 41: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
-	27, // 42: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
-	15, // 43: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
-	30, // 44: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
-	32, // 45: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
-	34, // 46: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
-	36, // 47: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
-	38, // 48: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
-	40, // 49: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
-	38, // [38:50] is the sub-list for method output_type
-	26, // [26:38] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	45, // 2: npan.v1.CrawlStats.started_at_ts:type_name -> google.protobuf.Timestamp
+	45, // 3: npan.v1.CrawlStats.ended_at_ts:type_name -> google.protobuf.Timestamp
+	7,  // 4: npan.v1.RootSyncProgress.stats:type_name -> npan.v1.CrawlStats
+	45, // 5: npan.v1.RootSyncProgress.updated_at_ts:type_name -> google.protobuf.Timestamp
+	1,  // 6: npan.v1.SyncProgressState.status:type_name -> npan.v1.SyncStatus
+	2,  // 7: npan.v1.SyncProgressState.mode:type_name -> npan.v1.SyncMode
+	41, // 8: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
+	7,  // 9: npan.v1.SyncProgressState.aggregate_stats:type_name -> npan.v1.CrawlStats
+	42, // 10: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
+	43, // 11: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
+	44, // 12: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
+	9,  // 13: npan.v1.SyncProgressState.incremental_stats:type_name -> npan.v1.IncrementalSyncStats
+	10, // 14: npan.v1.SyncProgressState.verification:type_name -> npan.v1.SyncVerification
+	45, // 15: npan.v1.SyncProgressState.started_at_ts:type_name -> google.protobuf.Timestamp
+	45, // 16: npan.v1.SyncProgressState.updated_at_ts:type_name -> google.protobuf.Timestamp
+	3,  // 17: npan.v1.ErrorResponse.code:type_name -> npan.v1.ErrorCode
+	14, // 18: npan.v1.RemoteSearchResponse.files:type_name -> npan.v1.RemoteSearchItem
+	14, // 19: npan.v1.RemoteSearchResponse.folders:type_name -> npan.v1.RemoteSearchItem
+	4,  // 20: npan.v1.ReadyzResponse.status:type_name -> npan.v1.ReadyStatus
+	6,  // 21: npan.v1.AppSearchResponse.result:type_name -> npan.v1.QueryResult
+	13, // 22: npan.v1.AppDownloadURLResponse.result:type_name -> npan.v1.DownloadURLResult
+	6,  // 23: npan.v1.LocalSearchResponse.result:type_name -> npan.v1.QueryResult
+	13, // 24: npan.v1.DownloadURLResponse.result:type_name -> npan.v1.DownloadURLResult
+	2,  // 25: npan.v1.StartSyncRequest.mode:type_name -> npan.v1.SyncMode
+	16, // 26: npan.v1.InspectRootsResponse.items:type_name -> npan.v1.InspectRootItem
+	17, // 27: npan.v1.InspectRootsResponse.errors:type_name -> npan.v1.InspectRootError
+	11, // 28: npan.v1.GetSyncProgressResponse.state:type_name -> npan.v1.SyncProgressState
+	8,  // 29: npan.v1.SyncProgressState.RootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
+	8,  // 30: npan.v1.SyncProgressState.CatalogRootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
+	18, // 31: npan.v1.HealthService.Health:input_type -> npan.v1.HealthRequest
+	20, // 32: npan.v1.HealthService.Readyz:input_type -> npan.v1.ReadyzRequest
+	22, // 33: npan.v1.AppService.AppSearch:input_type -> npan.v1.AppSearchRequest
+	24, // 34: npan.v1.AppService.AppDownloadURL:input_type -> npan.v1.AppDownloadURLRequest
+	26, // 35: npan.v1.AuthService.CreateToken:input_type -> npan.v1.CreateTokenRequest
+	28, // 36: npan.v1.SearchService.RemoteSearch:input_type -> npan.v1.RemoteSearchRequest
+	29, // 37: npan.v1.SearchService.LocalSearch:input_type -> npan.v1.LocalSearchRequest
+	31, // 38: npan.v1.SearchService.DownloadURL:input_type -> npan.v1.DownloadURLRequest
+	33, // 39: npan.v1.AdminService.StartSync:input_type -> npan.v1.StartSyncRequest
+	35, // 40: npan.v1.AdminService.InspectRoots:input_type -> npan.v1.InspectRootsRequest
+	37, // 41: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
+	39, // 42: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
+	19, // 43: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
+	21, // 44: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
+	23, // 45: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
+	25, // 46: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
+	27, // 47: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
+	15, // 48: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
+	30, // 49: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
+	32, // 50: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
+	34, // 51: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
+	36, // 52: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
+	38, // 53: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
+	40, // 54: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
+	43, // [43:55] is the sub-list for method output_type
+	31, // [31:43] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_npan_v1_api_proto_init() }

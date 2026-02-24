@@ -254,4 +254,21 @@ describe("SyncProgressDisplay", () => {
     await userEvent.click(screen.getByRole("switch", { name: /选择根目录 100/i }));
     expect(onToggleRoot).toHaveBeenCalledWith(100);
   });
+
+  it("prefers timestamp sidecar fields for elapsed time display", () => {
+    const progress = {
+      ...baseProgress,
+      status: "done",
+      startedAt: 100,
+      startedAtTs: { seconds: 1700000000, nanos: 0 },
+      aggregateStats: {
+        ...baseProgress.aggregateStats,
+        endedAt: 101,
+        endedAtTs: { seconds: 1700000005, nanos: 0 },
+      },
+    } as unknown as SyncProgress;
+
+    render(<SyncProgressDisplay progress={progress} />);
+    expect(screen.getByText(/用时 5s/)).toBeInTheDocument();
+  });
 });
