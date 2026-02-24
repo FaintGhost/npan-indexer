@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
@@ -138,15 +139,18 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 	e.GET("/readyz", handlers.Readyz)
 
 	// Connect-RPC endpoints (gradual migration, coexist with REST).
-	healthPath, healthConnectHandler := npanv1connect.NewHealthServiceHandler(newHealthConnectServer(handlers))
+	connectHandlerOptions := []connect.HandlerOption{
+		connect.WithInterceptors(NewConnectErrorInterceptor(slog.Default())),
+	}
+	healthPath, healthConnectHandler := npanv1connect.NewHealthServiceHandler(newHealthConnectServer(handlers), connectHandlerOptions...)
 	e.Any(healthPath+"*", echo.WrapHandler(healthConnectHandler))
-	appPath, appConnectHandler := npanv1connect.NewAppServiceHandler(newAppConnectServer(handlers))
+	appPath, appConnectHandler := npanv1connect.NewAppServiceHandler(newAppConnectServer(handlers), connectHandlerOptions...)
 	e.Group(strings.TrimRight(appPath, "/"), EmbeddedAuth()).
 		Any("/*", echo.WrapHandler(appConnectHandler))
-	authPath, authConnectHandler := npanv1connect.NewAuthServiceHandler(newAuthConnectServer(handlers))
+	authPath, authConnectHandler := npanv1connect.NewAuthServiceHandler(newAuthConnectServer(handlers), connectHandlerOptions...)
 	e.Group(strings.TrimRight(authPath, "/"), APIKeyAuth(adminAPIKey)).
 		Any("/*", echo.WrapHandler(authConnectHandler))
-	searchPath, searchConnectHandler := npanv1connect.NewSearchServiceHandler(newSearchConnectServer(handlers))
+	searchPath, searchConnectHandler := npanv1connect.NewSearchServiceHandler(newSearchConnectServer(handlers), connectHandlerOptions...)
 	e.Group(strings.TrimRight(searchPath, "/"), APIKeyAuth(adminAPIKey)).
 		Any("/*", echo.WrapHandler(searchConnectHandler))
 

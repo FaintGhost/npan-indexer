@@ -16,5 +16,9 @@ plugins:
     out: gen/ts
     opt:
       - target=ts
+  - remote: buf.build/connectrpc/query-es
+    out: gen/ts
+    opt:
+      - target=ts
 inputs:
   - directory: proto
