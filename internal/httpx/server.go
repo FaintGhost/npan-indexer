@@ -140,6 +140,7 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 
 	// Connect-RPC endpoints (gradual migration, coexist with REST).
 	connectHandlerOptions := []connect.HandlerOption{
+		connect.WithInterceptors(NewConnectValidationInterceptor(slog.Default())),
 		connect.WithInterceptors(NewConnectErrorInterceptor(slog.Default())),
 	}
 	healthPath, healthConnectHandler := npanv1connect.NewHealthServiceHandler(newHealthConnectServer(handlers), connectHandlerOptions...)
@@ -153,6 +154,9 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 	searchPath, searchConnectHandler := npanv1connect.NewSearchServiceHandler(newSearchConnectServer(handlers), connectHandlerOptions...)
 	e.Group(strings.TrimRight(searchPath, "/"), APIKeyAuth(adminAPIKey)).
 		Any("/*", echo.WrapHandler(searchConnectHandler))
+	adminConnectPath, adminConnectHandler := npanv1connect.NewAdminServiceHandler(newAdminConnectServer(handlers), connectHandlerOptions...)
+	e.Group(strings.TrimRight(adminConnectPath, "/"), APIKeyAuth(adminAPIKey), ConfigFallbackAuth(), RateLimitMiddleware(context.Background(), 5, 10)).
+		Any("/*", echo.WrapHandler(adminConnectHandler))
 
 	// SPA frontend served from embedded Vite build output.
 	// Specific routes (/api, /healthz, /readyz) take priority over the catch-all.

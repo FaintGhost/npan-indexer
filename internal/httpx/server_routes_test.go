@@ -76,6 +76,10 @@ func TestRoutes_AdminEndpoints_RequireAuth(t *testing.T) {
 		{http.MethodGet, "/api/v1/admin/sync/full/progress"},
 		{http.MethodPost, "/api/v1/admin/sync/full/cancel"},
 		{http.MethodPost, "/api/v1/admin/roots/inspect"},
+		{http.MethodPost, "/npan.v1.AdminService/StartSync"},
+		{http.MethodPost, "/npan.v1.AdminService/GetSyncProgress"},
+		{http.MethodPost, "/npan.v1.AdminService/CancelSync"},
+		{http.MethodPost, "/npan.v1.AdminService/InspectRoots"},
 	}
 
 	for _, ep := range endpoints {
@@ -106,6 +110,7 @@ func TestRoutes_APIEndpoints_WithKey_Pass(t *testing.T) {
 		{http.MethodPost, "/npan.v1.SearchService/LocalSearch"},
 		{http.MethodPost, "/npan.v1.AppService/AppSearch"},
 		{http.MethodPost, "/npan.v1.HealthService/Health"},
+		{http.MethodPost, "/npan.v1.AdminService/GetSyncProgress"},
 		{http.MethodPost, "/api/v1/admin/sync/full"},
 		{http.MethodGet, "/api/v1/admin/sync/full/progress"},
 		{http.MethodPost, "/api/v1/admin/sync/full/cancel"},
