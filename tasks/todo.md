@@ -73,6 +73,12 @@
 - [x] 2. 覆盖后端/前端/测试与构建关键文件，排除文档与任务记录类变更
 - [x] 3. 完成 workflow 静态检查并记录变更影响
 
+## 新任务：修复 CI 中 go:embed 在 dist 仅含隐藏文件时失败
+
+- [x] 1. 基于 GitHub Actions 日志定位 `web/embed.go` 匹配模式失败根因
+- [x] 2. 调整 embed 指令以支持 `dist` 目录仅包含 `.gitkeep` 的场景
+- [x] 3. 运行 Go 测试验证 `cmd/server` 与 `npan/web` 编译路径恢复正常
+
 ## Review（Docker 发布流水线）
 
 - 已新增 workflow：`.github/workflows/docker-publish.yml`
@@ -153,6 +159,16 @@
   - 白名单包含：`api/**`、`cmd/**`、`internal/**`、`tests/**`、`web/**`、`go.mod`、`go.sum`、`Dockerfile`、`docker-compose*.yml`、`Makefile`。
 - 影响：
   - 仅修改 `docs/**`、`tasks/**`、`.claude/**`、普通 markdown 等非源码文件时，不再触发整套 CI 测试。
+
+## Review（go:embed dist 匹配失败修复）
+
+- 根因：
+  - CI checkout 后 `web/dist` 只有 `.gitkeep`，原模式 `//go:embed dist/*` 不匹配隐藏文件。
+  - 导致 `go test ./...` 报错：`pattern dist/*: no matching files found`。
+- 修复：
+  - `web/embed.go` 改为 `//go:embed all:dist`，允许包含隐藏文件并递归嵌入目录。
+- 验证：
+  - `GOCACHE=/tmp/go-build go test ./... -short` 通过（`cmd/server` 与 `npan/web` 已不再 setup failed）。
 
 ## Review（本轮实施结果）
 
