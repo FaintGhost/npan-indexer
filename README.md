@@ -141,6 +141,32 @@ go run ./cmd/cli sync --progress-output json
 go run ./cmd/cli sync --mode incremental --incremental-query-words "* OR *" --window-overlap-ms 2000
 ```
 
+## 镜像发布（GitHub Actions）
+
+仓库已提供 `.github/workflows/docker-publish.yml`，用于构建并推送镜像到：
+
+- Docker Hub: `docker.io/<DOCKERHUB_USERNAME>/<repo>`
+- GHCR: `ghcr.io/<github_owner>/<repo>`
+
+### 触发条件
+
+- push 到 `main`
+- push `v*` tag（例如 `v1.0.0`）
+- 手动触发 `workflow_dispatch`
+
+### 需要的仓库 Secrets
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+> GHCR 使用 `GITHUB_TOKEN` 推送，workflow 已配置 `packages: write` 权限。
+
+### 标签策略
+
+- `latest`（仅默认分支）
+- `ref` 标签（分支名 / tag 名）
+- `sha-<commit>` 短标签
+
 ## 环境变量
 
 ### 必填

@@ -34,6 +34,24 @@
 - [x] 5. 按计划执行前端估计/告警展示
 - [x] 6. 运行生成校验与回归测试并记录结果
 
+## 新任务：Docker Registry 发布流水线
+
+- [x] 1. 产出 `docker publish` 实施计划文档（任务拆分 + 验证步骤）
+- [x] 2. 新增 GitHub Action：构建镜像并推送 Docker Hub + GHCR
+- [x] 3. 补充仓库配置说明（Secrets、触发条件、镜像标签策略）
+- [x] 4. 自检工作流语法与影响范围
+
+## Review（Docker 发布流水线）
+
+- 已新增 workflow：`.github/workflows/docker-publish.yml`
+  - 触发：`push(main)`、`push(v*)`、`workflow_dispatch`
+  - 行为：buildx 多平台构建并推送 Docker Hub + GHCR
+  - 标签：`latest`、`ref`、`sha-*`
+- 已更新文档：`README.md` 增加“镜像发布（GitHub Actions）”章节。
+- 自检结果：
+  - `git diff --check -- .github/workflows/docker-publish.yml README.md ...` 通过
+  - 本地无法直接模拟 GitHub 托管运行环境；首次真实验证需在 GitHub 上触发 workflow。
+
 ## Review（本轮实施结果）
 
 - 后端：
