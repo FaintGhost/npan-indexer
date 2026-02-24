@@ -778,3 +778,28 @@
   - `bash -n tests/smoke/smoke_test.sh` 通过
   - `git diff --check` 通过
   - `docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120 && ./tests/smoke/smoke_test.sh` 通过（34/34，使用脚本默认参数）
+
+## 新任务：修复 Docker Publish digest 污染
+
+- [x] 1. 修复 `.github/workflows/docker-publish.yml`，避免 self-hosted runner 残留 digest 文件进入当前发布
+- [x] 2. 校验 workflow 关键逻辑（artifact 路径、merge source 组装）与本地 diff
+- [x] 3. 回填 Review，并说明验证与回归风险
+
+## Review（修复 Docker Publish digest 污染）
+
+- 根因定位：
+  - `build` job 将 digest 文件写入固定目录 `/tmp/digests`，在 self-hosted ARM64 runner 上可能残留历史文件。
+  - `upload-artifact` 使用 `/tmp/digests/*` 上传，导致单次 `digests-arm64` artifact 混入历史 digest。
+  - `merge` job 会把下载目录中的所有 digest 都并入 manifest，最终污染 `latest`/`sha-*` 多平台镜像，ARM64 运行时可能命中旧版本。
+- 本轮修复：
+  - `build` job 新增 `Prepare digest artifact path`，使用 `${RUNNER_TEMP}` + `run_id/run_attempt/platform` 生成唯一目录，并在写入前清空。
+  - `Export digest` 改为输出单个 `digest_file` 路径。
+  - `Upload digest artifact` 改为上传该单文件，避免通配符吸入历史文件。
+  - `merge` job 下载目录改为 `${{ runner.temp }}` 下唯一目录。
+  - `merge` job 新增 `Validate downloaded digest count`，当前固定校验 2 个文件（amd64 + arm64），异常时 fail-fast。
+- 校验：
+  - `git diff --check` 通过。
+  - 本地环境缺少 `python`/`ruby`，未执行 YAML 解析校验；已用最小改动方式修改并保持表达式/字段名与 `actions/download-artifact@v4` 输出约定一致（`download-path`）。
+- 风险与后续建议：
+  - 若未来增加平台矩阵（不止 amd64/arm64），需同步调整 `Validate downloaded digest count` 的固定数量（当前为 `2`）。
+  - 修复合入 `main` 后需重新触发 Docker Publish，重新生成干净 manifest；部署端建议优先使用 `sha-<commit>` tag 或 platform digest 验证回归。

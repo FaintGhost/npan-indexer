@@ -50,3 +50,8 @@
   - `waitForRequest`/`waitForResponse` 默认使用短超时（优先 3s-5s），仅对已知慢路径使用 10s+。
   - UI 断言超时按场景分级：即时交互 3s、常规异步 5s、确实重负载流程才给 10s。
   - 出现批量超时时先检查“等待条件是否匹配当前协议/路径”（如 REST -> Connect 迁移），再考虑放宽超时。
+- 用户纠正：线上从 DockerHub 拉取 `latest` 后仍表现为旧版本，需要排查发布产物而非仅看代码分支。
+- 规则：
+  - 发布后优先核对镜像标签对应的 `org.opencontainers.image.revision`（或 `sha-<commit>` tag）是否匹配目标提交。
+  - 多平台 manifest 若行为异常，需检查各平台 digest 是否被错误混入历史条目（尤其 self-hosted runner 的临时目录残留）。
+  - CI 上传构建 digest artifact 时必须使用“每次运行唯一且清理过”的临时目录，不能复用固定 `/tmp` 路径。
