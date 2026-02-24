@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { SyncProgress } from "@/lib/sync-schemas";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
 import { useSyncProgress } from "@/hooks/use-sync-progress";
 import { ApiKeyDialog } from "@/components/api-key-dialog";
@@ -11,30 +12,20 @@ const SYNC_MODES = [
   { value: "incremental", label: "增量", description: "仅同步最近变更" },
 ] as const;
 
-function parseRootFolderIDs(raw: string): { ids: number[]; error?: string } {
-  const value = raw.trim();
-  if (value === "") {
-    return { ids: [] };
+function getSelectableRootIDs(progress: SyncProgress | null): number[] {
+  if (!progress) return [];
+
+  const fromCatalog = progress.catalogRoots ?? [];
+  if (fromCatalog.length > 0) {
+    return [...new Set(fromCatalog)].sort((a, b) => a - b);
   }
 
-  const parts = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const source = progress.catalogRootProgress ?? progress.rootProgress;
+  const ids = Object.keys(source ?? {})
+    .map((key) => Number(key))
+    .filter((id) => Number.isInteger(id) && id > 0);
 
-  const ids: number[] = [];
-  const seen = new Set<number>();
-  for (const part of parts) {
-    const parsed = Number(part);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      return { ids: [], error: `目录 ID 格式错误: ${part}` };
-    }
-    if (!seen.has(parsed)) {
-      seen.add(parsed);
-      ids.push(parsed);
-    }
-  }
-  return { ids };
+  return [...new Set(ids)].sort((a, b) => a - b);
 }
 
 export function AdminSyncPage() {
@@ -43,7 +34,8 @@ export function AdminSyncPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<string>("auto");
   const [forceRebuild, setForceRebuild] = useState(false);
-  const [rootIDsInput, setRootIDsInput] = useState("");
+  const [selectedRootIDs, setSelectedRootIDs] = useState<number[]>([]);
+  const selectionInitializedRef = useRef(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -61,9 +53,50 @@ export function AdminSyncPage() {
   });
 
   const isRunning = sync.progress?.status === "running";
-  const isBusy = sync.loading || isRunning;
+  const isBusy = sync.loading || sync.inspectLoading || isRunning;
+  const selectableRootIDs = useMemo(
+    () => getSelectableRootIDs(sync.progress),
+    [sync.progress],
+  );
+  const selectedScopedRoots = useMemo(() => {
+    if (mode !== "full") return [];
+    const selected = new Set(selectedRootIDs);
+    return selectableRootIDs.filter((id) => selected.has(id));
+  }, [mode, selectableRootIDs, selectedRootIDs]);
+
+  useEffect(() => {
+    if (selectionInitializedRef.current) return;
+    if (selectableRootIDs.length === 0) return;
+    setSelectedRootIDs(selectableRootIDs);
+    selectionInitializedRef.current = true;
+  }, [selectableRootIDs]);
+
+  const handleInspectRoots = async () => {
+    setMessage(null);
+    if (selectableRootIDs.length === 0) {
+      setMessage("暂无可拉取的根目录，请先完成一次全量同步");
+      return;
+    }
+
+    const result = await sync.inspectRoots(selectableRootIDs);
+    if (!result) return;
+
+    const successCount = result.items.length;
+    const failCount = result.errors?.length ?? 0;
+    setMessage(
+      failCount > 0
+        ? `目录详情已拉取：成功 ${successCount} 个，失败 ${failCount} 个`
+        : `目录详情已拉取：成功 ${successCount} 个`,
+    );
+    setTimeout(() => setMessage(null), 4000);
+  };
 
   const handleStartSync = async () => {
+    if (forceRebuild && selectedScopedRoots.length > 0) {
+      setMessage("强制重建仅允许全量全库执行，请先取消勾选目录");
+      return;
+    }
+
     if (forceRebuild) {
       setConfirmDialog({
         open: true,
@@ -84,12 +117,10 @@ export function AdminSyncPage() {
 
   const doStartSync = async () => {
     setMessage(null);
-    const parsed = parseRootFolderIDs(rootIDsInput);
-    if (parsed.error) {
-      setMessage(parsed.error);
-      return;
-    }
-    await sync.startSync(parsed.ids, mode, forceRebuild);
+    const scopedRootIDs = mode === "full" ? selectedScopedRoots : [];
+    await sync.startSync(scopedRootIDs, mode, forceRebuild, {
+      preserveRootCatalog: scopedRootIDs.length > 0,
+    });
     if (!sync.error) {
       setMessage("同步任务已启动");
       setTimeout(() => setMessage(null), 4000);
@@ -142,7 +173,6 @@ export function AdminSyncPage() {
         </a>
       </div>
 
-      {/* Mode selector + Action buttons */}
       <div className="mb-6 space-y-3">
         {!isRunning && (
           <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
@@ -164,28 +194,38 @@ export function AdminSyncPage() {
             ))}
           </div>
         )}
+
         {!isRunning && (
-          <div className="space-y-1">
-            <label
-              htmlFor="root-folder-ids"
-              className="block text-sm font-medium text-slate-700"
-            >
-              目录 ID（可选）
-            </label>
-            <input
-              id="root-folder-ids"
-              type="text"
-              value={rootIDsInput}
-              onChange={(event) => setRootIDsInput(event.target.value)}
-              placeholder="例如: 123456, 789012"
-              disabled={isBusy}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-offset-2 placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-            />
-            <p className="text-xs text-slate-400">
-              留空表示按默认根目录同步；填写后仅同步这些目录。
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+            <p className="block text-sm font-medium text-slate-700">
+              根目录详情
             </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleInspectRoots}
+                disabled={isBusy || selectableRootIDs.length === 0}
+                className="shrink-0 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {sync.inspectLoading ? "拉取中..." : "刷新目录详情"}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400">
+              该操作仅刷新已存在根目录的详情，不会启动同步。
+            </p>
+            {selectableRootIDs.length === 0 && (
+              <p className="text-xs text-amber-600">
+                当前没有可刷新目录，请先完成一次全量同步以生成根目录列表。
+              </p>
+            )}
+            {mode === "full" && selectableRootIDs.length > 0 && (
+              <p className="text-xs text-slate-500">
+                当前已勾选 {selectedScopedRoots.length} / {selectableRootIDs.length} 个根目录；启动全量时将仅同步勾选目录。
+              </p>
+            )}
           </div>
         )}
+
         {!isRunning && mode === "full" && (
           <button
             type="button"
@@ -211,11 +251,12 @@ export function AdminSyncPage() {
                 强制重建索引
               </span>
               <span className="text-xs text-slate-400">
-                清空现有索引后重新爬取，重建期间搜索将无结果
+                仅允许全量全库执行；会清空现有索引后重置断点重新爬取
               </span>
             </span>
           </button>
         )}
+
         <div className="flex gap-3">
           <button
             type="button"
@@ -233,7 +274,9 @@ export function AdminSyncPage() {
               ? "启动中..."
               : isRunning
                 ? "同步进行中"
-                : "启动同步"}
+                : mode === "full" && selectedScopedRoots.length > 0
+                  ? "按勾选目录启动全量"
+                  : "启动同步"}
           </button>
 
           {isRunning && (
@@ -249,21 +292,24 @@ export function AdminSyncPage() {
         </div>
       </div>
 
-      {/* Success message */}
       {message && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
           <p className="text-sm text-emerald-700">{message}</p>
         </div>
       )}
 
-      {/* Error message */}
+      {sync.inspectError && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm text-amber-700">{sync.inspectError}</p>
+        </div>
+      )}
+
       {sync.error && (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3">
           <p className="text-sm text-rose-600">{sync.error}</p>
         </div>
       )}
 
-      {/* Progress display */}
       {sync.initialLoading && (
         <div className="space-y-4">
           <div className="h-8 w-24 animate-pulse rounded-lg bg-slate-200" />
@@ -276,7 +322,20 @@ export function AdminSyncPage() {
       )}
 
       {!sync.initialLoading && sync.progress && (
-        <SyncProgressDisplay progress={sync.progress} />
+        <SyncProgressDisplay
+          progress={sync.progress}
+          rootSelection={{
+            selectedRootIds: selectedRootIDs,
+            disabled: isBusy,
+            onToggleRoot: (rootID) => {
+              setSelectedRootIDs((prev) =>
+                prev.includes(rootID)
+                  ? prev.filter((id) => id !== rootID)
+                  : [...prev, rootID].sort((a, b) => a - b),
+              );
+            },
+          }}
+        />
       )}
 
       {!sync.initialLoading &&

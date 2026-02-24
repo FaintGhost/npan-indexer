@@ -126,22 +126,25 @@ type SyncVerification struct {
 }
 
 type SyncProgressState struct {
-	Status             string                       `json:"status"`
-	Mode               string                       `json:"mode,omitempty"`
-	StartedAt          int64                        `json:"startedAt"`
-	UpdatedAt          int64                        `json:"updatedAt"`
-	MeiliHost          string                       `json:"meiliHost"`
-	MeiliIndex         string                       `json:"meiliIndex"`
-	CheckpointTemplate string                       `json:"checkpointTemplate"`
-	Roots              []int64                      `json:"roots"`
-	RootNames          map[int64]string             `json:"rootNames,omitempty"`
-	CompletedRoots     []int64                      `json:"completedRoots"`
-	ActiveRoot         *int64                       `json:"activeRoot,omitempty"`
-	AggregateStats     CrawlStats                   `json:"aggregateStats"`
-	RootProgress       map[string]*RootSyncProgress `json:"rootProgress"`
-	IncrementalStats   *IncrementalSyncStats        `json:"incrementalStats,omitempty"`
-	LastError          string                       `json:"lastError,omitempty"`
-	Verification       *SyncVerification            `json:"verification,omitempty"`
+	Status              string                       `json:"status"`
+	Mode                string                       `json:"mode,omitempty"`
+	StartedAt           int64                        `json:"startedAt"`
+	UpdatedAt           int64                        `json:"updatedAt"`
+	MeiliHost           string                       `json:"meiliHost"`
+	MeiliIndex          string                       `json:"meiliIndex"`
+	CheckpointTemplate  string                       `json:"checkpointTemplate"`
+	Roots               []int64                      `json:"roots"`
+	RootNames           map[int64]string             `json:"rootNames,omitempty"`
+	CompletedRoots      []int64                      `json:"completedRoots"`
+	ActiveRoot          *int64                       `json:"activeRoot,omitempty"`
+	AggregateStats      CrawlStats                   `json:"aggregateStats"`
+	RootProgress        map[string]*RootSyncProgress `json:"rootProgress"`
+	CatalogRoots        []int64                      `json:"catalogRoots,omitempty"`
+	CatalogRootNames    map[int64]string             `json:"catalogRootNames,omitempty"`
+	CatalogRootProgress map[string]*RootSyncProgress `json:"catalogRootProgress,omitempty"`
+	IncrementalStats    *IncrementalSyncStats        `json:"incrementalStats,omitempty"`
+	LastError           string                       `json:"lastError,omitempty"`
+	Verification        *SyncVerification            `json:"verification,omitempty"`
 }
 
 type CrawlCheckpoint struct {

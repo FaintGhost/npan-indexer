@@ -285,6 +285,21 @@ components:
           additionalProperties:
             $ref: "#/components/schemas/RootSyncProgress"
           description: Map of root folder ID (as string key) to its progress.
+        catalogRoots:
+          type: array
+          items:
+            type: integer
+          description: Historical root catalog for admin root detail list.
+        catalogRootNames:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map of catalog root folder ID to name.
+        catalogRootProgress:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/RootSyncProgress"
+          description: Historical root progress catalog (includes previous scoped runs).
         incrementalStats:
           nullable: true
           allOf:
@@ -308,6 +323,9 @@ components:
         include_departments:
           type: boolean
           nullable: true
+        preserve_root_catalog:
+          type: boolean
+          nullable: true
         department_ids:
           type: array
           items:
@@ -329,6 +347,50 @@ components:
           type: integer
         incremental_query:
           type: string
+
+    InspectRootItem:
+      type: object
+      required: [folder_id, name, item_count, estimated_total_docs]
+      properties:
+        folder_id:
+          type: integer
+        name:
+          type: string
+        item_count:
+          type: integer
+        estimated_total_docs:
+          type: integer
+
+    InspectRootError:
+      type: object
+      required: [folder_id, message]
+      properties:
+        folder_id:
+          type: integer
+        message:
+          type: string
+
+    InspectRootsRequest:
+      type: object
+      required: [folder_ids]
+      properties:
+        folder_ids:
+          type: array
+          items:
+            type: integer
+
+    InspectRootsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InspectRootItem"
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/InspectRootError"
 
     TokenRequest:
       type: object
@@ -758,6 +820,45 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: A sync job is already running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/admin/roots/inspect:
+    post:
+      operationId: inspectRoots
+      summary: Inspect root folders by IDs
+      tags: [Admin]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InspectRootsRequest"
+      responses:
+        "200":
+          description: Root folder inspection result (supports partial success).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectRootsResponse"
+        "400":
+          description: Invalid request body or missing credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized.
           content:
             application/json:
               schema:

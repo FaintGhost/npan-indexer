@@ -104,6 +104,9 @@ export const zSyncProgressState = z.object({
     ]).optional(),
     aggregateStats: zCrawlStats,
     rootProgress: z.record(zRootSyncProgress),
+    catalogRoots: z.array(z.number().int()).optional(),
+    catalogRootNames: z.record(z.string()).optional(),
+    catalogRootProgress: z.record(zRootSyncProgress).optional(),
     incrementalStats: z.union([
         zIncrementalSyncStats,
         z.null()
@@ -122,6 +125,10 @@ export const zSyncStartRequest = z.object({
         z.boolean(),
         z.null()
     ]).optional(),
+    preserve_root_catalog: z.union([
+        z.boolean(),
+        z.null()
+    ]).optional(),
     department_ids: z.array(z.number().int()).optional(),
     resume_progress: z.union([
         z.boolean(),
@@ -136,6 +143,27 @@ export const zSyncStartRequest = z.object({
     checkpoint_template: z.string().optional(),
     window_overlap_ms: z.number().int().optional(),
     incremental_query: z.string().optional()
+});
+
+export const zInspectRootItem = z.object({
+    folder_id: z.number().int(),
+    name: z.string(),
+    item_count: z.number().int(),
+    estimated_total_docs: z.number().int()
+});
+
+export const zInspectRootError = z.object({
+    folder_id: z.number().int(),
+    message: z.string()
+});
+
+export const zInspectRootsRequest = z.object({
+    folder_ids: z.array(z.number().int())
+});
+
+export const zInspectRootsResponse = z.object({
+    items: z.array(zInspectRootItem),
+    errors: z.array(zInspectRootError).optional()
 });
 
 export const zTokenRequest = z.object({
@@ -326,6 +354,17 @@ export const zDownloadUrlData = z.object({
  */
 export const zDownloadUrlResponse2 = zDownloadUrlResponse;
 
+export const zStartSyncData = z.object({
+    body: zSyncStartRequest,
+    path: z.never().optional(),
+    query: z.never().optional()
+});
+
+/**
+ * Sync job accepted.
+ */
+export const zStartSyncResponse = zMessageResponse;
+
 export const zCancelSyncData = z.object({
     body: z.never().optional(),
     path: z.never().optional(),
@@ -348,13 +387,13 @@ export const zGetSyncProgressData = z.object({
  */
 export const zGetSyncProgressResponse = zSyncProgressState;
 
-export const zStartSyncData = z.object({
-    body: zSyncStartRequest,
+export const zInspectRootsData = z.object({
+    body: zInspectRootsRequest,
     path: z.never().optional(),
     query: z.never().optional()
 });
 
 /**
- * Sync job accepted.
+ * Root folder inspection result (supports partial success).
  */
-export const zStartSyncResponse = zMessageResponse;
+export const zInspectRootsResponse2 = zInspectRootsResponse;

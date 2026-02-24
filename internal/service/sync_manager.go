@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,17 +19,18 @@ import (
 )
 
 type SyncStartRequest struct {
-	Mode               models.SyncMode `json:"mode"`
-	RootFolderIDs      []int64         `json:"root_folder_ids"`
-	IncludeDepartments *bool           `json:"include_departments"`
-	DepartmentIDs      []int64         `json:"department_ids"`
-	ResumeProgress     *bool           `json:"resume_progress"`
-	ForceRebuild       *bool           `json:"force_rebuild"`
-	RootWorkers        int             `json:"root_workers"`
-	ProgressEvery      int             `json:"progress_every"`
-	CheckpointTemplate string          `json:"checkpoint_template"`
-	WindowOverlapMS    int64           `json:"window_overlap_ms"`
-	IncrementalQuery   string          `json:"incremental_query"`
+	Mode                models.SyncMode `json:"mode"`
+	RootFolderIDs       []int64         `json:"root_folder_ids"`
+	IncludeDepartments  *bool           `json:"include_departments"`
+	PreserveRootCatalog *bool           `json:"preserve_root_catalog"`
+	DepartmentIDs       []int64         `json:"department_ids"`
+	ResumeProgress      *bool           `json:"resume_progress"`
+	ForceRebuild        *bool           `json:"force_rebuild"`
+	RootWorkers         int             `json:"root_workers"`
+	ProgressEvery       int             `json:"progress_every"`
+	CheckpointTemplate  string          `json:"checkpoint_template"`
+	WindowOverlapMS     int64           `json:"window_overlap_ms"`
+	IncrementalQuery    string          `json:"incremental_query"`
 }
 
 type SyncManager struct {
@@ -45,10 +47,10 @@ type SyncManager struct {
 	minTimeMS                 int
 	activityChecker           indexer.ActivityChecker
 
-	syncStateFile             string
-	defaultIncrementalQuery   string
-	defaultWindowOverlapMS    int64
-	metricsReporter           metrics.SyncReporter
+	syncStateFile           string
+	defaultIncrementalQuery string
+	defaultWindowOverlapMS  int64
+	metricsReporter         metrics.SyncReporter
 
 	mu      sync.Mutex
 	running bool
@@ -218,6 +220,112 @@ func uniqueSorted(values []int64) []int64 {
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
 	return result
+}
+
+func shouldPreserveRootCatalog(request SyncStartRequest, forceRebuild bool) bool {
+	if forceRebuild {
+		return false
+	}
+	if request.PreserveRootCatalog != nil {
+		return *request.PreserveRootCatalog
+	}
+	return len(request.RootFolderIDs) > 0
+}
+
+func cloneRootSyncProgress(src *models.RootSyncProgress) *models.RootSyncProgress {
+	if src == nil {
+		return nil
+	}
+	cloned := *src
+	if src.EstimatedTotalDocs != nil {
+		v := *src.EstimatedTotalDocs
+		cloned.EstimatedTotalDocs = &v
+	}
+	if src.CurrentFolderID != nil {
+		v := *src.CurrentFolderID
+		cloned.CurrentFolderID = &v
+	}
+	if src.CurrentPageID != nil {
+		v := *src.CurrentPageID
+		cloned.CurrentPageID = &v
+	}
+	if src.CurrentPageCount != nil {
+		v := *src.CurrentPageCount
+		cloned.CurrentPageCount = &v
+	}
+	if src.QueueLength != nil {
+		v := *src.QueueLength
+		cloned.QueueLength = &v
+	}
+	return &cloned
+}
+
+func mergeHistoricalRootCatalog(progress *models.SyncProgressState, existing *models.SyncProgressState) {
+	if progress == nil || existing == nil {
+		return
+	}
+
+	if progress.RootNames == nil {
+		progress.RootNames = map[int64]string{}
+	}
+	for id, name := range existing.RootNames {
+		if _, exists := progress.RootNames[id]; !exists {
+			progress.RootNames[id] = name
+		}
+	}
+
+	if progress.RootProgress == nil {
+		progress.RootProgress = map[string]*models.RootSyncProgress{}
+	}
+	for key, rp := range existing.RootProgress {
+		if _, exists := progress.RootProgress[key]; exists {
+			continue
+		}
+		progress.RootProgress[key] = cloneRootSyncProgress(rp)
+	}
+}
+
+func syncCatalogFields(progress *models.SyncProgressState) {
+	if progress == nil {
+		return
+	}
+
+	if progress.RootProgress == nil {
+		progress.RootProgress = map[string]*models.RootSyncProgress{}
+	}
+	progress.CatalogRootProgress = progress.RootProgress
+
+	if progress.RootNames == nil {
+		progress.RootNames = map[int64]string{}
+	}
+	progress.CatalogRootNames = make(map[int64]string, len(progress.RootNames))
+	for id, name := range progress.RootNames {
+		progress.CatalogRootNames[id] = name
+	}
+
+	roots := make([]int64, 0, len(progress.RootProgress))
+	seen := map[int64]struct{}{}
+	for key, rp := range progress.RootProgress {
+		rootID := int64(0)
+		if rp != nil && rp.RootFolderID > 0 {
+			rootID = rp.RootFolderID
+		}
+		if rootID <= 0 {
+			parsed, err := strconv.ParseInt(key, 10, 64)
+			if err == nil {
+				rootID = parsed
+			}
+		}
+		if rootID <= 0 {
+			continue
+		}
+		if _, exists := seen[rootID]; exists {
+			continue
+		}
+		seen[rootID] = struct{}{}
+		roots = append(roots, rootID)
+	}
+	progress.CatalogRoots = uniqueSorted(roots)
 }
 
 func resolveMode(mode models.SyncMode, state *models.SyncState) models.SyncMode {
@@ -718,6 +826,10 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 			CheckpointTemplate: checkpointTemplate,
 		})
 	}
+	if shouldPreserveRootCatalog(request, forceRebuild) {
+		mergeHistoricalRootCatalog(progress, existing)
+	}
+	syncCatalogFields(progress)
 
 	if err := m.progressStore.Save(progress); err != nil {
 		return err
@@ -885,18 +997,18 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 	existing, _ := m.progressStore.Load()
 
 	progress := &models.SyncProgressState{
-		Status:             "running",
-		Mode:               string(models.SyncModeIncremental),
-		StartedAt:          now,
-		UpdatedAt:          now,
-		MeiliHost:          m.meiliHost,
-		MeiliIndex:         m.meiliIndex,
-		Roots:              []int64{},
-		CompletedRoots:     []int64{},
-		RootNames:          map[int64]string{},
-		RootProgress:       map[string]*models.RootSyncProgress{},
-		AggregateStats:     models.CrawlStats{StartedAt: now, EndedAt: now},
-		IncrementalStats:   &models.IncrementalSyncStats{CursorBefore: cursorBefore},
+		Status:           "running",
+		Mode:             string(models.SyncModeIncremental),
+		StartedAt:        now,
+		UpdatedAt:        now,
+		MeiliHost:        m.meiliHost,
+		MeiliIndex:       m.meiliIndex,
+		Roots:            []int64{},
+		CompletedRoots:   []int64{},
+		RootNames:        map[int64]string{},
+		RootProgress:     map[string]*models.RootSyncProgress{},
+		AggregateStats:   models.CrawlStats{StartedAt: now, EndedAt: now},
+		IncrementalStats: &models.IncrementalSyncStats{CursorBefore: cursorBefore},
 	}
 
 	if existing != nil {
@@ -905,7 +1017,11 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 		progress.RootNames = existing.RootNames
 		progress.RootProgress = existing.RootProgress
 		progress.AggregateStats = existing.AggregateStats
+		progress.CatalogRoots = existing.CatalogRoots
+		progress.CatalogRootNames = existing.CatalogRootNames
+		progress.CatalogRootProgress = existing.CatalogRootProgress
 	}
+	syncCatalogFields(progress)
 
 	if err := m.progressStore.Save(progress); err != nil {
 		return err
@@ -942,6 +1058,7 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 	}
 
 	progress.UpdatedAt = time.Now().UnixMilli()
+	syncCatalogFields(progress)
 
 	if m.metricsReporter != nil {
 		m.metricsReporter.ReportSyncFinished(metrics.SyncEvent{

@@ -3,6 +3,28 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { server } from "../tests/mocks/server";
 import { useSyncProgress } from "./use-sync-progress";
+import type { InspectRootsResponse } from "@/lib/sync-schemas";
+
+function assertRecord(value: unknown): asserts value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("expected payload to be an object");
+  }
+}
+
+function getRecord(value: unknown): Record<string, unknown> {
+  assertRecord(value);
+  return value;
+}
+
+function requireValue<T>(
+  value: T | null | undefined,
+  message: string,
+): NonNullable<T> {
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+}
 
 const validProgress = {
   status: "idle",
@@ -91,7 +113,9 @@ describe("useSyncProgress", () => {
         return HttpResponse.json(validProgress);
       }),
       http.post("/api/v1/admin/sync", async ({ request }) => {
-        capturedBody = (await request.json()) as Record<string, unknown>;
+        const body: unknown = await request.json();
+        assertRecord(body);
+        capturedBody = body;
         return HttpResponse.json({ message: "Sync started" });
       }),
     );
@@ -107,8 +131,9 @@ describe("useSyncProgress", () => {
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody!.resume_progress).toBe(false);
-    expect(capturedBody!.mode).toBe("full");
+    const payload = getRecord(capturedBody);
+    expect(payload.resume_progress).toBe(false);
+    expect(payload.mode).toBe("full");
   });
 
   it("sends resume_progress=true when mode is auto", async () => {
@@ -118,7 +143,9 @@ describe("useSyncProgress", () => {
         return HttpResponse.json(validProgress);
       }),
       http.post("/api/v1/admin/sync", async ({ request }) => {
-        capturedBody = (await request.json()) as Record<string, unknown>;
+        const body: unknown = await request.json();
+        assertRecord(body);
+        capturedBody = body;
         return HttpResponse.json({ message: "Sync started" });
       }),
     );
@@ -134,8 +161,9 @@ describe("useSyncProgress", () => {
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody!.resume_progress).toBe(true);
-    expect(capturedBody!.mode).toBe("auto");
+    const payload = getRecord(capturedBody);
+    expect(payload.resume_progress).toBe(true);
+    expect(payload.mode).toBe("auto");
   });
 
   it("sends force_rebuild when forceRebuild is true", async () => {
@@ -145,7 +173,9 @@ describe("useSyncProgress", () => {
         return HttpResponse.json(validProgress);
       }),
       http.post("/api/v1/admin/sync", async ({ request }) => {
-        capturedBody = (await request.json()) as Record<string, unknown>;
+        const body: unknown = await request.json();
+        assertRecord(body);
+        capturedBody = body;
         return HttpResponse.json({ message: "Sync started" });
       }),
     );
@@ -161,8 +191,9 @@ describe("useSyncProgress", () => {
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody!.force_rebuild).toBe(true);
-    expect(capturedBody!.resume_progress).toBe(false);
+    const payload = getRecord(capturedBody);
+    expect(payload.force_rebuild).toBe(true);
+    expect(payload.resume_progress).toBe(false);
   });
 
   it("sends include_departments=false when root_folder_ids is provided", async () => {
@@ -172,7 +203,9 @@ describe("useSyncProgress", () => {
         return HttpResponse.json(validProgress);
       }),
       http.post("/api/v1/admin/sync", async ({ request }) => {
-        capturedBody = (await request.json()) as Record<string, unknown>;
+        const body: unknown = await request.json();
+        assertRecord(body);
+        capturedBody = body;
         return HttpResponse.json({ message: "Sync started" });
       }),
     );
@@ -188,8 +221,65 @@ describe("useSyncProgress", () => {
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody!.root_folder_ids).toEqual([123456]);
-    expect(capturedBody!.include_departments).toBe(false);
+    const payload = getRecord(capturedBody);
+    expect(payload.root_folder_ids).toEqual([123456]);
+    expect(payload.include_departments).toBe(false);
+    expect(payload.preserve_root_catalog).toBe(true);
+  });
+
+  it("inspects roots without starting sync", async () => {
+    let inspectCalled = false;
+    let syncPostCalled = false;
+    server.use(
+      http.get("/api/v1/admin/sync", () => {
+        return HttpResponse.json(validProgress);
+      }),
+      http.post("/api/v1/admin/roots/inspect", async ({ request }) => {
+        inspectCalled = true;
+        const body: unknown = await request.json();
+        assertRecord(body);
+        expect(body.folder_ids).toEqual([1001, 1002]);
+        return HttpResponse.json({
+          items: [
+            {
+              folder_id: 1001,
+              name: "A",
+              item_count: 10,
+              estimated_total_docs: 11,
+            },
+          ],
+          errors: [{ folder_id: 1002, message: "获取目录信息失败" }],
+        });
+      }),
+      http.post("/api/v1/admin/sync", () => {
+        syncPostCalled = true;
+        return HttpResponse.json({ message: "Sync started" });
+      }),
+    );
+
+    const { result } = renderHook(() => useSyncProgress(headers));
+
+    await waitFor(() => {
+      expect(result.current.progress).not.toBeNull();
+    });
+
+    let inspectResult: InspectRootsResponse | null = null;
+    await act(async () => {
+      const response = await result.current.inspectRoots([1001, 1002]);
+      if (!response) {
+        throw new Error("expected inspect result");
+      }
+      inspectResult = response;
+    });
+
+    expect(inspectCalled).toBe(true);
+    expect(syncPostCalled).toBe(false);
+    const inspectResponse = requireValue<InspectRootsResponse>(
+      inspectResult,
+      "expected inspect result",
+    );
+    expect(inspectResponse.items).toHaveLength(1);
+    expect(result.current.progress?.catalogRoots).toContain(1001);
   });
 
   it("omits force_rebuild when forceRebuild is false", async () => {
@@ -199,7 +289,9 @@ describe("useSyncProgress", () => {
         return HttpResponse.json(validProgress);
       }),
       http.post("/api/v1/admin/sync", async ({ request }) => {
-        capturedBody = (await request.json()) as Record<string, unknown>;
+        const body: unknown = await request.json();
+        assertRecord(body);
+        capturedBody = body;
         return HttpResponse.json({ message: "Sync started" });
       }),
     );
@@ -215,7 +307,8 @@ describe("useSyncProgress", () => {
     });
 
     expect(capturedBody).not.toBeNull();
-    expect(capturedBody!.force_rebuild).toBeUndefined();
+    const payload = getRecord(capturedBody);
+    expect(payload.force_rebuild).toBeUndefined();
   });
 
   it("cancels sync", async () => {
@@ -263,7 +356,7 @@ describe("useSyncProgress", () => {
   describe("startSync 后状态自动刷新", () => {
     const doneProgress = {
       ...validProgress,
-      status: "done" as const,
+      status: "done",
       startedAt: 1000,
       updatedAt: 2000,
       roots: [100],

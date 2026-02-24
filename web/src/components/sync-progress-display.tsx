@@ -3,6 +3,11 @@ import type { SyncProgress } from '@/lib/sync-schemas'
 
 interface SyncProgressDisplayProps {
   progress: SyncProgress
+  rootSelection?: {
+    selectedRootIds: number[]
+    onToggleRoot?: (rootId: number) => void
+    disabled?: boolean
+  }
 }
 
 const statusConfig: Record<string, { label: string; color: string; badgeBg: string }> = {
@@ -16,10 +21,12 @@ const statusConfig: Record<string, { label: string; color: string; badgeBg: stri
 
 const defaultConfig = { label: '空闲', color: 'text-slate-600', badgeBg: 'bg-slate-100' } as const
 
-export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
+export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDisplayProps) {
   const config = statusConfig[progress.status] ?? defaultConfig
   const stats = progress.aggregateStats
   const isRunning = progress.status === 'running'
+  const rootNames = progress.catalogRootNames ?? progress.rootNames
+  const rootProgress = progress.catalogRootProgress ?? progress.rootProgress
 
   const rootsDone = progress.completedRoots.length
   const rootsTotal = progress.roots.length
@@ -66,7 +73,7 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
           </div>
           {progress.activeRoot != null && isRunning && (
             <p className="mt-2 text-xs text-slate-400">
-              当前根目录: <span className="font-mono">{progress.rootNames?.[String(progress.activeRoot)] || progress.activeRoot}</span>
+              当前根目录: <span className="font-mono">{rootNames?.[String(progress.activeRoot)] || progress.activeRoot}</span>
             </p>
           )}
         </div>
@@ -124,7 +131,13 @@ export function SyncProgressDisplay({ progress }: SyncProgressDisplayProps) {
       )}
 
       {/* Per-root details (collapsed by default, expandable) */}
-      {rootsTotal > 0 && <RootDetails progress={progress} />}
+      {(rootsTotal > 0 || Object.keys(rootProgress ?? {}).length > 0) && (
+        <RootDetails
+          rootNames={rootNames}
+          rootProgress={rootProgress}
+          rootSelection={rootSelection}
+        />
+      )}
 
       {/* Error */}
       {progress.lastError && (
@@ -175,9 +188,21 @@ function ElapsedTime({
   )
 }
 
-function RootDetails({ progress }: { progress: SyncProgress }) {
+function RootDetails({
+  rootNames,
+  rootProgress,
+  rootSelection,
+}: {
+  rootNames?: Record<string, string>
+  rootProgress: Record<string, NonNullable<SyncProgress['rootProgress'][string]>>
+  rootSelection?: {
+    selectedRootIds: number[]
+    onToggleRoot?: (rootId: number) => void
+    disabled?: boolean
+  }
+}) {
   const [expanded, setExpanded] = useState(false)
-  const entries = Object.entries(progress.rootProgress)
+  const entries = Object.entries(rootProgress)
   if (entries.length === 0) return null
 
   return (
@@ -201,14 +226,35 @@ function RootDetails({ progress }: { progress: SyncProgress }) {
                   ? 'text-rose-600'
                   : 'text-slate-500'
 
-            const rootName = progress.rootNames?.[key]
+            const rootName = rootNames?.[key]
             const estimated = root.estimatedTotalDocs
             const actualDocs = root.stats.filesIndexed + root.stats.foldersVisited
+            const rootID = root.rootFolderId
+            const selected = rootSelection?.selectedRootIds.includes(rootID) ?? false
 
             return (
               <div key={key} className="px-4 py-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700">
+                  <span className="flex items-center gap-3 text-sm text-slate-700">
+                    {rootSelection?.onToggleRoot && (
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-label={`选择根目录 ${rootID}`}
+                        aria-checked={selected}
+                        disabled={rootSelection.disabled}
+                        onClick={() => rootSelection.onToggleRoot?.(rootID)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                          selected ? 'bg-blue-500' : 'bg-slate-200'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                            selected ? 'translate-x-4' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    )}
                     {rootName ? (
                       <><span className="font-medium">{rootName}</span> <span className="font-mono text-xs text-slate-400">({root.rootFolderId})</span></>
                     ) : (

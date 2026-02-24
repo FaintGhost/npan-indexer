@@ -849,7 +849,7 @@ func TestCheckpointReset_ForceRebuildClearsCheckpoint(t *testing.T) {
 	t.Parallel()
 
 	const (
-		rootID       int64 = 1
+		rootID        int64 = 1
 		staleFolderID int64 = 999
 	)
 
@@ -892,7 +892,7 @@ func TestCheckpointReset_ResumeFalseClearsCheckpoint(t *testing.T) {
 	t.Parallel()
 
 	const (
-		rootID       int64 = 1
+		rootID        int64 = 1
 		staleFolderID int64 = 888
 	)
 
@@ -933,7 +933,7 @@ func TestCheckpointReset_ResumeTrueKeepsCheckpoint(t *testing.T) {
 	t.Parallel()
 
 	const (
-		rootID       int64 = 1
+		rootID        int64 = 1
 		staleFolderID int64 = 777
 	)
 
@@ -967,6 +967,140 @@ func TestCheckpointReset_ResumeTrueKeepsCheckpoint(t *testing.T) {
 
 	if firstFolderID != staleFolderID {
 		t.Fatalf("expected resume=true to keep checkpoint folder %d, got %d", staleFolderID, firstFolderID)
+	}
+}
+
+func TestCatalogPreserve_ScopedFullKeepsHistoricalRootProgress(t *testing.T) {
+	t.Parallel()
+
+	const currentRoot int64 = 200
+
+	mgr := newRoutingTestSyncManager(t, &routingStubIndex{docCount: 0})
+	existing := &models.SyncProgressState{
+		Status:         "done",
+		StartedAt:      1,
+		UpdatedAt:      1,
+		Roots:          []int64{100, 200, 300},
+		RootNames:      map[int64]string{100: "A", 200: "B", 300: "C"},
+		CompletedRoots: []int64{100, 200, 300},
+		AggregateStats: models.CrawlStats{
+			StartedAt: 1,
+			EndedAt:   1,
+		},
+		RootProgress: map[string]*models.RootSyncProgress{
+			"100": {
+				RootFolderID: 100,
+				Status:       "done",
+				Stats:        models.CrawlStats{StartedAt: 1, EndedAt: 1},
+			},
+			"200": {
+				RootFolderID: 200,
+				Status:       "done",
+				Stats:        models.CrawlStats{StartedAt: 1, EndedAt: 1},
+			},
+			"300": {
+				RootFolderID: 300,
+				Status:       "done",
+				Stats:        models.CrawlStats{StartedAt: 1, EndedAt: 1},
+			},
+		},
+	}
+	if err := mgr.progressStore.Save(existing); err != nil {
+		t.Fatalf("seed progress failed: %v", err)
+	}
+
+	includeDepartments := false
+	resume := false
+	preserve := true
+	api := &mockAPIForRouting{
+		listFolderChildrenFn: func(_ context.Context, _ int64, _ int64) (models.FolderChildrenPage, error) {
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	err := mgr.run(context.Background(), api, SyncStartRequest{
+		Mode:                models.SyncModeFull,
+		RootFolderIDs:       []int64{currentRoot},
+		IncludeDepartments:  &includeDepartments,
+		ResumeProgress:      &resume,
+		PreserveRootCatalog: &preserve,
+	})
+	if err != nil {
+		t.Fatalf("run() returned unexpected error: %v", err)
+	}
+
+	progress, err := mgr.GetProgress()
+	if err != nil {
+		t.Fatalf("GetProgress failed: %v", err)
+	}
+	if len(progress.Roots) != 1 || progress.Roots[0] != currentRoot {
+		t.Fatalf("expected current run roots [200], got %#v", progress.Roots)
+	}
+	if progress.RootProgress["100"] == nil || progress.RootProgress["300"] == nil {
+		t.Fatalf("expected historical roots to be preserved in rootProgress, got keys %#v", progress.RootProgress)
+	}
+	if len(progress.CatalogRoots) != 3 {
+		t.Fatalf("expected catalogRoots to keep historical roots, got %#v", progress.CatalogRoots)
+	}
+	if progress.CatalogRootProgress["100"] == nil || progress.CatalogRootProgress["300"] == nil {
+		t.Fatalf("expected catalogRootProgress to include historical roots")
+	}
+}
+
+func TestCatalogPreserve_ForceRebuildDoesNotKeepHistoricalRoots(t *testing.T) {
+	t.Parallel()
+
+	const currentRoot int64 = 200
+
+	mgr := newRoutingTestSyncManager(t, &forceRebuildStubIndex{routingStubIndex{docCount: 0}})
+	existing := &models.SyncProgressState{
+		Status:         "done",
+		StartedAt:      1,
+		UpdatedAt:      1,
+		Roots:          []int64{100, 300},
+		RootNames:      map[int64]string{100: "A", 300: "C"},
+		CompletedRoots: []int64{100, 300},
+		AggregateStats: models.CrawlStats{
+			StartedAt: 1,
+			EndedAt:   1,
+		},
+		RootProgress: map[string]*models.RootSyncProgress{
+			"100": {RootFolderID: 100, Status: "done", Stats: models.CrawlStats{StartedAt: 1, EndedAt: 1}},
+			"300": {RootFolderID: 300, Status: "done", Stats: models.CrawlStats{StartedAt: 1, EndedAt: 1}},
+		},
+	}
+	if err := mgr.progressStore.Save(existing); err != nil {
+		t.Fatalf("seed progress failed: %v", err)
+	}
+
+	includeDepartments := false
+	resume := false
+	preserve := true
+	forceRebuild := true
+	api := &mockAPIForRouting{
+		listFolderChildrenFn: func(_ context.Context, _ int64, _ int64) (models.FolderChildrenPage, error) {
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	err := mgr.run(context.Background(), api, SyncStartRequest{
+		Mode:                models.SyncModeFull,
+		RootFolderIDs:       []int64{currentRoot},
+		IncludeDepartments:  &includeDepartments,
+		ResumeProgress:      &resume,
+		PreserveRootCatalog: &preserve,
+		ForceRebuild:        &forceRebuild,
+	})
+	if err != nil {
+		t.Fatalf("run() returned unexpected error: %v", err)
+	}
+
+	progress, err := mgr.GetProgress()
+	if err != nil {
+		t.Fatalf("GetProgress failed: %v", err)
+	}
+	if progress.RootProgress["100"] != nil || progress.RootProgress["300"] != nil {
+		t.Fatalf("expected force_rebuild to start from clean rootProgress, got %#v", progress.RootProgress)
 	}
 }
 

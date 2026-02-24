@@ -40,3 +40,8 @@
 - 规则：
   - `go:embed` 依赖目录若不是稳定跟踪产物，必须在 CI 对应 job 前置创建占位目录/文件。
   - 不能仅依赖本地存在但未跟踪文件（如 `.gitkeep`）；要以 GitHub checkout 的最小状态为准验证。
+- 用户纠正：先修问题再测试；并且禁止用类型断言/`any` 兜底类型错误。
+- 规则：
+  - 当 `lint`/`typecheck` 失败时，先修复本轮引入的问题，再进入 smoke/E2E 长链路测试。
+  - 测试代码中读取 `request.json()` 一律先用 `unknown`，再通过类型守卫收窄（如 `assertRecord`/`getRecord`）。
+  - 禁止通过 `as` 或 `any` 绕过类型系统；若需从可空值读取，使用返回值型守卫（如 `requireValue`）而非断言。

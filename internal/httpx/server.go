@@ -157,6 +157,7 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 	admin.POST("/sync", handlers.StartFullSync)
 	admin.GET("/sync", handlers.GetFullSyncProgress)
 	admin.DELETE("/sync", handlers.CancelFullSync)
+	admin.POST("/roots/inspect", handlers.InspectRoots)
 	// Legacy routes for backward compatibility
 	admin.POST("/sync/full", handlers.StartFullSync)
 	admin.POST("/sync/start", handlers.StartFullSync)

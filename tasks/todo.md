@@ -207,3 +207,115 @@
   - `cd web && bun vitest run` 全量前端单测通过（22 files / 184 tests）。
   - `./tests/smoke/smoke_test.sh` 通过（34/34）。
   - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright` 通过（32/32）。
+
+## 新任务：Admin 局部补同步交互重构（Brainstorming 设计）
+
+- [x] 1. 复盘当前 Admin 页面“目录 ID 输入即同步”的交互与根因链路
+- [x] 2. 确认“局部同步后根目录详情被覆盖”的根因位于服务端 progress 语义
+- [x] 3. 输出可选方案（前端本地缓存 vs 后端目录册保留）并给出推荐
+- [x] 4. 产出设计文档包到 `docs/plans/2026-02-24-admin-partial-resync-toggle-design/`
+- [x] 5. 补充 BDD 场景（toggle 局部补同步 / 拉取目录详情 / 运行中禁用 / 互斥规则）
+- [x] 6. 回填评审记录与未决问题
+
+## Review（Admin 局部补同步交互重构 / 设计）
+
+- 结论：
+  - 采用“新增目录详情拉取接口 + 后端保留根目录目录册（catalog）”方案。
+  - 目标是把“目录发现”和“同步执行”解耦，并修复 scoped full 后 UI 列表被覆盖的问题。
+- 根因：
+  - 当前 `root_folder_ids` 输入直接驱动 `/api/v1/admin/sync`。
+  - full path 会按本次 roots 重建 progress，`rootProgress` 被覆盖。
+  - 前端根目录详情直接渲染 `progress.rootProgress`，因此只剩本次目录。
+- 设计产物：
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-design/_index.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-design/architecture.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-design/bdd-specs.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-design/best-practices.md`
+- 未决问题（实现前确认）：
+  - 拉取目录详情成功后，新加入目录是否默认自动勾选（设计稿当前默认“自动勾选”）。
+
+## 新任务：Admin 局部补同步交互重构（Writing Plans）
+
+- [x] 1. 基于设计文档产出实施计划目录 `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/`
+- [x] 2. 将任务拆分为 BDD 驱动的 Red/Green 粒度（每任务单文件）
+- [x] 3. 补全任务依赖、验证命令与回归收口任务
+- [x] 4. 回填执行移交说明（下一步进入 `executing-plans`）
+
+## Review（Admin 局部补同步交互重构 / 实施计划）
+
+- 计划目录：
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/_index.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-001-red-backend-inspect-roots-tests.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-002-green-backend-inspect-roots-api-and-contract.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-003-red-backend-catalog-preserve-tests.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-004-green-backend-catalog-preserve-impl.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-005-red-frontend-inspect-and-autoselect-tests.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-006-green-frontend-inspect-and-autoselect-impl.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-007-red-frontend-running-lock-and-guard-tests.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-008-green-frontend-running-lock-and-guard-impl.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-009-red-frontend-catalog-fallback-tests.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-010-green-frontend-catalog-fallback-impl.md`
+  - `docs/plans/2026-02-24-admin-partial-resync-toggle-plan/task-011-verification-and-regression.md`
+- 关键决策已固化：
+  - 拉取目录详情成功后，新目录默认自动勾选（按用户确认）。
+
+## 新任务：Admin 局部补同步交互重构（Executing Plans）
+
+- [x] 1. 实现后端 `inspect roots` 接口（批量、部分成功）并接入 Admin 路由鉴权
+- [x] 2. 扩展同步启动请求字段 `preserve_root_catalog` 并加 `force_rebuild + scoped` 防线
+- [x] 3. 扩展同步进度模型与 DTO：支持 `catalogRoots/catalogRootNames/catalogRootProgress`
+- [x] 4. 在 full scoped 运行中保留历史根目录目录册，修复“列表被覆盖”
+- [x] 5. 前端实现“拉取目录详情”独立按钮与 `inspectRoots` 流程
+- [x] 6. 前端在根目录详情中增加 toggle，并按勾选目录发起全量补同步
+- [x] 7. 新拉取目录默认自动勾选（按用户确认）
+- [x] 8. 更新 OpenAPI + 生成 Go/TS 客户端类型
+- [x] 9. 补齐后端/前端测试并完成回归验证
+
+## Review（Admin 局部补同步交互重构 / 实施结果）
+
+- 后端能力：
+  - 新增 `POST /api/v1/admin/roots/inspect`（目录详情拉取，支持部分成功）。
+  - `POST /api/v1/admin/sync` 支持 `preserve_root_catalog`。
+  - 当 `force_rebuild=true` 且提供 `root_folder_ids` 时返回 `400`，避免危险组合误用。
+  - `SyncProgressState` 新增目录册字段：`catalogRoots` / `catalogRootNames` / `catalogRootProgress`。
+  - full scoped run 在 `preserve_root_catalog=true` 时合并历史 `rootProgress`，避免根目录详情被覆盖。
+- 前端交互：
+  - 目录输入框改为“拉取目录详情”用途，不再直接触发同步。
+  - 新增“拉取目录详情”按钮，独立 loading/error 状态。
+  - `SyncProgressDisplay` 在根目录详情行新增 toggle；Admin 页面按勾选根目录发起全量补同步。
+  - 新拉取目录默认自动勾选（按用户选择 `1` 落地）。
+  - 前端渲染优先使用 `catalog*`，缺失时回退 `rootProgress/rootNames`。
+- OpenAPI 与生成：
+  - 已更新 `api/openapi.yaml`。
+  - 已执行 `GOCACHE=/tmp/go-build go generate ./api/...`。
+  - 已执行 `cd web && bun run generate`。
+- 测试验证：
+  - `GOCACHE=/tmp/go-build go test ./internal/httpx ./internal/service -count=1` 通过。
+  - `GOCACHE=/tmp/go-build go test ./...` 通过。
+  - `cd web && bun vitest run src/components/admin-page.test.tsx src/hooks/use-sync-progress.test.ts src/components/sync-progress-display.test.tsx` 通过。
+  - `cd web && bun vitest run` 通过（22 files / 187 tests）。
+  - 容器链路：
+    - `docker compose -f docker-compose.ci.yml --profile e2e up --build -d --wait --wait-timeout 180` 通过。
+    - `BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh` 通过（34/34）。
+    - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright` 通过（31 passed + 1 flaky 重试后通过）。
+- 额外检查：
+  - `git diff --check` 通过。
+  - `cd web && bun run typecheck` 仍有历史性问题（`routeTree.gen` 缺失导致路由类型报错），与本次改动无直接耦合；本次新增测试中的类型错误已修复。
+
+## 新任务：Admin 局部补同步交互优化（移除手动目录 ID 输入）
+
+- [x] 1. 移除 Admin 页面手动输入目录 ID 的 UI 与解析逻辑
+- [x] 2. 保留“刷新目录详情”按钮并改为基于当前根目录列表执行
+- [x] 3. 更新前端测试用例，验证无输入框时的局部补同步流程
+- [x] 4. 运行相关前端测试回归
+
+## Review（Admin 局部补同步交互优化 / 移除手动目录 ID 输入）
+
+- 交互调整：
+  - Admin 页面不再提供手动输入目录 ID 的入口，避免与下方 toggle 重复。
+  - 保留“刷新目录详情”按钮，仅刷新当前已知根目录（`catalogRoots`/`rootProgress` 推导）。
+  - 当尚无根目录列表时，按钮禁用并提示需先完成一次全量同步。
+- 实现范围：
+  - 仅前端改动（`web/src/components/admin-sync-page.tsx`、`web/src/components/admin-page.test.tsx`），后端接口保持兼容。
+- 验证：
+  - `cd web && bun vitest run src/components/admin-page.test.tsx src/components/sync-progress-display.test.tsx src/hooks/use-sync-progress.test.ts` 通过（33 tests）。

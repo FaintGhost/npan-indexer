@@ -7,6 +7,17 @@ import { AdminSyncPage } from './admin-sync-page'
 
 const STORAGE_KEY = 'npan_admin_api_key'
 
+function assertRecord(value: unknown): asserts value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('expected payload to be an object')
+  }
+}
+
+function getRecord(value: unknown): Record<string, unknown> {
+  assertRecord(value)
+  return value
+}
+
 const validProgress = {
   status: 'idle',
   startedAt: 0,
@@ -50,7 +61,7 @@ describe('AdminSyncPage', () => {
     render(<AdminSyncPage />)
 
     await waitFor(() => {
-      expect(screen.getByText(/启动同步/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
     })
   })
 
@@ -75,7 +86,7 @@ describe('AdminSyncPage', () => {
     await user.click(screen.getByRole('button', { name: /确认/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/启动同步/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
     })
   })
 
@@ -104,16 +115,91 @@ describe('AdminSyncPage', () => {
     })
   })
 
-  it('submits parsed root folder ids to start sync payload', async () => {
+  it('inspects folders first, then starts scoped full sync from selected roots', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
 
+    let inspectCalled = false
     let capturedBody: Record<string, unknown> | null = null
     server.use(
       http.get('/api/v1/admin/sync', () => {
-        return HttpResponse.json(validProgress)
+        return HttpResponse.json({
+          ...validProgress,
+          catalogRoots: [1001, 1002, 1003],
+          catalogRootNames: {
+            1001: 'A',
+            1002: 'B',
+            1003: 'C',
+          },
+          catalogRootProgress: {
+            '1001': {
+              rootFolderId: 1001,
+              status: 'done',
+              estimatedTotalDocs: 11,
+              stats: {
+                foldersVisited: 1,
+                filesIndexed: 10,
+                filesDiscovered: 10,
+                skippedFiles: 0,
+                pagesFetched: 1,
+                failedRequests: 0,
+                startedAt: 0,
+                endedAt: 0,
+              },
+              updatedAt: 0,
+            },
+            '1002': {
+              rootFolderId: 1002,
+              status: 'done',
+              estimatedTotalDocs: 21,
+              stats: {
+                foldersVisited: 1,
+                filesIndexed: 20,
+                filesDiscovered: 20,
+                skippedFiles: 0,
+                pagesFetched: 1,
+                failedRequests: 0,
+                startedAt: 0,
+                endedAt: 0,
+              },
+              updatedAt: 0,
+            },
+            '1003': {
+              rootFolderId: 1003,
+              status: 'done',
+              estimatedTotalDocs: 31,
+              stats: {
+                foldersVisited: 1,
+                filesIndexed: 30,
+                filesDiscovered: 30,
+                skippedFiles: 0,
+                pagesFetched: 1,
+                failedRequests: 0,
+                startedAt: 0,
+                endedAt: 0,
+              },
+              updatedAt: 0,
+            },
+          },
+        })
+      }),
+      http.post('/api/v1/admin/roots/inspect', async ({ request }) => {
+        inspectCalled = true
+        const body: unknown = await request.json()
+        assertRecord(body)
+        expect(body.folder_ids).toEqual([1001, 1002, 1003])
+        return HttpResponse.json({
+          items: [
+            { folder_id: 1001, name: 'A', item_count: 10, estimated_total_docs: 11 },
+            { folder_id: 1002, name: 'B', item_count: 20, estimated_total_docs: 21 },
+            { folder_id: 1003, name: 'C', item_count: 30, estimated_total_docs: 31 },
+          ],
+          errors: [],
+        })
       }),
       http.post('/api/v1/admin/sync', async ({ request }) => {
-        capturedBody = (await request.json()) as Record<string, unknown>
+        const body: unknown = await request.json()
+        assertRecord(body)
+        capturedBody = body
         return HttpResponse.json({ message: 'Sync started' }, { status: 202 })
       }),
     )
@@ -121,18 +207,27 @@ describe('AdminSyncPage', () => {
     render(<AdminSyncPage />)
 
     await waitFor(() => {
-      expect(screen.getByText(/启动同步/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
     })
 
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText(/目录 ID/i), '1001, 1002,1003')
-    await user.click(screen.getByRole('button', { name: /启动同步/i }))
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /刷新目录详情/i }))
+    expect(inspectCalled).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: /^全量$/ }))
+    await user.click(screen.getByRole('button', { name: /展开/i }))
+    await user.click(screen.getByRole('switch', { name: /选择根目录 1002/i }))
+
+    await user.click(screen.getByRole('button', { name: /按勾选目录启动全量/i }))
 
     await waitFor(() => {
       expect(capturedBody).not.toBeNull()
     })
 
-    expect(capturedBody?.root_folder_ids).toEqual([1001, 1002, 1003])
-    expect(capturedBody?.include_departments).toBe(false)
+    const payload = getRecord(capturedBody)
+    expect(payload.root_folder_ids).toEqual([1001, 1003])
+    expect(payload.include_departments).toBe(false)
+    expect(payload.preserve_root_catalog).toBe(true)
   })
 })

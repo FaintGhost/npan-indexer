@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SyncProgressDisplay } from "./sync-progress-display";
@@ -182,5 +182,76 @@ describe("SyncProgressDisplay", () => {
 
     expect(screen.getByText(/估计 4,152/)).toBeInTheDocument();
     expect(screen.getByText(/实际 512/)).toBeInTheDocument();
+  });
+
+  it("renders catalogRootProgress when present", async () => {
+    const progress: SyncProgress = {
+      ...baseProgress,
+      roots: [100],
+      completedRoots: [100],
+      rootProgress: {},
+      catalogRoots: [100],
+      catalogRootNames: { 100: "PIXELHUE" },
+      catalogRootProgress: {
+        "100": {
+          rootFolderId: 100,
+          status: "done",
+          estimatedTotalDocs: 10,
+          stats: {
+            foldersVisited: 1,
+            filesIndexed: 9,
+            filesDiscovered: 9,
+            skippedFiles: 0,
+            pagesFetched: 1,
+            failedRequests: 0,
+            startedAt: 0,
+            endedAt: 0,
+          },
+          updatedAt: 0,
+        },
+      },
+    };
+
+    render(<SyncProgressDisplay progress={progress} />);
+    await userEvent.click(screen.getByRole("button", { name: /展开/i }));
+    expect(screen.getByText(/PIXELHUE/)).toBeInTheDocument();
+    expect(screen.getByText(/实际 10/)).toBeInTheDocument();
+  });
+
+  it("supports row toggle selection", async () => {
+    const progress: SyncProgress = {
+      ...baseProgress,
+      roots: [100],
+      completedRoots: [100],
+      rootProgress: {
+        "100": {
+          rootFolderId: 100,
+          status: "done",
+          estimatedTotalDocs: 10,
+          stats: {
+            foldersVisited: 1,
+            filesIndexed: 9,
+            filesDiscovered: 9,
+            skippedFiles: 0,
+            pagesFetched: 1,
+            failedRequests: 0,
+            startedAt: 0,
+            endedAt: 0,
+          },
+          updatedAt: 0,
+        },
+      },
+    };
+
+    const onToggleRoot = vi.fn();
+    render(
+      <SyncProgressDisplay
+        progress={progress}
+        rootSelection={{ selectedRootIds: [100], onToggleRoot }}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /展开/i }));
+    await userEvent.click(screen.getByRole("switch", { name: /选择根目录 100/i }));
+    expect(onToggleRoot).toHaveBeenCalledWith(100);
   });
 });

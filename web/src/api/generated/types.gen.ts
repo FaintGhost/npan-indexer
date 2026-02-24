@@ -113,6 +113,22 @@ export type SyncProgressState = {
     rootProgress: {
         [key: string]: RootSyncProgress;
     };
+    /**
+     * Historical root catalog for admin root detail list.
+     */
+    catalogRoots?: Array<number>;
+    /**
+     * Map of catalog root folder ID to name.
+     */
+    catalogRootNames?: {
+        [key: string]: string;
+    };
+    /**
+     * Historical root progress catalog (includes previous scoped runs).
+     */
+    catalogRootProgress?: {
+        [key: string]: RootSyncProgress;
+    };
     incrementalStats?: IncrementalSyncStats | null;
     lastError?: string;
     verification?: SyncVerification | null;
@@ -122,6 +138,7 @@ export type SyncStartRequest = {
     mode?: SyncMode;
     root_folder_ids?: Array<number>;
     include_departments?: boolean | null;
+    preserve_root_catalog?: boolean | null;
     department_ids?: Array<number>;
     resume_progress?: boolean | null;
     /**
@@ -133,6 +150,27 @@ export type SyncStartRequest = {
     checkpoint_template?: string;
     window_overlap_ms?: number;
     incremental_query?: string;
+};
+
+export type InspectRootItem = {
+    folder_id: number;
+    name: string;
+    item_count: number;
+    estimated_total_docs: number;
+};
+
+export type InspectRootError = {
+    folder_id: number;
+    message: string;
+};
+
+export type InspectRootsRequest = {
+    folder_ids: Array<number>;
+};
+
+export type InspectRootsResponse = {
+    items: Array<InspectRootItem>;
+    errors?: Array<InspectRootError>;
 };
 
 export type TokenRequest = {
@@ -502,76 +540,6 @@ export type DownloadUrlResponses = {
 
 export type DownloadUrlResponse2 = DownloadUrlResponses[keyof DownloadUrlResponses];
 
-export type CancelSyncData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/sync';
-};
-
-export type CancelSyncErrors = {
-    /**
-     * Unauthorized.
-     */
-    401: ErrorResponse;
-    /**
-     * No running sync to cancel.
-     */
-    409: ErrorResponse;
-    /**
-     * Rate limited.
-     */
-    429: ErrorResponse;
-};
-
-export type CancelSyncError = CancelSyncErrors[keyof CancelSyncErrors];
-
-export type CancelSyncResponses = {
-    /**
-     * Cancel signal sent.
-     */
-    200: MessageResponse;
-};
-
-export type CancelSyncResponse = CancelSyncResponses[keyof CancelSyncResponses];
-
-export type GetSyncProgressData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/sync';
-};
-
-export type GetSyncProgressErrors = {
-    /**
-     * Unauthorized.
-     */
-    401: ErrorResponse;
-    /**
-     * No sync progress found.
-     */
-    404: ErrorResponse;
-    /**
-     * Rate limited.
-     */
-    429: ErrorResponse;
-    /**
-     * Failed to read sync progress.
-     */
-    500: ErrorResponse;
-};
-
-export type GetSyncProgressError = GetSyncProgressErrors[keyof GetSyncProgressErrors];
-
-export type GetSyncProgressResponses = {
-    /**
-     * Current sync progress state.
-     */
-    200: SyncProgressState;
-};
-
-export type GetSyncProgressResponse = GetSyncProgressResponses[keyof GetSyncProgressResponses];
-
 export type StartSyncData = {
     body: SyncStartRequest;
     path?: never;
@@ -608,3 +576,106 @@ export type StartSyncResponses = {
 };
 
 export type StartSyncResponse = StartSyncResponses[keyof StartSyncResponses];
+
+export type CancelSyncData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/roots/inspect';
+};
+
+export type CancelSyncErrors = {
+    /**
+     * Unauthorized.
+     */
+    401: ErrorResponse;
+    /**
+     * No running sync to cancel.
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limited.
+     */
+    429: ErrorResponse;
+};
+
+export type CancelSyncError = CancelSyncErrors[keyof CancelSyncErrors];
+
+export type CancelSyncResponses = {
+    /**
+     * Cancel signal sent.
+     */
+    200: MessageResponse;
+};
+
+export type CancelSyncResponse = CancelSyncResponses[keyof CancelSyncResponses];
+
+export type GetSyncProgressData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/roots/inspect';
+};
+
+export type GetSyncProgressErrors = {
+    /**
+     * Unauthorized.
+     */
+    401: ErrorResponse;
+    /**
+     * No sync progress found.
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limited.
+     */
+    429: ErrorResponse;
+    /**
+     * Failed to read sync progress.
+     */
+    500: ErrorResponse;
+};
+
+export type GetSyncProgressError = GetSyncProgressErrors[keyof GetSyncProgressErrors];
+
+export type GetSyncProgressResponses = {
+    /**
+     * Current sync progress state.
+     */
+    200: SyncProgressState;
+};
+
+export type GetSyncProgressResponse = GetSyncProgressResponses[keyof GetSyncProgressResponses];
+
+export type InspectRootsData = {
+    body: InspectRootsRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/roots/inspect';
+};
+
+export type InspectRootsErrors = {
+    /**
+     * Invalid request body or missing credentials.
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized.
+     */
+    401: ErrorResponse;
+    /**
+     * Rate limited.
+     */
+    429: ErrorResponse;
+};
+
+export type InspectRootsError = InspectRootsErrors[keyof InspectRootsErrors];
+
+export type InspectRootsResponses = {
+    /**
+     * Root folder inspection result (supports partial success).
+     */
+    200: InspectRootsResponse;
+};
+
+export type InspectRootsResponse2 = InspectRootsResponses[keyof InspectRootsResponses];

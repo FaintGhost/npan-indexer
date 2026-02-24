@@ -25,6 +25,7 @@ type Handlers struct {
 	cfg          config.Config
 	queryService searchService
 	syncManager  *service.SyncManager
+	apiFactory   func(token string, authOptions npan.AuthResolverOptions) npan.API
 }
 
 func NewHandlers(cfg config.Config, queryService search.Searcher, syncManager *service.SyncManager) *Handlers {
@@ -63,6 +64,22 @@ type authPayload struct {
 	SubID        int64  `json:"sub_id"`
 	SubType      string `json:"sub_type"`
 	OAuthHost    string `json:"oauth_host"`
+}
+
+func normalizePositiveIDs(ids []int64) ([]int64, error) {
+	normalized := make([]int64, 0, len(ids))
+	seen := map[int64]struct{}{}
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, strconv.ErrSyntax
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+	return normalized, nil
 }
 
 // allowConfigFallback 从 echo 上下文中读取 allow_config_fallback 标记。
@@ -148,6 +165,9 @@ func firstPositive(values ...int64) int64 {
 }
 
 func (h *Handlers) newAPIClient(token string, authOptions npan.AuthResolverOptions) npan.API {
+	if h.apiFactory != nil {
+		return h.apiFactory(token, authOptions)
+	}
 	return npan.NewHTTPClient(npan.HTTPClientOptions{
 		BaseURL:        h.cfg.BaseURL,
 		Token:          token,
@@ -419,23 +439,49 @@ func (h *Handlers) AppDownloadURL(c *echo.Context) error {
 
 type syncStartPayload struct {
 	authPayload
-	Mode               string  `json:"mode"`
-	RootFolderIDs      []int64 `json:"root_folder_ids"`
-	IncludeDepartments *bool   `json:"include_departments"`
-	DepartmentIDs      []int64 `json:"department_ids"`
-	ResumeProgress     *bool   `json:"resume_progress"`
-	ForceRebuild       *bool   `json:"force_rebuild"`
-	RootWorkers        int     `json:"root_workers"`
-	ProgressEvery      int     `json:"progress_every"`
-	CheckpointTemplate string  `json:"checkpoint_template"`
-	WindowOverlapMS    int64   `json:"window_overlap_ms"`
-	IncrementalQuery   string  `json:"incremental_query"`
+	Mode                string  `json:"mode"`
+	RootFolderIDs       []int64 `json:"root_folder_ids"`
+	IncludeDepartments  *bool   `json:"include_departments"`
+	PreserveRootCatalog *bool   `json:"preserve_root_catalog"`
+	DepartmentIDs       []int64 `json:"department_ids"`
+	ResumeProgress      *bool   `json:"resume_progress"`
+	ForceRebuild        *bool   `json:"force_rebuild"`
+	RootWorkers         int     `json:"root_workers"`
+	ProgressEvery       int     `json:"progress_every"`
+	CheckpointTemplate  string  `json:"checkpoint_template"`
+	WindowOverlapMS     int64   `json:"window_overlap_ms"`
+	IncrementalQuery    string  `json:"incremental_query"`
+}
+
+type inspectRootsPayload struct {
+	authPayload
+	FolderIDs []int64 `json:"folder_ids"`
+}
+
+type inspectRootItem struct {
+	FolderID           int64  `json:"folder_id"`
+	Name               string `json:"name"`
+	ItemCount          int64  `json:"item_count"`
+	EstimatedTotalDocs int64  `json:"estimated_total_docs"`
+}
+
+type inspectRootError struct {
+	FolderID int64  `json:"folder_id"`
+	Message  string `json:"message"`
+}
+
+type inspectRootsResponse struct {
+	Items  []inspectRootItem  `json:"items"`
+	Errors []inspectRootError `json:"errors,omitempty"`
 }
 
 func (h *Handlers) StartFullSync(c *echo.Context) error {
 	var payload syncStartPayload
 	if err := c.Bind(&payload); err != nil {
 		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "请求体格式错误")
+	}
+	if force := payload.ForceRebuild != nil && *payload.ForceRebuild; force && len(payload.RootFolderIDs) > 0 {
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "force_rebuild 仅允许全量全库执行")
 	}
 
 	token, authOptions, err := h.resolveToken(c, payload.authPayload)
@@ -452,17 +498,18 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 	}
 
 	err = h.syncManager.Start(api, service.SyncStartRequest{
-		Mode:               models.SyncMode(payload.Mode),
-		RootFolderIDs:      payload.RootFolderIDs,
-		IncludeDepartments: payload.IncludeDepartments,
-		DepartmentIDs:      payload.DepartmentIDs,
-		ResumeProgress:     payload.ResumeProgress,
-		ForceRebuild:       payload.ForceRebuild,
-		RootWorkers:        payload.RootWorkers,
-		ProgressEvery:      payload.ProgressEvery,
-		CheckpointTemplate: payload.CheckpointTemplate,
-		WindowOverlapMS:    payload.WindowOverlapMS,
-		IncrementalQuery:   payload.IncrementalQuery,
+		Mode:                models.SyncMode(payload.Mode),
+		RootFolderIDs:       payload.RootFolderIDs,
+		IncludeDepartments:  payload.IncludeDepartments,
+		PreserveRootCatalog: payload.PreserveRootCatalog,
+		DepartmentIDs:       payload.DepartmentIDs,
+		ResumeProgress:      payload.ResumeProgress,
+		ForceRebuild:        payload.ForceRebuild,
+		RootWorkers:         payload.RootWorkers,
+		ProgressEvery:       payload.ProgressEvery,
+		CheckpointTemplate:  payload.CheckpointTemplate,
+		WindowOverlapMS:     payload.WindowOverlapMS,
+		IncrementalQuery:    payload.IncrementalQuery,
 	})
 	if err != nil {
 		slog.Error("启动同步失败", "error", err, "handler", "StartFullSync")
@@ -472,6 +519,53 @@ func (h *Handlers) StartFullSync(c *echo.Context) error {
 	return c.JSON(http.StatusAccepted, map[string]any{
 		"message": "同步任务已启动",
 	})
+}
+
+func (h *Handlers) InspectRoots(c *echo.Context) error {
+	var payload inspectRootsPayload
+	if err := c.Bind(&payload); err != nil {
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "请求体格式错误")
+	}
+	if len(payload.FolderIDs) == 0 {
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "folder_ids 不能为空")
+	}
+	folderIDs, err := normalizePositiveIDs(payload.FolderIDs)
+	if err != nil {
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "folder_ids 必须是正整数数组")
+	}
+
+	token, authOptions, err := h.resolveToken(c, payload.authPayload)
+	if err != nil {
+		slog.Error("解析 token 失败", "error", err, "handler", "InspectRoots")
+		return writeErrorResponse(c, http.StatusBadRequest, ErrCodeBadRequest, "拉取目录详情失败")
+	}
+
+	api := h.newAPIClient(token, authOptions)
+	resp := inspectRootsResponse{
+		Items: make([]inspectRootItem, 0, len(folderIDs)),
+	}
+	for _, folderID := range folderIDs {
+		folder, infoErr := api.GetFolderInfo(c.Request().Context(), folderID)
+		if infoErr != nil {
+			resp.Errors = append(resp.Errors, inspectRootError{
+				FolderID: folderID,
+				Message:  "获取目录信息失败",
+			})
+			continue
+		}
+		estimate := folder.ItemCount + 1
+		if estimate < 0 {
+			estimate = 0
+		}
+		resp.Items = append(resp.Items, inspectRootItem{
+			FolderID:           folderID,
+			Name:               folder.Name,
+			ItemCount:          folder.ItemCount,
+			EstimatedTotalDocs: estimate,
+		})
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *Handlers) GetFullSyncProgress(c *echo.Context) error {

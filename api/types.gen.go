@@ -115,6 +115,31 @@ type IndexDocument struct {
 	Type       ItemType `json:"type"`
 }
 
+// InspectRootError defines model for InspectRootError.
+type InspectRootError struct {
+	FolderId int    `json:"folder_id"`
+	Message  string `json:"message"`
+}
+
+// InspectRootItem defines model for InspectRootItem.
+type InspectRootItem struct {
+	EstimatedTotalDocs int    `json:"estimated_total_docs"`
+	FolderId           int    `json:"folder_id"`
+	ItemCount          int    `json:"item_count"`
+	Name               string `json:"name"`
+}
+
+// InspectRootsRequest defines model for InspectRootsRequest.
+type InspectRootsRequest struct {
+	FolderIds []int `json:"folder_ids"`
+}
+
+// InspectRootsResponse defines model for InspectRootsResponse.
+type InspectRootsResponse struct {
+	Errors *[]InspectRootError `json:"errors,omitempty"`
+	Items  []InspectRootItem   `json:"items"`
+}
+
 // ItemType defines model for ItemType.
 type ItemType string
 
@@ -172,8 +197,17 @@ type SyncMode string
 
 // SyncProgressState defines model for SyncProgressState.
 type SyncProgressState struct {
-	ActiveRoot       *int                  `json:"activeRoot"`
-	AggregateStats   CrawlStats            `json:"aggregateStats"`
+	ActiveRoot     *int       `json:"activeRoot"`
+	AggregateStats CrawlStats `json:"aggregateStats"`
+
+	// CatalogRootNames Map of catalog root folder ID to name.
+	CatalogRootNames *map[string]string `json:"catalogRootNames,omitempty"`
+
+	// CatalogRootProgress Historical root progress catalog (includes previous scoped runs).
+	CatalogRootProgress *map[string]RootSyncProgress `json:"catalogRootProgress,omitempty"`
+
+	// CatalogRoots Historical root catalog for admin root detail list.
+	CatalogRoots     *[]int                `json:"catalogRoots,omitempty"`
 	CompletedRoots   []int                 `json:"completedRoots"`
 	IncrementalStats *IncrementalSyncStats `json:"incrementalStats"`
 	LastError        *string               `json:"lastError,omitempty"`
@@ -201,15 +235,16 @@ type SyncStartRequest struct {
 	DepartmentIds      *[]int  `json:"department_ids,omitempty"`
 
 	// ForceRebuild 清空索引后重建，重新应用设置并从头爬取
-	ForceRebuild       *bool     `json:"force_rebuild"`
-	IncludeDepartments *bool     `json:"include_departments"`
-	IncrementalQuery   *string   `json:"incremental_query,omitempty"`
-	Mode               *SyncMode `json:"mode,omitempty"`
-	ProgressEvery      *int      `json:"progress_every,omitempty"`
-	ResumeProgress     *bool     `json:"resume_progress"`
-	RootFolderIds      *[]int    `json:"root_folder_ids,omitempty"`
-	RootWorkers        *int      `json:"root_workers,omitempty"`
-	WindowOverlapMs    *int      `json:"window_overlap_ms,omitempty"`
+	ForceRebuild        *bool     `json:"force_rebuild"`
+	IncludeDepartments  *bool     `json:"include_departments"`
+	IncrementalQuery    *string   `json:"incremental_query,omitempty"`
+	Mode                *SyncMode `json:"mode,omitempty"`
+	PreserveRootCatalog *bool     `json:"preserve_root_catalog"`
+	ProgressEvery       *int      `json:"progress_every,omitempty"`
+	ResumeProgress      *bool     `json:"resume_progress"`
+	RootFolderIds       *[]int    `json:"root_folder_ids,omitempty"`
+	RootWorkers         *int      `json:"root_workers,omitempty"`
+	WindowOverlapMs     *int      `json:"window_overlap_ms,omitempty"`
 }
 
 // SyncStatus defines model for SyncStatus.
@@ -315,6 +350,9 @@ type RemoteSearchParams struct {
 	SearchInFolder   *int    `form:"search_in_folder,omitempty" json:"search_in_folder,omitempty"`
 	UpdatedTimeRange *string `form:"updated_time_range,omitempty" json:"updated_time_range,omitempty"`
 }
+
+// InspectRootsJSONRequestBody defines body for InspectRoots for application/json ContentType.
+type InspectRootsJSONRequestBody = InspectRootsRequest
 
 // StartSyncJSONRequestBody defines body for StartSync for application/json ContentType.
 type StartSyncJSONRequestBody = SyncStartRequest
