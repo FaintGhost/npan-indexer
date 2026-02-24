@@ -79,6 +79,12 @@
 - [x] 2. 调整 embed 指令以支持 `dist` 目录仅包含 `.gitkeep` 的场景
 - [x] 3. 运行 Go 测试验证 `cmd/server` 与 `npan/web` 编译路径恢复正常
 
+## 新任务：修复 CI checkout 缺少 web/dist 导致 go:embed 失败
+
+- [x] 1. 从最新 run 日志确认 `pattern all:dist: no matching files found` 的真实原因是目录缺失
+- [x] 2. 在 `unit-test-go` 中补充 `web/dist` 占位创建步骤，确保 Go 测试前满足 embed 前提
+- [x] 3. 触发并观察新一轮 CI 验证结果
+
 ## Review（Docker 发布流水线）
 
 - 已新增 workflow：`.github/workflows/docker-publish.yml`
@@ -169,6 +175,18 @@
   - `web/embed.go` 改为 `//go:embed all:dist`，允许包含隐藏文件并递归嵌入目录。
 - 验证：
   - `GOCACHE=/tmp/go-build go test ./... -short` 通过（`cmd/server` 与 `npan/web` 已不再 setup failed）。
+
+## Review（CI checkout 缺少 web/dist 修复）
+
+- 根因：
+  - GitHub checkout 环境中 `web/dist` 不存在（`.gitkeep` 未被跟踪），导致 `//go:embed all:dist` 仍然匹配失败。
+- 修复：
+  - 在 `.github/workflows/ci.yml` 的 `unit-test-go` job 增加步骤：
+    - `mkdir -p web/dist`
+    - `touch web/dist/.gitkeep`
+  - 保证 `go test ./...` 执行前 embed 路径必定存在。
+- 结果预期：
+  - `unit-test-go` 不再因 `web/embed.go` setup failed 而中断。
 
 ## Review（本轮实施结果）
 

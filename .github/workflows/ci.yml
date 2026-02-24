@@ -45,6 +45,11 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      - name: Prepare embedded web dist placeholder
+        run: |
+          mkdir -p web/dist
+          touch web/dist/.gitkeep
+
       - run: go test ./... -short -count=1 -race
 
   unit-test-frontend:

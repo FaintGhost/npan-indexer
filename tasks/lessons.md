@@ -36,3 +36,7 @@
   - CI workflow 触发优先使用 `paths` 白名单，而不是仅靠 `paths-ignore`。
   - 将 `tasks/**`、文档、临时记录等高频非源码变更排除在 CI 测试触发条件之外。
   - 涉及 workflow/Docker 构建链路调整时，默认先做静态检查；是否跑全量测试根据是否触及源码决定。
+- 用户纠正：`go:embed all:dist` 在 CI 仍失败（checkout 缺少 `web/dist` 目录）。
+- 规则：
+  - `go:embed` 依赖目录若不是稳定跟踪产物，必须在 CI 对应 job 前置创建占位目录/文件。
+  - 不能仅依赖本地存在但未跟踪文件（如 `.gitkeep`）；要以 GitHub checkout 的最小状态为准验证。
