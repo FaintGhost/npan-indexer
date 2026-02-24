@@ -1,7 +1,10 @@
+# syntax=docker/dockerfile:1.7
+
 FROM oven/bun:alpine AS frontend
 WORKDIR /web
 COPY web/package.json web/bun.lock ./
-RUN bun install --frozen-lockfile
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile
 COPY web/ .
 RUN bun run --bun vite build
 
@@ -9,13 +12,16 @@ FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 COPY . .
 COPY --from=frontend /web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=linux go build \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build \
       -ldflags="-s -w" -trimpath \
       -o /out/npan-server ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux go build \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build \
       -ldflags="-s -w" -trimpath \
       -o /out/npan-cli ./cmd/cli
 

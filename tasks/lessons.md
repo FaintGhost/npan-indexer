@@ -26,3 +26,13 @@
   - 当 `*` 可能匹配多个文件时，禁止用 `printf` 一次性混合拼接镜像引用（易触发格式串重复）。
   - manifest source 统一使用显式循环：逐个 digest 组装 `${TARGET_IMAGE}@sha256:<digest>`。
   - 对 shell 拼接逻辑，优先先在本地用多输入样例验证展开行为再提交。
+- 用户纠正：merge 阶段 `docker.io/...@sha256:... not found`。
+- 规则：
+  - 多 registry 发布时，若 build 阶段只保存单一 digest artifact，必须明确该 digest 的“来源 registry”。
+  - `imagetools create` 的 source 优先统一使用单一 canonical registry（本项目选 GHCR），避免跨 registry digest 不一致/不可见。
+  - 若需要双 registry 发布，推荐策略是“单 registry push-by-digest + merge 阶段跨 registry 打标签复制”。
+- 用户纠正：测试应仅在源码变更时触发。
+- 规则：
+  - CI workflow 触发优先使用 `paths` 白名单，而不是仅靠 `paths-ignore`。
+  - 将 `tasks/**`、文档、临时记录等高频非源码变更排除在 CI 测试触发条件之外。
+  - 涉及 workflow/Docker 构建链路调整时，默认先做静态检查；是否跑全量测试根据是否触及源码决定。

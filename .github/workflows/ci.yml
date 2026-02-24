@@ -4,15 +4,31 @@ on:
   push:
     branches:
       - '**'
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
+    paths:
+      - 'api/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+      - 'Makefile'
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
+    paths:
+      - 'api/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'tests/**'
+      - 'web/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+      - 'Makefile'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

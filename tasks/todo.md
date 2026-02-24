@@ -60,6 +60,19 @@
 - [x] 2. 将 `printf` 拼接改为显式循环构造每个平台 digest 的完整引用
 - [x] 3. 完成静态自检并记录根因与修复
 
+## 新任务：优化 Docker Build 缓存与修复 merge digest not found
+
+- [x] 1. 优化 Docker 构建缓存（BuildKit cache mount + gha/registry 双缓存）
+- [x] 2. 收敛构建上下文（排除与镜像产物无关的高频变更目录）
+- [x] 3. 修复 `merge` 阶段按 Docker Hub digest 查找失败（统一以 GHCR digest 为 source）
+- [x] 4. 完成静态检查与完整回归测试
+
+## 新任务：CI 测试仅在源码变更时触发
+
+- [x] 1. 收敛 `.github/workflows/ci.yml` 触发条件为源码白名单路径
+- [x] 2. 覆盖后端/前端/测试与构建关键文件，排除文档与任务记录类变更
+- [x] 3. 完成 workflow 静态检查并记录变更影响
+
 ## Review（Docker 发布流水线）
 
 - 已新增 workflow：`.github/workflows/docker-publish.yml`
@@ -109,6 +122,37 @@
   - 同步修复 Docker Hub 与 GHCR 两个 manifest 合并步骤。
 - 预期结果：
   - `merge` 阶段不再出现 `failed to parse source "...@sha256:"`。
+
+## Review（Build 缓存优化 + merge digest not found 修复）
+
+- 缓存优化：
+  - `Dockerfile` 启用 BuildKit cache mount：
+    - bun 依赖缓存：`/root/.bun/install/cache`
+    - go mod 缓存：`/go/pkg/mod`
+    - go build 缓存：`/root/.cache/go-build`
+  - workflow `build` job 增加双缓存后端：
+    - `type=gha`（快速近端缓存）
+    - `type=registry`（GHCR 持久缓存，跨 runner 复用）
+  - `.dockerignore` 新增排除：`tasks/`、`.claude/`、`web/e2e/`、`web/playwright-report/`、`web/test-results/`、`web/tsconfig.tsbuildinfo`。
+- `merge` 报错根因：
+  - 之前 `build` 同时向 Docker Hub + GHCR push by digest，但 artifact 仅保存了单一 digest。
+  - `merge` 在 Docker Hub 用该 digest 查源时可能不存在，触发 `not found`。
+- 修复方案：
+  - `build` 改为仅向 GHCR push by digest（digest 作为统一 source）。
+  - `merge` 在 Docker Hub / GHCR 两个 manifest 创建步骤都使用 GHCR digest source，再分别打目标仓库标签。
+- 预期结果：
+  - 同源码重复构建命中率显著提升。
+  - `merge` 阶段不再出现 `docker.io/...@sha256:... not found`。
+
+## Review（CI 源码路径触发约束）
+
+- 背景：
+  - 你要求“测试只在源码发生变更时进行”。
+- 调整：
+  - 将 `.github/workflows/ci.yml` 的 `push` / `pull_request` 触发从 `paths-ignore` 改为 `paths` 白名单。
+  - 白名单包含：`api/**`、`cmd/**`、`internal/**`、`tests/**`、`web/**`、`go.mod`、`go.sum`、`Dockerfile`、`docker-compose*.yml`、`Makefile`。
+- 影响：
+  - 仅修改 `docs/**`、`tasks/**`、`.claude/**`、普通 markdown 等非源码文件时，不再触发整套 CI 测试。
 
 ## Review（本轮实施结果）
 
