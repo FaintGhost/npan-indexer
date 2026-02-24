@@ -644,3 +644,51 @@
   - `cd web && bun vitest run src/hooks/use-search.test.ts src/components/search-page.test.tsx src/hooks/use-admin-auth.test.ts src/components/admin-page.test.tsx` 通过（26 tests）
   - `cd web && bun vitest run` 通过（22 files / 189 tests）
   - `git diff --check` 通过
+
+## 新任务：Stage 4 AdminSyncPage 组件内直连 Connect（已完成）
+
+- [x] 1. 移除 `AdminSyncPage` 对 `use-sync-progress` 的依赖，改为组件内直接使用 `@connectrpc/connect-query` 的 `useQuery/useMutation`
+- [x] 2. 保持现有交互行为不变（刷新目录详情、全量勾选目录、强制重建约束、取消同步、消息提示）
+- [x] 3. 回归验证 `admin-page` 相关测试与前端全量测试
+- [x] 4. 回填本轮 Review 记录（改动点 + 验证结果）
+
+## Review（Stage 4 / AdminSyncPage 组件内直连 Connect）
+
+- 关键改动：
+  - `web/src/components/admin-sync-page.tsx` 已移除 `useSyncProgress` 依赖。
+  - 组件内直接接入 `@connectrpc/connect-query`：
+    - `useQuery(getSyncProgress)` + 手动 `refetch`
+    - `useMutation(startSync / inspectRoots / cancelSync)`
+  - 保留并内联了原有同步状态机能力：
+    - 首次加载、运行中轮询、`NotFound` 视为“暂无进度”
+    - 目录详情拉取后写回 `catalogRoots/catalogRootProgress`
+    - 启动同步后的运行态更新与取消后的刷新
+  - UI 交互与文案保持不变（刷新目录详情、全量勾选、强制重建确认、取消同步确认）。
+- 额外修正：
+  - 启动/取消同步结果改为基于 mutation 返回值判断成功，避免依赖异步 error 状态导致误提示成功。
+- 验证：
+  - `cd web && bun vitest run src/components/admin-page.test.tsx` 通过（5 tests）
+  - `cd web && bun vitest run` 通过（22 files / 189 tests）
+  - `git diff --check` 通过
+
+## 新任务：Stage 4 清理遗留 use-sync-progress（继续2）
+
+- [x] 1. 删除未再被生产代码使用的 `web/src/hooks/use-sync-progress.ts`
+- [x] 2. 删除对应测试 `web/src/hooks/use-sync-progress.test.ts` 并确认测试套件收敛
+- [x] 3. 运行前端回归测试（重点 `admin-page` + 全量 vitest）
+- [x] 4. 回填本轮 Review（清理范围与验证结果）
+
+## Review（Stage 4 / 清理遗留 use-sync-progress）
+
+- 清理范围：
+  - 删除 `web/src/hooks/use-sync-progress.ts`
+  - 删除 `web/src/hooks/use-sync-progress.test.ts`
+- 背景：
+  - `AdminSyncPage` 已在上一轮改为组件内直接使用 Connect Query/Mutation，`use-sync-progress` 不再被生产代码引用。
+- 结果：
+  - `rg -n "use-sync-progress" web/src -g'*.ts*'` 无匹配，遗留引用已清零。
+  - 前端测试套件从 `22 files / 189 tests` 收敛为 `21 files / 175 tests`（仅因移除该 hook 测试）。
+- 验证：
+  - `cd web && bun vitest run src/components/admin-page.test.tsx` 通过（5 tests）
+  - `cd web && bun vitest run` 通过（21 files / 175 tests）
+  - `git diff --check` 通过

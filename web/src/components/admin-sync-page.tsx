@@ -1,10 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { SyncProgress } from "@/lib/sync-schemas";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Code, ConnectError } from "@connectrpc/connect";
+import { useMutation, useQuery } from "@connectrpc/connect-query";
+import {
+  cancelSync as cancelSyncMethod,
+  getSyncProgress as getSyncProgressMethod,
+  inspectRoots as inspectRootsMethod,
+  startSync as startSyncMethod,
+} from "@/gen/npan/v1/api-AdminService_connectquery";
+import {
+  fromProtoGetSyncProgressResponse,
+  fromProtoInspectRootsResponse,
+  toProtoSyncMode,
+} from "@/lib/connect-admin-adapter";
+import { createNpanTransport } from "@/lib/connect-transport";
+import {
+  InspectRootsResponseSchema,
+  SyncProgressSchema,
+  preferTimestampMillis,
+} from "@/lib/sync-schemas";
+import type { InspectRootsResponse, SyncProgress } from "@/lib/sync-schemas";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
-import { useSyncProgress } from "@/hooks/use-sync-progress";
 import { ApiKeyDialog } from "@/components/api-key-dialog";
 import { SyncProgressDisplay } from "@/components/sync-progress-display";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+
+const POLL_INTERVAL = 2000;
 
 const SYNC_MODES = [
   { value: "auto", label: "自适应", description: "有游标走增量，否则全量" },
@@ -28,14 +48,67 @@ function getSelectableRootIDs(progress: SyncProgress | null): number[] {
   return [...new Set(ids)].sort((a, b) => a - b);
 }
 
+function toErrorMessage(err: unknown): string {
+  if (err instanceof ConnectError) {
+    return err.rawMessage || err.message;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return "Unknown error";
+}
+
+function normalizeCrawlStatsTimestamps(
+  stats: SyncProgress["aggregateStats"],
+): SyncProgress["aggregateStats"] {
+  return {
+    ...stats,
+    startedAt: preferTimestampMillis(stats.startedAt, stats.startedAtTs),
+    endedAt: preferTimestampMillis(stats.endedAt, stats.endedAtTs),
+  };
+}
+
+function normalizeRootProgressTimestamps(
+  rootProgress: SyncProgress["rootProgress"],
+): SyncProgress["rootProgress"] {
+  const next: SyncProgress["rootProgress"] = {};
+  for (const [key, value] of Object.entries(rootProgress)) {
+    next[key] = {
+      ...value,
+      updatedAt: preferTimestampMillis(value.updatedAt, value.updatedAtTs),
+      stats: normalizeCrawlStatsTimestamps(value.stats),
+    };
+  }
+  return next;
+}
+
+function normalizeSyncProgressTimestamps(progress: SyncProgress): SyncProgress {
+  return {
+    ...progress,
+    startedAt: preferTimestampMillis(progress.startedAt, progress.startedAtTs),
+    updatedAt: preferTimestampMillis(progress.updatedAt, progress.updatedAtTs),
+    aggregateStats: normalizeCrawlStatsTimestamps(progress.aggregateStats),
+    rootProgress: normalizeRootProgressTimestamps(progress.rootProgress),
+    catalogRootProgress: progress.catalogRootProgress
+      ? normalizeRootProgressTimestamps(progress.catalogRootProgress)
+      : progress.catalogRootProgress,
+  };
+}
+
 export function AdminSyncPage() {
   const auth = useAdminAuth();
-  const sync = useSyncProgress(auth.getHeaders());
+  const [progress, setProgress] = useState<SyncProgress | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [inspectError, setInspectError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<string>("auto");
   const [forceRebuild, setForceRebuild] = useState(false);
   const [selectedRootIDs, setSelectedRootIDs] = useState<number[]>([]);
   const selectionInitializedRef = useRef(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     title: string;
@@ -52,11 +125,298 @@ export function AdminSyncPage() {
     onConfirm: () => {},
   });
 
-  const isRunning = sync.progress?.status === "running";
-  const isBusy = sync.loading || sync.inspectLoading || isRunning;
+  const apiKey = auth.apiKey;
+  const hasAuth = Boolean(apiKey);
+  const transport = useMemo(
+    () =>
+      apiKey
+        ? createNpanTransport({
+            "X-API-Key": apiKey,
+          })
+        : undefined,
+    [apiKey],
+  );
+
+  const progressQuery = useQuery(getSyncProgressMethod, {}, {
+    enabled: false,
+    transport,
+    retry: false,
+  });
+  const startSyncMutation = useMutation(startSyncMethod, {
+    transport,
+    retry: false,
+  });
+  const inspectRootsMutation = useMutation(inspectRootsMethod, {
+    transport,
+    retry: false,
+  });
+  const cancelSyncMutation = useMutation(cancelSyncMethod, {
+    transport,
+    retry: false,
+  });
+
+  const fetchProgress = useCallback(async (): Promise<SyncProgress | null> => {
+    try {
+      const result = await progressQuery.refetch();
+      if (result.error) {
+        throw result.error;
+      }
+      const mapped = result.data
+        ? fromProtoGetSyncProgressResponse(result.data)
+        : null;
+      if (!mapped) {
+        setProgress(null);
+        setError(null);
+        return null;
+      }
+      const normalized = normalizeSyncProgressTimestamps(
+        SyncProgressSchema.parse(mapped),
+      );
+      setProgress(normalized);
+      setError(null);
+      return normalized;
+    } catch (err) {
+      if (err instanceof ConnectError && err.code === Code.NotFound) {
+        setProgress(null);
+        setError(null);
+        return null;
+      }
+      setError(toErrorMessage(err));
+      return null;
+    }
+  }, [progressQuery.refetch]);
+
+  const startPolling = useCallback(
+    (status: string, gracePollCount: number = 0) => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+
+      if (status === "running") {
+        let remainingGrace = gracePollCount;
+        intervalRef.current = setInterval(() => {
+          void fetchProgress().then((result) => {
+            if (result && result.status !== "running") {
+              if (remainingGrace > 0) {
+                remainingGrace--;
+                return;
+              }
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+            }
+          });
+        }, POLL_INTERVAL);
+      }
+    },
+    [fetchProgress],
+  );
+
+  const startSync = useCallback(
+    async (
+      rootFolderIds: number[],
+      selectedMode: string = "auto",
+      selectedForceRebuild: boolean = false,
+      options?: { preserveRootCatalog?: boolean },
+    ): Promise<boolean> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const preserveRootCatalog =
+          options?.preserveRootCatalog ?? rootFolderIds.length > 0;
+        await startSyncMutation.mutateAsync({
+          mode: toProtoSyncMode(selectedMode),
+          rootFolderIds: rootFolderIds.map((id) => BigInt(id)),
+          includeDepartments: rootFolderIds.length > 0 ? false : undefined,
+          preserveRootCatalog:
+            preserveRootCatalog && !selectedForceRebuild ? true : undefined,
+          resumeProgress: selectedMode !== "full" && !selectedForceRebuild,
+          forceRebuild: selectedForceRebuild || undefined,
+        });
+        await fetchProgress();
+        setProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "running",
+                lastError: undefined,
+                updatedAt: Date.now(),
+              }
+            : {
+                status: "running",
+                mode: selectedMode as "auto" | "full" | "incremental",
+                startedAt: Date.now(),
+                updatedAt: Date.now(),
+                roots: [],
+                completedRoots: [],
+                rootProgress: {},
+                aggregateStats: {
+                  filesIndexed: 0,
+                  filesDiscovered: 0,
+                  skippedFiles: 0,
+                  pagesFetched: 0,
+                  foldersVisited: 0,
+                  failedRequests: 0,
+                  startedAt: 0,
+                  endedAt: 0,
+                },
+              },
+        );
+        startPolling("running", 5);
+        return true;
+      } catch (err) {
+        setError(toErrorMessage(err));
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [startSyncMutation, fetchProgress, startPolling],
+  );
+
+  const inspectRoots = useCallback(
+    async (folderIds: number[]): Promise<InspectRootsResponse | null> => {
+      setInspectLoading(true);
+      setInspectError(null);
+      try {
+        const result = await inspectRootsMutation.mutateAsync({
+          folderIds: folderIds.map((id) => BigInt(id)),
+        });
+        const parsed = InspectRootsResponseSchema.parse(
+          fromProtoInspectRootsResponse(result),
+        );
+        if (parsed.items.length > 0) {
+          setProgress((prev) => {
+            const now = Date.now();
+            const base: SyncProgress =
+              prev ?? {
+                status: "idle",
+                mode: "full",
+                startedAt: now,
+                updatedAt: now,
+                roots: [],
+                completedRoots: [],
+                rootProgress: {},
+                aggregateStats: {
+                  filesIndexed: 0,
+                  filesDiscovered: 0,
+                  skippedFiles: 0,
+                  pagesFetched: 0,
+                  foldersVisited: 0,
+                  failedRequests: 0,
+                  startedAt: 0,
+                  endedAt: 0,
+                },
+              };
+
+            const catalogRootProgress = {
+              ...(base.catalogRootProgress ?? base.rootProgress),
+            };
+            const catalogRootNames = {
+              ...(base.catalogRootNames ?? base.rootNames),
+            };
+            const rootIDs = new Set<number>(base.catalogRoots ?? []);
+
+            for (const item of parsed.items) {
+              const key = String(item.folder_id);
+              rootIDs.add(item.folder_id);
+              catalogRootNames[String(item.folder_id)] = item.name;
+              const existing = catalogRootProgress[key];
+              if (existing) {
+                catalogRootProgress[key] = {
+                  ...existing,
+                  estimatedTotalDocs: item.estimated_total_docs,
+                  updatedAt: now,
+                };
+                continue;
+              }
+              catalogRootProgress[key] = {
+                rootFolderId: item.folder_id,
+                status: "pending",
+                estimatedTotalDocs: item.estimated_total_docs,
+                stats: {
+                  foldersVisited: 0,
+                  filesIndexed: 0,
+                  filesDiscovered: 0,
+                  skippedFiles: 0,
+                  pagesFetched: 0,
+                  failedRequests: 0,
+                  startedAt: 0,
+                  endedAt: 0,
+                },
+                updatedAt: now,
+              };
+            }
+
+            return {
+              ...base,
+              updatedAt: now,
+              catalogRoots: [...rootIDs].sort((a, b) => a - b),
+              catalogRootNames,
+              catalogRootProgress,
+            };
+          });
+        }
+        return parsed;
+      } catch (err) {
+        setInspectError(toErrorMessage(err));
+        return null;
+      } finally {
+        setInspectLoading(false);
+      }
+    },
+    [inspectRootsMutation],
+  );
+
+  const cancelSync = useCallback(async (): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    try {
+      await cancelSyncMutation.mutateAsync({});
+      await fetchProgress();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return true;
+    } catch (err) {
+      setError(toErrorMessage(err));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [cancelSyncMutation, fetchProgress]);
+
+  useEffect(() => {
+    if (!hasAuth) {
+      setInitialLoading(false);
+      setProgress(null);
+      setError(null);
+      return;
+    }
+
+    setInitialLoading(true);
+    void fetchProgress().then((result) => {
+      setInitialLoading(false);
+      if (result) {
+        startPolling(result.status);
+      }
+    });
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [hasAuth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isRunning = progress?.status === "running";
+  const isBusy = loading || inspectLoading || isRunning;
   const selectableRootIDs = useMemo(
-    () => getSelectableRootIDs(sync.progress),
-    [sync.progress],
+    () => getSelectableRootIDs(progress),
+    [progress],
   );
   const selectedScopedRoots = useMemo(() => {
     if (mode !== "full") return [];
@@ -78,7 +438,7 @@ export function AdminSyncPage() {
       return;
     }
 
-    const result = await sync.inspectRoots(selectableRootIDs);
+    const result = await inspectRoots(selectableRootIDs);
     if (!result) return;
 
     const successCount = result.items.length;
@@ -118,10 +478,10 @@ export function AdminSyncPage() {
   const doStartSync = async () => {
     setMessage(null);
     const scopedRootIDs = mode === "full" ? selectedScopedRoots : [];
-    await sync.startSync(scopedRootIDs, mode, forceRebuild, {
+    const started = await startSync(scopedRootIDs, mode, forceRebuild, {
       preserveRootCatalog: scopedRootIDs.length > 0,
     });
-    if (!sync.error) {
+    if (started) {
       setMessage("同步任务已启动");
       setTimeout(() => setMessage(null), 4000);
     }
@@ -143,8 +503,8 @@ export function AdminSyncPage() {
 
   const doCancelSync = async () => {
     setMessage(null);
-    await sync.cancelSync();
-    if (!sync.error) {
+    const cancelled = await cancelSync();
+    if (cancelled) {
       setMessage("已发送取消请求");
       setTimeout(() => setMessage(null), 4000);
     }
@@ -207,7 +567,7 @@ export function AdminSyncPage() {
                 disabled={isBusy || selectableRootIDs.length === 0}
                 className="shrink-0 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {sync.inspectLoading ? "拉取中..." : "刷新目录详情"}
+                {inspectLoading ? "拉取中..." : "刷新目录详情"}
               </button>
             </div>
             <p className="text-xs text-slate-400">
@@ -264,13 +624,13 @@ export function AdminSyncPage() {
             disabled={isBusy}
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {sync.loading && !isRunning && (
+            {loading && !isRunning && (
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             )}
             {isRunning && (
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
             )}
-            {sync.loading && !isRunning
+            {loading && !isRunning
               ? "启动中..."
               : isRunning
                 ? "同步进行中"
@@ -283,7 +643,7 @@ export function AdminSyncPage() {
             <button
               type="button"
               onClick={handleCancelSync}
-              disabled={sync.loading}
+              disabled={loading}
               className="rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               取消同步
@@ -298,19 +658,19 @@ export function AdminSyncPage() {
         </div>
       )}
 
-      {sync.inspectError && (
+      {inspectError && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
-          <p className="text-sm text-amber-700">{sync.inspectError}</p>
+          <p className="text-sm text-amber-700">{inspectError}</p>
         </div>
       )}
 
-      {sync.error && (
+      {error && (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3">
-          <p className="text-sm text-rose-600">{sync.error}</p>
+          <p className="text-sm text-rose-600">{error}</p>
         </div>
       )}
 
-      {sync.initialLoading && (
+      {initialLoading && (
         <div className="space-y-4">
           <div className="h-8 w-24 animate-pulse rounded-lg bg-slate-200" />
           <div className="h-24 animate-pulse rounded-xl bg-slate-100" />
@@ -321,9 +681,9 @@ export function AdminSyncPage() {
         </div>
       )}
 
-      {!sync.initialLoading && sync.progress && (
+      {!initialLoading && progress && (
         <SyncProgressDisplay
-          progress={sync.progress}
+          progress={progress}
           rootSelection={{
             selectedRootIds: selectedRootIDs,
             disabled: isBusy,
@@ -338,14 +698,11 @@ export function AdminSyncPage() {
         />
       )}
 
-      {!sync.initialLoading &&
-        !sync.progress &&
-        !sync.loading &&
-        !sync.error && (
-          <div className="py-12 text-center">
-            <p className="text-sm text-slate-400">暂无同步记录</p>
-          </div>
-        )}
+      {!initialLoading && !progress && !loading && !error && (
+        <div className="py-12 text-center">
+          <p className="text-sm text-slate-400">暂无同步记录</p>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmDialog.open}
