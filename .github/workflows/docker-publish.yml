@@ -149,7 +149,10 @@ jobs:
           DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
           TARGET_IMAGE: ${{ steps.prep.outputs.dockerhub_image }}
         run: |
-          sources="$(printf '%s@sha256:%s ' "${TARGET_IMAGE}" *)"
+          sources=""
+          for digest in *; do
+            sources="${sources} ${TARGET_IMAGE}@sha256:${digest}"
+          done
           tags="$(jq -cr '.tags | map(select(startswith(env.TARGET_IMAGE + ":")) | "-t " + .) | join(" ")' <<<"${DOCKER_METADATA_OUTPUT_JSON}")"
           docker buildx imagetools create ${tags} ${sources}
 
@@ -159,6 +162,9 @@ jobs:
           DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
           TARGET_IMAGE: ${{ steps.prep.outputs.ghcr_image }}
         run: |
-          sources="$(printf '%s@sha256:%s ' "${TARGET_IMAGE}" *)"
+          sources=""
+          for digest in *; do
+            sources="${sources} ${TARGET_IMAGE}@sha256:${digest}"
+          done
           tags="$(jq -cr '.tags | map(select(startswith(env.TARGET_IMAGE + ":")) | "-t " + .) | join(" ")' <<<"${DOCKER_METADATA_OUTPUT_JSON}")"
           docker buildx imagetools create ${tags} ${sources}

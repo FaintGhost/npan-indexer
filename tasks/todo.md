@@ -54,6 +54,12 @@
 - [x] 2. 改造 workflow，移除跨 job 传递镜像名（含 secret 风险），改为各 job 内本地计算
 - [x] 3. 静态自检 workflow 改动并回填验证记录
 
+## 新任务：修复 merge 阶段 manifest source 拼接错误
+
+- [x] 1. 基于报错 `invalid reference format` 回溯 `sources` 拼接逻辑并复现变量展开问题
+- [x] 2. 将 `printf` 拼接改为显式循环构造每个平台 digest 的完整引用
+- [x] 3. 完成静态自检并记录根因与修复
+
 ## Review（Docker 发布流水线）
 
 - 已新增 workflow：`.github/workflows/docker-publish.yml`
@@ -91,6 +97,18 @@
 - 预期结果：
   - 消除 `prepare` 的 2 个 warning（skip output）
   - 消除 `Build linux/amd64` 与 `Build linux/arm64` 的 2 个 buildx error
+
+## Review（merge source 拼接错误修复）
+
+- 根因：
+  - `sources="$(printf '%s@sha256:%s ' "${TARGET_IMAGE}" *)"` 在 `*` 匹配多个 digest 文件时，`printf` 会重复使用格式串。
+  - 第二轮输出会把某个 digest 当成“镜像名”，并因缺少配对参数生成 `digest@sha256:`，触发 `invalid reference format`。
+- 修复：
+  - 改为 `for digest in *; do ...; done` 显式构造：
+    `${TARGET_IMAGE}@sha256:<digest>`。
+  - 同步修复 Docker Hub 与 GHCR 两个 manifest 合并步骤。
+- 预期结果：
+  - `merge` 阶段不再出现 `failed to parse source "...@sha256:"`。
 
 ## Review（本轮实施结果）
 

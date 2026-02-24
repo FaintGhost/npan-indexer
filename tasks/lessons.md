@@ -21,3 +21,8 @@
   - 禁止将由 `secrets.*` 参与拼接得到的值作为 **job outputs** 跨 job 传递。
   - 镜像名（尤其含 DockerHub 用户名）统一在各 job 内本地计算并使用 **step outputs**。
   - 出现 `buildx tag is needed` 时，优先排查 `name=` 是否为空（变量/输出被跳过）。
+- 用户纠正：merge 阶段 `imagetools create` 出现 `failed to parse source "...@sha256:"`。
+- 规则：
+  - 当 `*` 可能匹配多个文件时，禁止用 `printf` 一次性混合拼接镜像引用（易触发格式串重复）。
+  - manifest source 统一使用显式循环：逐个 digest 组装 `${TARGET_IMAGE}@sha256:<digest>`。
+  - 对 shell 拼接逻辑，优先先在本地用多输入样例验证展开行为再提交。
