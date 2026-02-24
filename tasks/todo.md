@@ -411,3 +411,49 @@
   - `git diff --check` 通过
 - Timestamp 守门结论：
   - 本批次未引入 `google.protobuf.Timestamp`，`proto/npan/v1/api.proto` 中相关时间字段仍为 `int64`（`started_at` / `updated_at` 等），符合“兼容性优先、暂缓迁移”的约束。
+
+## 新任务：Connect-RPC Timestamp 迁移（Brainstorming 设计）
+
+- [x] 1. 盘点时间字段影响面（proto、Go DTO、service、存储、前端消费与测试）
+- [x] 2. 对比迁移策略（一次性替换 vs 双字段过渡）并收敛推荐方案
+- [x] 3. 产出设计文档包到 `docs/plans/2026-02-24-connect-rpc-timestamp-migration-design/`
+- [x] 4. 回填评审结论与迁移边界（本批次不直接删旧 `int64` 字段）
+
+## Review（Connect-RPC Timestamp 迁移 / Brainstorming 设计）
+
+- 核心结论：
+  - 不能“就地把已有字段类型从 `int64` 改成 `Timestamp`”，这会破坏 protobuf 向后兼容。
+  - 推荐采用“双字段过渡”：
+    - 保留现有 `int64` 字段（兼容 REST/CLI/存储与老客户端）
+    - 新增 `*_ts`（`google.protobuf.Timestamp`）字段给 Connect 新客户端优先消费
+  - 过渡期由服务端同时填充新旧字段，前端优先读新字段，缺失时回退旧字段。
+- 范围边界：
+  - 本批次目标是“增量引入 Timestamp 字段并打通兼容消费链路”。
+  - 本批次不移除旧 `int64` 字段，不修改进度持久化结构，不做破坏式清理。
+- 设计产物：
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-design/_index.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-design/architecture.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-design/bdd-specs.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-design/best-practices.md`
+
+## 新任务：Connect-RPC Timestamp 迁移（Writing Plans）
+
+- [x] 1. 基于 Timestamp 设计文档产出实施计划目录
+- [x] 2. 按 BDD 场景拆分 Red/Green 任务（契约、后端映射、前端消费、兼容守门）
+- [x] 3. 为任务补齐依赖、影响文件与验证命令
+- [x] 4. 回填执行移交说明（下一步进入 `executing-plans`）
+
+## Review（Connect-RPC Timestamp 迁移 / 实施计划）
+
+- 计划目录：
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/_index.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/task-001-red-proto-descriptor-timestamp-fields.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/task-002-green-proto-add-timestamp-sidecar-fields.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/task-003-red-backend-connect-progress-timestamp-tests.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/task-004-green-backend-progress-timestamp-mapping.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/task-005-red-frontend-timestamp-fallback-tests.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/task-006-green-frontend-timestamp-consumer-adapter.md`
+  - `docs/plans/2026-02-24-connect-rpc-timestamp-migration-plan/task-007-verification-and-compatibility-gate.md`
+- 迁移策略已固化：
+  - 先“新增 + 双写 + 回退读取”，再评估后续清理旧字段；
+  - 兼容优先，不做同批次破坏式替换。
