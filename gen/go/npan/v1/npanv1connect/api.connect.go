@@ -69,6 +69,9 @@ const (
 	// AdminServiceGetSyncProgressProcedure is the fully-qualified name of the AdminService's
 	// GetSyncProgress RPC.
 	AdminServiceGetSyncProgressProcedure = "/npan.v1.AdminService/GetSyncProgress"
+	// AdminServiceWatchSyncProgressProcedure is the fully-qualified name of the AdminService's
+	// WatchSyncProgress RPC.
+	AdminServiceWatchSyncProgressProcedure = "/npan.v1.AdminService/WatchSyncProgress"
 	// AdminServiceCancelSyncProcedure is the fully-qualified name of the AdminService's CancelSync RPC.
 	AdminServiceCancelSyncProcedure = "/npan.v1.AdminService/CancelSync"
 )
@@ -462,6 +465,7 @@ type AdminServiceClient interface {
 	StartSync(context.Context, *connect.Request[v1.StartSyncRequest]) (*connect.Response[v1.StartSyncResponse], error)
 	InspectRoots(context.Context, *connect.Request[v1.InspectRootsRequest]) (*connect.Response[v1.InspectRootsResponse], error)
 	GetSyncProgress(context.Context, *connect.Request[v1.GetSyncProgressRequest]) (*connect.Response[v1.GetSyncProgressResponse], error)
+	WatchSyncProgress(context.Context, *connect.Request[v1.WatchSyncProgressRequest]) (*connect.ServerStreamForClient[v1.WatchSyncProgressResponse], error)
 	CancelSync(context.Context, *connect.Request[v1.CancelSyncRequest]) (*connect.Response[v1.CancelSyncResponse], error)
 }
 
@@ -494,6 +498,12 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(adminServiceMethods.ByName("GetSyncProgress")),
 			connect.WithClientOptions(opts...),
 		),
+		watchSyncProgress: connect.NewClient[v1.WatchSyncProgressRequest, v1.WatchSyncProgressResponse](
+			httpClient,
+			baseURL+AdminServiceWatchSyncProgressProcedure,
+			connect.WithSchema(adminServiceMethods.ByName("WatchSyncProgress")),
+			connect.WithClientOptions(opts...),
+		),
 		cancelSync: connect.NewClient[v1.CancelSyncRequest, v1.CancelSyncResponse](
 			httpClient,
 			baseURL+AdminServiceCancelSyncProcedure,
@@ -505,10 +515,11 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 
 // adminServiceClient implements AdminServiceClient.
 type adminServiceClient struct {
-	startSync       *connect.Client[v1.StartSyncRequest, v1.StartSyncResponse]
-	inspectRoots    *connect.Client[v1.InspectRootsRequest, v1.InspectRootsResponse]
-	getSyncProgress *connect.Client[v1.GetSyncProgressRequest, v1.GetSyncProgressResponse]
-	cancelSync      *connect.Client[v1.CancelSyncRequest, v1.CancelSyncResponse]
+	startSync         *connect.Client[v1.StartSyncRequest, v1.StartSyncResponse]
+	inspectRoots      *connect.Client[v1.InspectRootsRequest, v1.InspectRootsResponse]
+	getSyncProgress   *connect.Client[v1.GetSyncProgressRequest, v1.GetSyncProgressResponse]
+	watchSyncProgress *connect.Client[v1.WatchSyncProgressRequest, v1.WatchSyncProgressResponse]
+	cancelSync        *connect.Client[v1.CancelSyncRequest, v1.CancelSyncResponse]
 }
 
 // StartSync calls npan.v1.AdminService.StartSync.
@@ -526,6 +537,11 @@ func (c *adminServiceClient) GetSyncProgress(ctx context.Context, req *connect.R
 	return c.getSyncProgress.CallUnary(ctx, req)
 }
 
+// WatchSyncProgress calls npan.v1.AdminService.WatchSyncProgress.
+func (c *adminServiceClient) WatchSyncProgress(ctx context.Context, req *connect.Request[v1.WatchSyncProgressRequest]) (*connect.ServerStreamForClient[v1.WatchSyncProgressResponse], error) {
+	return c.watchSyncProgress.CallServerStream(ctx, req)
+}
+
 // CancelSync calls npan.v1.AdminService.CancelSync.
 func (c *adminServiceClient) CancelSync(ctx context.Context, req *connect.Request[v1.CancelSyncRequest]) (*connect.Response[v1.CancelSyncResponse], error) {
 	return c.cancelSync.CallUnary(ctx, req)
@@ -536,6 +552,7 @@ type AdminServiceHandler interface {
 	StartSync(context.Context, *connect.Request[v1.StartSyncRequest]) (*connect.Response[v1.StartSyncResponse], error)
 	InspectRoots(context.Context, *connect.Request[v1.InspectRootsRequest]) (*connect.Response[v1.InspectRootsResponse], error)
 	GetSyncProgress(context.Context, *connect.Request[v1.GetSyncProgressRequest]) (*connect.Response[v1.GetSyncProgressResponse], error)
+	WatchSyncProgress(context.Context, *connect.Request[v1.WatchSyncProgressRequest], *connect.ServerStream[v1.WatchSyncProgressResponse]) error
 	CancelSync(context.Context, *connect.Request[v1.CancelSyncRequest]) (*connect.Response[v1.CancelSyncResponse], error)
 }
 
@@ -564,6 +581,12 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(adminServiceMethods.ByName("GetSyncProgress")),
 		connect.WithHandlerOptions(opts...),
 	)
+	adminServiceWatchSyncProgressHandler := connect.NewServerStreamHandler(
+		AdminServiceWatchSyncProgressProcedure,
+		svc.WatchSyncProgress,
+		connect.WithSchema(adminServiceMethods.ByName("WatchSyncProgress")),
+		connect.WithHandlerOptions(opts...),
+	)
 	adminServiceCancelSyncHandler := connect.NewUnaryHandler(
 		AdminServiceCancelSyncProcedure,
 		svc.CancelSync,
@@ -578,6 +601,8 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 			adminServiceInspectRootsHandler.ServeHTTP(w, r)
 		case AdminServiceGetSyncProgressProcedure:
 			adminServiceGetSyncProgressHandler.ServeHTTP(w, r)
+		case AdminServiceWatchSyncProgressProcedure:
+			adminServiceWatchSyncProgressHandler.ServeHTTP(w, r)
 		case AdminServiceCancelSyncProcedure:
 			adminServiceCancelSyncHandler.ServeHTTP(w, r)
 		default:
@@ -599,6 +624,10 @@ func (UnimplementedAdminServiceHandler) InspectRoots(context.Context, *connect.R
 
 func (UnimplementedAdminServiceHandler) GetSyncProgress(context.Context, *connect.Request[v1.GetSyncProgressRequest]) (*connect.Response[v1.GetSyncProgressResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("npan.v1.AdminService.GetSyncProgress is not implemented"))
+}
+
+func (UnimplementedAdminServiceHandler) WatchSyncProgress(context.Context, *connect.Request[v1.WatchSyncProgressRequest], *connect.ServerStream[v1.WatchSyncProgressResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("npan.v1.AdminService.WatchSyncProgress is not implemented"))
 }
 
 func (UnimplementedAdminServiceHandler) CancelSync(context.Context, *connect.Request[v1.CancelSyncRequest]) (*connect.Response[v1.CancelSyncResponse], error) {

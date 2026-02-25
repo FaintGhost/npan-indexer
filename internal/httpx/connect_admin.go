@@ -20,6 +20,8 @@ type adminConnectServer struct {
 	handlers *Handlers
 }
 
+var watchSyncProgressPollInterval = 2 * time.Second
+
 func newAdminConnectServer(handlers *Handlers) *adminConnectServer {
 	return &adminConnectServer{handlers: handlers}
 }
@@ -140,6 +142,67 @@ func (s *adminConnectServer) GetSyncProgress(_ context.Context, _ *connect.Reque
 	return connect.NewResponse(&npanv1.GetSyncProgressResponse{
 		State: toProtoSyncProgressState(progress),
 	}), nil
+}
+
+func (s *adminConnectServer) WatchSyncProgress(
+	ctx context.Context,
+	_ *connect.Request[npanv1.WatchSyncProgressRequest],
+	stream *connect.ServerStream[npanv1.WatchSyncProgressResponse],
+) error {
+	if s.handlers == nil || s.handlers.syncManager == nil {
+		return connect.NewError(connect.CodeInternal, errors.New("同步服务未初始化"))
+	}
+
+	sendProgress := func() (bool, error) {
+		progress, err := s.handlers.syncManager.GetProgress()
+		if err != nil {
+			return false, connect.NewError(connect.CodeInternal, errors.New("无法读取同步进度"))
+		}
+		if progress == nil {
+			return false, nil
+		}
+		if err := stream.Send(&npanv1.WatchSyncProgressResponse{
+			State: toProtoSyncProgressState(progress),
+		}); err != nil {
+			return false, err
+		}
+		return isSyncTerminalStatus(progress.Status), nil
+	}
+
+	done, err := sendProgress()
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		return err
+	}
+	if done {
+		return nil
+	}
+
+	ticker := time.NewTicker(watchSyncProgressPollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.Canceled) {
+				return nil
+			}
+			return ctx.Err()
+		case <-ticker.C:
+			done, err := sendProgress()
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
+				return err
+			}
+			if done {
+				return nil
+			}
+		}
+	}
 }
 
 func (s *adminConnectServer) CancelSync(_ context.Context, _ *connect.Request[npanv1.CancelSyncRequest]) (*connect.Response[npanv1.CancelSyncResponse], error) {
@@ -269,6 +332,15 @@ func toProtoSyncMode(raw string) *npanv1.SyncMode {
 		return &mode
 	default:
 		return nil
+	}
+}
+
+func isSyncTerminalStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "done", "error", "cancelled", "interrupted":
+		return true
+	default:
+		return false
 	}
 }
 

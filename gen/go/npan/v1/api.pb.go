@@ -2599,6 +2599,86 @@ func (x *GetSyncProgressResponse) GetState() *SyncProgressState {
 	return nil
 }
 
+type WatchSyncProgressRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchSyncProgressRequest) Reset() {
+	*x = WatchSyncProgressRequest{}
+	mi := &file_npan_v1_api_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchSyncProgressRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchSyncProgressRequest) ProtoMessage() {}
+
+func (x *WatchSyncProgressRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_npan_v1_api_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchSyncProgressRequest.ProtoReflect.Descriptor instead.
+func (*WatchSyncProgressRequest) Descriptor() ([]byte, []int) {
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{34}
+}
+
+type WatchSyncProgressResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         *SyncProgressState     `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchSyncProgressResponse) Reset() {
+	*x = WatchSyncProgressResponse{}
+	mi := &file_npan_v1_api_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchSyncProgressResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchSyncProgressResponse) ProtoMessage() {}
+
+func (x *WatchSyncProgressResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_npan_v1_api_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchSyncProgressResponse.ProtoReflect.Descriptor instead.
+func (*WatchSyncProgressResponse) Descriptor() ([]byte, []int) {
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *WatchSyncProgressResponse) GetState() *SyncProgressState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
 type CancelSyncRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -2607,7 +2687,7 @@ type CancelSyncRequest struct {
 
 func (x *CancelSyncRequest) Reset() {
 	*x = CancelSyncRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[34]
+	mi := &file_npan_v1_api_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2619,7 +2699,7 @@ func (x *CancelSyncRequest) String() string {
 func (*CancelSyncRequest) ProtoMessage() {}
 
 func (x *CancelSyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[34]
+	mi := &file_npan_v1_api_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2632,7 +2712,7 @@ func (x *CancelSyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelSyncRequest.ProtoReflect.Descriptor instead.
 func (*CancelSyncRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{34}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{36}
 }
 
 type CancelSyncResponse struct {
@@ -2644,7 +2724,7 @@ type CancelSyncResponse struct {
 
 func (x *CancelSyncResponse) Reset() {
 	*x = CancelSyncResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[35]
+	mi := &file_npan_v1_api_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2656,7 +2736,7 @@ func (x *CancelSyncResponse) String() string {
 func (*CancelSyncResponse) ProtoMessage() {}
 
 func (x *CancelSyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[35]
+	mi := &file_npan_v1_api_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2669,7 +2749,7 @@ func (x *CancelSyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelSyncResponse.ProtoReflect.Descriptor instead.
 func (*CancelSyncResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{35}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *CancelSyncResponse) GetMessage() string {
@@ -2931,6 +3011,9 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x06errors\x18\x02 \x03(\v2\x19.npan.v1.InspectRootErrorR\x06errors\"\x18\n" +
 	"\x16GetSyncProgressRequest\"K\n" +
 	"\x17GetSyncProgressResponse\x120\n" +
+	"\x05state\x18\x01 \x01(\v2\x1a.npan.v1.SyncProgressStateR\x05state\"\x1a\n" +
+	"\x18WatchSyncProgressRequest\"M\n" +
+	"\x19WatchSyncProgressResponse\x120\n" +
 	"\x05state\x18\x01 \x01(\v2\x1a.npan.v1.SyncProgressStateR\x05state\"\x13\n" +
 	"\x11CancelSyncRequest\".\n" +
 	"\x12CancelSyncResponse\x12\x18\n" +
@@ -2977,11 +3060,12 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\rSearchService\x12K\n" +
 	"\fRemoteSearch\x12\x1c.npan.v1.RemoteSearchRequest\x1a\x1d.npan.v1.RemoteSearchResponse\x12H\n" +
 	"\vLocalSearch\x12\x1b.npan.v1.LocalSearchRequest\x1a\x1c.npan.v1.LocalSearchResponse\x12H\n" +
-	"\vDownloadURL\x12\x1b.npan.v1.DownloadURLRequest\x1a\x1c.npan.v1.DownloadURLResponse2\xbc\x02\n" +
+	"\vDownloadURL\x12\x1b.npan.v1.DownloadURLRequest\x1a\x1c.npan.v1.DownloadURLResponse2\x9a\x03\n" +
 	"\fAdminService\x12B\n" +
 	"\tStartSync\x12\x19.npan.v1.StartSyncRequest\x1a\x1a.npan.v1.StartSyncResponse\x12K\n" +
 	"\fInspectRoots\x12\x1c.npan.v1.InspectRootsRequest\x1a\x1d.npan.v1.InspectRootsResponse\x12T\n" +
-	"\x0fGetSyncProgress\x12\x1f.npan.v1.GetSyncProgressRequest\x1a .npan.v1.GetSyncProgressResponse\x12E\n" +
+	"\x0fGetSyncProgress\x12\x1f.npan.v1.GetSyncProgressRequest\x1a .npan.v1.GetSyncProgressResponse\x12\\\n" +
+	"\x11WatchSyncProgress\x12!.npan.v1.WatchSyncProgressRequest\x1a\".npan.v1.WatchSyncProgressResponse0\x01\x12E\n" +
 	"\n" +
 	"CancelSync\x12\x1a.npan.v1.CancelSyncRequest\x1a\x1b.npan.v1.CancelSyncResponseB\x1cZ\x1anpan/gen/go/npan/v1;npanv1b\x06proto3"
 
@@ -2998,73 +3082,75 @@ func file_npan_v1_api_proto_rawDescGZIP() []byte {
 }
 
 var file_npan_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_npan_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_npan_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_npan_v1_api_proto_goTypes = []any{
-	(ItemType)(0),                   // 0: npan.v1.ItemType
-	(SyncStatus)(0),                 // 1: npan.v1.SyncStatus
-	(SyncMode)(0),                   // 2: npan.v1.SyncMode
-	(ErrorCode)(0),                  // 3: npan.v1.ErrorCode
-	(ReadyStatus)(0),                // 4: npan.v1.ReadyStatus
-	(*IndexDocument)(nil),           // 5: npan.v1.IndexDocument
-	(*QueryResult)(nil),             // 6: npan.v1.QueryResult
-	(*CrawlStats)(nil),              // 7: npan.v1.CrawlStats
-	(*RootSyncProgress)(nil),        // 8: npan.v1.RootSyncProgress
-	(*IncrementalSyncStats)(nil),    // 9: npan.v1.IncrementalSyncStats
-	(*SyncVerification)(nil),        // 10: npan.v1.SyncVerification
-	(*SyncProgressState)(nil),       // 11: npan.v1.SyncProgressState
-	(*ErrorResponse)(nil),           // 12: npan.v1.ErrorResponse
-	(*DownloadURLResult)(nil),       // 13: npan.v1.DownloadURLResult
-	(*RemoteSearchItem)(nil),        // 14: npan.v1.RemoteSearchItem
-	(*RemoteSearchResponse)(nil),    // 15: npan.v1.RemoteSearchResponse
-	(*InspectRootItem)(nil),         // 16: npan.v1.InspectRootItem
-	(*InspectRootError)(nil),        // 17: npan.v1.InspectRootError
-	(*HealthRequest)(nil),           // 18: npan.v1.HealthRequest
-	(*HealthResponse)(nil),          // 19: npan.v1.HealthResponse
-	(*ReadyzRequest)(nil),           // 20: npan.v1.ReadyzRequest
-	(*ReadyzResponse)(nil),          // 21: npan.v1.ReadyzResponse
-	(*AppSearchRequest)(nil),        // 22: npan.v1.AppSearchRequest
-	(*AppSearchResponse)(nil),       // 23: npan.v1.AppSearchResponse
-	(*AppDownloadURLRequest)(nil),   // 24: npan.v1.AppDownloadURLRequest
-	(*AppDownloadURLResponse)(nil),  // 25: npan.v1.AppDownloadURLResponse
-	(*CreateTokenRequest)(nil),      // 26: npan.v1.CreateTokenRequest
-	(*CreateTokenResponse)(nil),     // 27: npan.v1.CreateTokenResponse
-	(*RemoteSearchRequest)(nil),     // 28: npan.v1.RemoteSearchRequest
-	(*LocalSearchRequest)(nil),      // 29: npan.v1.LocalSearchRequest
-	(*LocalSearchResponse)(nil),     // 30: npan.v1.LocalSearchResponse
-	(*DownloadURLRequest)(nil),      // 31: npan.v1.DownloadURLRequest
-	(*DownloadURLResponse)(nil),     // 32: npan.v1.DownloadURLResponse
-	(*StartSyncRequest)(nil),        // 33: npan.v1.StartSyncRequest
-	(*StartSyncResponse)(nil),       // 34: npan.v1.StartSyncResponse
-	(*InspectRootsRequest)(nil),     // 35: npan.v1.InspectRootsRequest
-	(*InspectRootsResponse)(nil),    // 36: npan.v1.InspectRootsResponse
-	(*GetSyncProgressRequest)(nil),  // 37: npan.v1.GetSyncProgressRequest
-	(*GetSyncProgressResponse)(nil), // 38: npan.v1.GetSyncProgressResponse
-	(*CancelSyncRequest)(nil),       // 39: npan.v1.CancelSyncRequest
-	(*CancelSyncResponse)(nil),      // 40: npan.v1.CancelSyncResponse
-	nil,                             // 41: npan.v1.SyncProgressState.RootNamesEntry
-	nil,                             // 42: npan.v1.SyncProgressState.RootProgressEntry
-	nil,                             // 43: npan.v1.SyncProgressState.CatalogRootNamesEntry
-	nil,                             // 44: npan.v1.SyncProgressState.CatalogRootProgressEntry
-	(*timestamppb.Timestamp)(nil),   // 45: google.protobuf.Timestamp
+	(ItemType)(0),                     // 0: npan.v1.ItemType
+	(SyncStatus)(0),                   // 1: npan.v1.SyncStatus
+	(SyncMode)(0),                     // 2: npan.v1.SyncMode
+	(ErrorCode)(0),                    // 3: npan.v1.ErrorCode
+	(ReadyStatus)(0),                  // 4: npan.v1.ReadyStatus
+	(*IndexDocument)(nil),             // 5: npan.v1.IndexDocument
+	(*QueryResult)(nil),               // 6: npan.v1.QueryResult
+	(*CrawlStats)(nil),                // 7: npan.v1.CrawlStats
+	(*RootSyncProgress)(nil),          // 8: npan.v1.RootSyncProgress
+	(*IncrementalSyncStats)(nil),      // 9: npan.v1.IncrementalSyncStats
+	(*SyncVerification)(nil),          // 10: npan.v1.SyncVerification
+	(*SyncProgressState)(nil),         // 11: npan.v1.SyncProgressState
+	(*ErrorResponse)(nil),             // 12: npan.v1.ErrorResponse
+	(*DownloadURLResult)(nil),         // 13: npan.v1.DownloadURLResult
+	(*RemoteSearchItem)(nil),          // 14: npan.v1.RemoteSearchItem
+	(*RemoteSearchResponse)(nil),      // 15: npan.v1.RemoteSearchResponse
+	(*InspectRootItem)(nil),           // 16: npan.v1.InspectRootItem
+	(*InspectRootError)(nil),          // 17: npan.v1.InspectRootError
+	(*HealthRequest)(nil),             // 18: npan.v1.HealthRequest
+	(*HealthResponse)(nil),            // 19: npan.v1.HealthResponse
+	(*ReadyzRequest)(nil),             // 20: npan.v1.ReadyzRequest
+	(*ReadyzResponse)(nil),            // 21: npan.v1.ReadyzResponse
+	(*AppSearchRequest)(nil),          // 22: npan.v1.AppSearchRequest
+	(*AppSearchResponse)(nil),         // 23: npan.v1.AppSearchResponse
+	(*AppDownloadURLRequest)(nil),     // 24: npan.v1.AppDownloadURLRequest
+	(*AppDownloadURLResponse)(nil),    // 25: npan.v1.AppDownloadURLResponse
+	(*CreateTokenRequest)(nil),        // 26: npan.v1.CreateTokenRequest
+	(*CreateTokenResponse)(nil),       // 27: npan.v1.CreateTokenResponse
+	(*RemoteSearchRequest)(nil),       // 28: npan.v1.RemoteSearchRequest
+	(*LocalSearchRequest)(nil),        // 29: npan.v1.LocalSearchRequest
+	(*LocalSearchResponse)(nil),       // 30: npan.v1.LocalSearchResponse
+	(*DownloadURLRequest)(nil),        // 31: npan.v1.DownloadURLRequest
+	(*DownloadURLResponse)(nil),       // 32: npan.v1.DownloadURLResponse
+	(*StartSyncRequest)(nil),          // 33: npan.v1.StartSyncRequest
+	(*StartSyncResponse)(nil),         // 34: npan.v1.StartSyncResponse
+	(*InspectRootsRequest)(nil),       // 35: npan.v1.InspectRootsRequest
+	(*InspectRootsResponse)(nil),      // 36: npan.v1.InspectRootsResponse
+	(*GetSyncProgressRequest)(nil),    // 37: npan.v1.GetSyncProgressRequest
+	(*GetSyncProgressResponse)(nil),   // 38: npan.v1.GetSyncProgressResponse
+	(*WatchSyncProgressRequest)(nil),  // 39: npan.v1.WatchSyncProgressRequest
+	(*WatchSyncProgressResponse)(nil), // 40: npan.v1.WatchSyncProgressResponse
+	(*CancelSyncRequest)(nil),         // 41: npan.v1.CancelSyncRequest
+	(*CancelSyncResponse)(nil),        // 42: npan.v1.CancelSyncResponse
+	nil,                               // 43: npan.v1.SyncProgressState.RootNamesEntry
+	nil,                               // 44: npan.v1.SyncProgressState.RootProgressEntry
+	nil,                               // 45: npan.v1.SyncProgressState.CatalogRootNamesEntry
+	nil,                               // 46: npan.v1.SyncProgressState.CatalogRootProgressEntry
+	(*timestamppb.Timestamp)(nil),     // 47: google.protobuf.Timestamp
 }
 var file_npan_v1_api_proto_depIdxs = []int32{
 	0,  // 0: npan.v1.IndexDocument.type:type_name -> npan.v1.ItemType
 	5,  // 1: npan.v1.QueryResult.items:type_name -> npan.v1.IndexDocument
-	45, // 2: npan.v1.CrawlStats.started_at_ts:type_name -> google.protobuf.Timestamp
-	45, // 3: npan.v1.CrawlStats.ended_at_ts:type_name -> google.protobuf.Timestamp
+	47, // 2: npan.v1.CrawlStats.started_at_ts:type_name -> google.protobuf.Timestamp
+	47, // 3: npan.v1.CrawlStats.ended_at_ts:type_name -> google.protobuf.Timestamp
 	7,  // 4: npan.v1.RootSyncProgress.stats:type_name -> npan.v1.CrawlStats
-	45, // 5: npan.v1.RootSyncProgress.updated_at_ts:type_name -> google.protobuf.Timestamp
+	47, // 5: npan.v1.RootSyncProgress.updated_at_ts:type_name -> google.protobuf.Timestamp
 	1,  // 6: npan.v1.SyncProgressState.status:type_name -> npan.v1.SyncStatus
 	2,  // 7: npan.v1.SyncProgressState.mode:type_name -> npan.v1.SyncMode
-	41, // 8: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
+	43, // 8: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
 	7,  // 9: npan.v1.SyncProgressState.aggregate_stats:type_name -> npan.v1.CrawlStats
-	42, // 10: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
-	43, // 11: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
-	44, // 12: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
+	44, // 10: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
+	45, // 11: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
+	46, // 12: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
 	9,  // 13: npan.v1.SyncProgressState.incremental_stats:type_name -> npan.v1.IncrementalSyncStats
 	10, // 14: npan.v1.SyncProgressState.verification:type_name -> npan.v1.SyncVerification
-	45, // 15: npan.v1.SyncProgressState.started_at_ts:type_name -> google.protobuf.Timestamp
-	45, // 16: npan.v1.SyncProgressState.updated_at_ts:type_name -> google.protobuf.Timestamp
+	47, // 15: npan.v1.SyncProgressState.started_at_ts:type_name -> google.protobuf.Timestamp
+	47, // 16: npan.v1.SyncProgressState.updated_at_ts:type_name -> google.protobuf.Timestamp
 	3,  // 17: npan.v1.ErrorResponse.code:type_name -> npan.v1.ErrorCode
 	14, // 18: npan.v1.RemoteSearchResponse.files:type_name -> npan.v1.RemoteSearchItem
 	14, // 19: npan.v1.RemoteSearchResponse.folders:type_name -> npan.v1.RemoteSearchItem
@@ -3077,37 +3163,40 @@ var file_npan_v1_api_proto_depIdxs = []int32{
 	16, // 26: npan.v1.InspectRootsResponse.items:type_name -> npan.v1.InspectRootItem
 	17, // 27: npan.v1.InspectRootsResponse.errors:type_name -> npan.v1.InspectRootError
 	11, // 28: npan.v1.GetSyncProgressResponse.state:type_name -> npan.v1.SyncProgressState
-	8,  // 29: npan.v1.SyncProgressState.RootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
-	8,  // 30: npan.v1.SyncProgressState.CatalogRootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
-	18, // 31: npan.v1.HealthService.Health:input_type -> npan.v1.HealthRequest
-	20, // 32: npan.v1.HealthService.Readyz:input_type -> npan.v1.ReadyzRequest
-	22, // 33: npan.v1.AppService.AppSearch:input_type -> npan.v1.AppSearchRequest
-	24, // 34: npan.v1.AppService.AppDownloadURL:input_type -> npan.v1.AppDownloadURLRequest
-	26, // 35: npan.v1.AuthService.CreateToken:input_type -> npan.v1.CreateTokenRequest
-	28, // 36: npan.v1.SearchService.RemoteSearch:input_type -> npan.v1.RemoteSearchRequest
-	29, // 37: npan.v1.SearchService.LocalSearch:input_type -> npan.v1.LocalSearchRequest
-	31, // 38: npan.v1.SearchService.DownloadURL:input_type -> npan.v1.DownloadURLRequest
-	33, // 39: npan.v1.AdminService.StartSync:input_type -> npan.v1.StartSyncRequest
-	35, // 40: npan.v1.AdminService.InspectRoots:input_type -> npan.v1.InspectRootsRequest
-	37, // 41: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
-	39, // 42: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
-	19, // 43: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
-	21, // 44: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
-	23, // 45: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
-	25, // 46: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
-	27, // 47: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
-	15, // 48: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
-	30, // 49: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
-	32, // 50: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
-	34, // 51: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
-	36, // 52: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
-	38, // 53: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
-	40, // 54: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
-	43, // [43:55] is the sub-list for method output_type
-	31, // [31:43] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	11, // 29: npan.v1.WatchSyncProgressResponse.state:type_name -> npan.v1.SyncProgressState
+	8,  // 30: npan.v1.SyncProgressState.RootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
+	8,  // 31: npan.v1.SyncProgressState.CatalogRootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
+	18, // 32: npan.v1.HealthService.Health:input_type -> npan.v1.HealthRequest
+	20, // 33: npan.v1.HealthService.Readyz:input_type -> npan.v1.ReadyzRequest
+	22, // 34: npan.v1.AppService.AppSearch:input_type -> npan.v1.AppSearchRequest
+	24, // 35: npan.v1.AppService.AppDownloadURL:input_type -> npan.v1.AppDownloadURLRequest
+	26, // 36: npan.v1.AuthService.CreateToken:input_type -> npan.v1.CreateTokenRequest
+	28, // 37: npan.v1.SearchService.RemoteSearch:input_type -> npan.v1.RemoteSearchRequest
+	29, // 38: npan.v1.SearchService.LocalSearch:input_type -> npan.v1.LocalSearchRequest
+	31, // 39: npan.v1.SearchService.DownloadURL:input_type -> npan.v1.DownloadURLRequest
+	33, // 40: npan.v1.AdminService.StartSync:input_type -> npan.v1.StartSyncRequest
+	35, // 41: npan.v1.AdminService.InspectRoots:input_type -> npan.v1.InspectRootsRequest
+	37, // 42: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
+	39, // 43: npan.v1.AdminService.WatchSyncProgress:input_type -> npan.v1.WatchSyncProgressRequest
+	41, // 44: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
+	19, // 45: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
+	21, // 46: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
+	23, // 47: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
+	25, // 48: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
+	27, // 49: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
+	15, // 50: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
+	30, // 51: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
+	32, // 52: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
+	34, // 53: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
+	36, // 54: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
+	38, // 55: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
+	40, // 56: npan.v1.AdminService.WatchSyncProgress:output_type -> npan.v1.WatchSyncProgressResponse
+	42, // 57: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
+	45, // [45:58] is the sub-list for method output_type
+	32, // [32:45] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_npan_v1_api_proto_init() }
@@ -3133,7 +3222,7 @@ func file_npan_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_npan_v1_api_proto_rawDesc), len(file_npan_v1_api_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   40,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

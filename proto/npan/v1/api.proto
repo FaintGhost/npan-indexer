@@ -270,6 +270,7 @@ service AdminService {
   rpc StartSync(StartSyncRequest) returns (StartSyncResponse);
   rpc InspectRoots(InspectRootsRequest) returns (InspectRootsResponse);
   rpc GetSyncProgress(GetSyncProgressRequest) returns (GetSyncProgressResponse);
+  rpc WatchSyncProgress(WatchSyncProgressRequest) returns (stream WatchSyncProgressResponse);
   rpc CancelSync(CancelSyncRequest) returns (CancelSyncResponse);
 }
 
@@ -317,6 +318,12 @@ message InspectRootsResponse {
 message GetSyncProgressRequest {}
 
 message GetSyncProgressResponse {
+  SyncProgressState state = 1;
+}
+
+message WatchSyncProgressRequest {}
+
+message WatchSyncProgressResponse {
   SyncProgressState state = 1;
 }
 

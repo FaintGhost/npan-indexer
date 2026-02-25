@@ -259,6 +259,38 @@
 - 关键决策已固化：
   - 拉取目录详情成功后，新目录默认自动勾选（按用户确认）。
 
+## 新任务：修复 Admin 同步进度自动刷新（Connect Server Streaming）
+
+- [x] 1. 对照 `review.md` 与当前实现，确认 `/admin` 进度需从轮询升级为 `WatchSyncProgress` 流式订阅
+- [x] 2. 修改 `proto/npan/v1/api.proto`：在 `AdminService` 新增 `WatchSyncProgress` RPC 与请求消息
+- [x] 3. 执行 `buf generate` 更新 Go/TS 生成代码，并校验无意外契约漂移
+- [x] 4. 在 `internal/httpx/connect_admin.go` 实现 `WatchSyncProgress` stream handler（连接关闭退出、终态可结束）
+- [x] 5. 改造 `web/src/components/admin-sync-page.tsx`：改为消费 Connect streaming，移除对进度轮询的依赖
+- [x] 6. 更新后端与前端测试（含 Connect route/组件行为）覆盖新流式链路
+- [x] 7. 运行验证：`go test ./...` + `cd web && bun vitest run` + 必要构建检查，并回填 review 记录
+
+## Review（Admin 同步进度自动刷新 / Connect Streaming）
+
+- 契约与生成：
+  - `AdminService` 新增 `WatchSyncProgress`（server streaming）。
+  - 按 Buf lint 规范，stream 响应封装为 `WatchSyncProgressResponse`（含 `state` 字段），避免直接流式返回 `SyncProgressState` 的命名违规。
+  - 已执行并通过：`buf generate`、`buf lint`。
+- 后端实现：
+  - `internal/httpx/connect_admin.go` 新增 `WatchSyncProgress` handler。
+  - 行为：首次立即推送当前进度；随后按轮询间隔持续推送；遇到 `done/error/cancelled/interrupted` 终态主动结束流；客户端取消时优雅退出。
+  - 新增 `isSyncTerminalStatus`，统一终态判断逻辑。
+- 前端实现：
+  - `web/src/components/admin-sync-page.tsx` 接入 Connect streaming 客户端，`for await...of` 消费 `watchSyncProgress`。
+  - 推送消息实时落地到页面 `progress`，不再依赖手动刷新。
+  - 保留 unary 查询轮询兜底，确保 stream 不可用时页面仍能持续更新。
+  - `web/src/lib/connect-admin-adapter.ts` 导出 `fromProtoSyncProgressState`，复用统一映射逻辑。
+- 测试与验证：
+  - 后端新增流式测试：`TestConnectAdminWatchSyncProgress_StreamsUntilTerminal`。
+  - 路由鉴权测试补充：`/npan.v1.AdminService/WatchSyncProgress`。
+  - `GOCACHE=/tmp/go-build go test ./...` 通过（测试前创建 `web/dist` 占位目录）。
+  - `cd web && bun vitest run` 通过（20 files / 166 tests）。
+  - `git diff --check` 通过。
+
 ## 新任务：Admin 局部补同步交互重构（Executing Plans）
 
 - [x] 1. 实现后端 `inspect roots` 接口（批量、部分成功）并接入 Admin 路由鉴权

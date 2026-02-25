@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,8 +13,11 @@ import (
 
 	npanv1 "npan/gen/go/npan/v1"
 	"npan/gen/go/npan/v1/npanv1connect"
+	"npan/internal/config"
 	"npan/internal/models"
 	"npan/internal/npan"
+	"npan/internal/service"
+	"npan/internal/storage"
 )
 
 type adminConnectTestAPI struct {
@@ -148,6 +152,94 @@ func TestConnectAdminGetSyncProgress_NotFoundAndCancelConflict(t *testing.T) {
 	}
 	if got := connect.CodeOf(err); got != connect.CodeAborted {
 		t.Fatalf("expected aborted, got %v", got)
+	}
+}
+
+func TestConnectAdminWatchSyncProgress_StreamsUntilTerminal(t *testing.T) {
+	originalInterval := watchSyncProgressPollInterval
+	watchSyncProgressPollInterval = 20 * time.Millisecond
+	t.Cleanup(func() {
+		watchSyncProgressPollInterval = originalInterval
+	})
+
+	progressStore := storage.NewJSONProgressStore(filepath.Join(t.TempDir(), "progress.json"))
+	syncManager := service.NewSyncManager(service.SyncManagerArgs{
+		ProgressStore: progressStore,
+	})
+	handlers := &Handlers{
+		cfg:          config.Config{AllowConfigAuthFallback: true},
+		queryService: &mockSearchService{},
+		syncManager:  syncManager,
+	}
+
+	now := time.Now().UnixMilli()
+	if err := progressStore.Save(&models.SyncProgressState{
+		Status:         "idle",
+		StartedAt:      now,
+		UpdatedAt:      now,
+		Roots:          []int64{},
+		CompletedRoots: []int64{},
+		RootProgress:   map[string]*models.RootSyncProgress{},
+	}); err != nil {
+		t.Fatalf("save running progress: %v", err)
+	}
+
+	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	ts := httptest.NewServer(e)
+	defer ts.Close()
+
+	client := npanv1connect.NewAdminServiceClient(ts.Client(), ts.URL)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	req := connect.NewRequest(&npanv1.WatchSyncProgressRequest{})
+	req.Header().Set("X-API-Key", testAdminKey)
+	stream, err := client.WatchSyncProgress(ctx, req)
+	if err != nil {
+		t.Fatalf("WatchSyncProgress returned error: %v", err)
+	}
+
+	if !stream.Receive() {
+		t.Fatalf("expected first streamed message, err=%v", stream.Err())
+	}
+	if got := stream.Msg().GetState().GetStatus(); got != npanv1.SyncStatus_SYNC_STATUS_IDLE {
+		t.Fatalf("expected idle status, got %v", got)
+	}
+
+	doneAt := time.Now().UnixMilli()
+	if err := progressStore.Save(&models.SyncProgressState{
+		Status:         "done",
+		StartedAt:      now,
+		UpdatedAt:      doneAt,
+		Roots:          []int64{},
+		CompletedRoots: []int64{},
+		RootProgress:   map[string]*models.RootSyncProgress{},
+	}); err != nil {
+		t.Fatalf("save done progress: %v", err)
+	}
+
+	deadline := time.After(500 * time.Millisecond)
+	sawDone := false
+	for !sawDone {
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for done status, last err=%v", stream.Err())
+		default:
+		}
+
+		if !stream.Receive() {
+			t.Fatalf("stream closed before done status, err=%v", stream.Err())
+		}
+		if stream.Msg().GetState().GetStatus() == npanv1.SyncStatus_SYNC_STATUS_DONE {
+			sawDone = true
+		}
+	}
+
+	if stream.Receive() {
+		t.Fatalf("expected stream to close after terminal status")
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("unexpected stream error after terminal status: %v", err)
 	}
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Code, ConnectError } from '@connectrpc/connect'
+import { createClient, Code, ConnectError } from '@connectrpc/connect'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   cancelSync as cancelSyncMethod,
@@ -7,9 +7,11 @@ import {
   inspectRoots as inspectRootsMethod,
   startSync as startSyncMethod,
 } from '@/gen/npan/v1/api-AdminService_connectquery'
+import { AdminService } from '@/gen/npan/v1/api_pb'
 import {
   fromProtoGetSyncProgressResponse,
   fromProtoInspectRootsResponse,
+  fromProtoSyncProgressState,
   toProtoSyncMode,
 } from '@/lib/connect-admin-adapter'
 import { createNpanTransport } from '@/lib/connect-transport'
@@ -25,6 +27,7 @@ import { SyncProgressDisplay } from '@/components/sync-progress-display'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
 const POLL_INTERVAL = 2000
+const STREAM_RECONNECT_DELAY = 500
 
 const SYNC_MODES = [
   { value: 'auto', label: '自适应', description: '有游标走增量，否则全量' },
@@ -122,6 +125,7 @@ export function AdminSyncPage() {
   })
 
   const apiKey = auth.apiKey
+  const onUnauthorized = auth.on401
   const hasAuth = Boolean(apiKey)
   const transport = useMemo(
     () =>
@@ -144,8 +148,10 @@ export function AdminSyncPage() {
       }
       return normalizeSyncProgressTimestamps(SyncProgressSchema.parse(mapped))
     },
-    refetchInterval: (query) =>
-      query.state.data?.status === 'running' ? POLL_INTERVAL : false,
+    // Keep a polling fallback even when current data is null/not_found.
+    // Streaming should provide realtime updates, but this prevents the UI from
+    // getting stuck if the stream is unavailable or temporarily broken.
+    refetchInterval: POLL_INTERVAL,
   })
   const startSyncMutation = useMutation(startSyncMethod, {
     transport,
@@ -190,6 +196,78 @@ export function AdminSyncPage() {
 
     setError(toErrorMessage(queryError))
   }, [progressQuery.error])
+
+  const adminStreamClient = useMemo(
+    () => (transport ? createClient(AdminService, transport) : undefined),
+    [transport],
+  )
+
+  useEffect(() => {
+    if (!hasAuth || !adminStreamClient) {
+      return
+    }
+
+    const abortController = new AbortController()
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleReconnect = (fn: () => void) => {
+      reconnectTimer = setTimeout(fn, STREAM_RECONNECT_DELAY)
+    }
+
+    const watchProgress = async () => {
+      try {
+        for await (const response of adminStreamClient.watchSyncProgress(
+          {},
+          { signal: abortController.signal },
+        )) {
+          if (!response.state) {
+            continue
+          }
+          const mapped = fromProtoSyncProgressState(response.state)
+          const normalized = normalizeSyncProgressTimestamps(
+            SyncProgressSchema.parse(mapped),
+          )
+          setProgress(normalized)
+          setError(null)
+        }
+
+        if (!abortController.signal.aborted) {
+          scheduleReconnect(() => {
+            void watchProgress()
+          })
+        }
+      } catch (err) {
+        if (abortController.signal.aborted) {
+          return
+        }
+        if (err instanceof ConnectError) {
+          if (err.code === Code.Unauthenticated) {
+            onUnauthorized()
+            return
+          }
+          if (err.code === Code.Unimplemented) {
+            return
+          }
+          if (err.code === Code.NotFound) {
+            setProgress(null)
+            setError(null)
+          }
+        }
+        scheduleReconnect(() => {
+          void watchProgress()
+        })
+      }
+    }
+
+    void watchProgress()
+
+    return () => {
+      abortController.abort()
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+      }
+    }
+  }, [adminStreamClient, hasAuth, onUnauthorized])
 
   const startSync = useCallback(
     async (

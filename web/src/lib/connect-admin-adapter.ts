@@ -149,6 +149,12 @@ function mapProgressState(state: ProtoSyncProgressState): SyncProgress {
   }
 }
 
+export function fromProtoSyncProgressState(
+  state: ProtoSyncProgressState,
+): SyncProgress {
+  return mapProgressState(state)
+}
+
 export function fromProtoGetSyncProgressResponse(
   response: GetSyncProgressResponse,
 ): SyncProgress | null {

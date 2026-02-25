@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { AppDownloadURLRequest, AppDownloadURLResponse, AppSearchRequest, AppSearchResponse, CancelSyncRequest, CancelSyncResponse, CreateTokenRequest, CreateTokenResponse, DownloadURLRequest, DownloadURLResponse, GetSyncProgressRequest, GetSyncProgressResponse, HealthRequest, HealthResponse, InspectRootsRequest, InspectRootsResponse, LocalSearchRequest, LocalSearchResponse, ReadyzRequest, ReadyzResponse, RemoteSearchRequest, RemoteSearchResponse, StartSyncRequest, StartSyncResponse } from "./api_pb.js";
+import { AppDownloadURLRequest, AppDownloadURLResponse, AppSearchRequest, AppSearchResponse, CancelSyncRequest, CancelSyncResponse, CreateTokenRequest, CreateTokenResponse, DownloadURLRequest, DownloadURLResponse, GetSyncProgressRequest, GetSyncProgressResponse, HealthRequest, HealthResponse, InspectRootsRequest, InspectRootsResponse, LocalSearchRequest, LocalSearchResponse, ReadyzRequest, ReadyzResponse, RemoteSearchRequest, RemoteSearchResponse, StartSyncRequest, StartSyncResponse, WatchSyncProgressRequest, WatchSyncProgressResponse } from "./api_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -146,6 +146,15 @@ export const AdminService = {
       I: GetSyncProgressRequest,
       O: GetSyncProgressResponse,
       kind: MethodKind.Unary,
+    },
+    /**
+     * @generated from rpc npan.v1.AdminService.WatchSyncProgress
+     */
+    watchSyncProgress: {
+      name: "WatchSyncProgress",
+      I: WatchSyncProgressRequest,
+      O: WatchSyncProgressResponse,
+      kind: MethodKind.ServerStreaming,
     },
     /**
      * @generated from rpc npan.v1.AdminService.CancelSync
