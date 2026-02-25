@@ -7,7 +7,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isAdminMethodRequest(
   url: string,
-  methodName: "StartSync" | "CancelSync",
+  methodName: "StartSync" | "CancelSync" | "WatchSyncProgress",
 ): boolean {
   return url.includes(`/npan.v1.AdminService/${methodName}`);
 }
@@ -283,6 +283,43 @@ test.describe("Admin 同步控制", () => {
     await expect(adminPage.startSyncButton).toContainText("同步进行中", {
       timeout: 5_000,
     });
+  });
+
+  test("WatchSyncProgress 不应出现 Flusher internal 错误", async ({
+    authenticatedPage,
+  }) => {
+    const internalErrors: string[] = [];
+    authenticatedPage.on("console", (msg) => {
+      if (msg.type() !== "error") {
+        return;
+      }
+      const text = msg.text();
+      if (
+        text.includes("http.Flusher") ||
+        text.includes("WatchSyncProgress") ||
+        text.includes('code: "internal"')
+      ) {
+        internalErrors.push(text);
+      }
+    });
+    authenticatedPage.on("pageerror", (err) => {
+      const text = err.message;
+      if (
+        text.includes("http.Flusher") ||
+        text.includes("WatchSyncProgress") ||
+        text.includes("internal")
+      ) {
+        internalErrors.push(text);
+      }
+    });
+
+    await authenticatedPage.reload();
+    await expect(
+      authenticatedPage.getByRole("heading", { name: "同步管理" }),
+    ).toBeVisible();
+    await authenticatedPage.waitForTimeout(3_500);
+
+    expect(internalErrors).toEqual([]);
   });
 });
 

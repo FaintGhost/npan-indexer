@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/prometheus/client_golang/prometheus"
 
 	npanv1 "npan/gen/go/npan/v1"
 	"npan/gen/go/npan/v1/npanv1connect"
@@ -63,7 +64,7 @@ func TestConnectAdminStartSync_ForceRebuildWithRoots_ReturnsInvalidArgument(t *t
 	t.Parallel()
 
 	handlers := newTestHandlers(t)
-	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	e := NewServer(handlers, testAdminKey, testDistFS(), prometheus.NewRegistry())
 	ts := httptest.NewServer(e)
 	defer ts.Close()
 

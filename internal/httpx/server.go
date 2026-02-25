@@ -69,6 +69,22 @@ func (w *statusCapture) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// Flush preserves streaming behavior (Connect server streaming / SSE) when
+// middleware wraps the original response writer.
+func (w *statusCapture) Flush() {
+	if !w.wrote {
+		w.status = http.StatusOK
+		w.wrote = true
+	}
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *statusCapture) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 // prometheusMiddleware registers HTTP request metrics with the given prometheus.Registerer
 // and returns an Echo v5 middleware that records per-route request count and duration.
 // Routes /healthz and /readyz are excluded from metrics.

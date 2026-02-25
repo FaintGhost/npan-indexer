@@ -291,6 +291,33 @@
   - `cd web && bun vitest run` 通过（20 files / 166 tests）。
   - `git diff --check` 通过。
 
+## 新任务：修复 WatchSyncProgress 的 Flusher internal 错误
+
+- [x] 1. 基于 `review.md` 与线上报错定位根因（Prometheus middleware 包装 writer 丢失 `http.Flusher`）
+- [x] 2. 修复 `internal/httpx/server.go` 的 `statusCapture`，确保 streaming 能透传 flush 能力
+- [x] 3. 增加后端回归测试：Prometheus 中间件开启时 `WatchSyncProgress` 仍可正常流式返回
+- [x] 4. 增加 E2E 守卫场景，覆盖 admin 页 WatchSyncProgress internal 错误的前端可观测信号
+- [x] 5. 完整回归：重建镜像后执行 smoke + e2e
+
+## Review（WatchSyncProgress Flusher 修复）
+
+- 根因：
+  - `prometheusMiddleware` 里 `statusCapture` 包装了 `ResponseWriter`，但没有实现 `http.Flusher`。
+  - Connect server streaming 写响应时要求 `http.Flusher`，导致浏览器收到 `internal`：`*httpx.statusCapture does not implement http.Flusher`。
+- 修复：
+  - `internal/httpx/server.go`：
+    - 为 `statusCapture` 增加 `Flush()`，向底层 writer 透传 flush。
+    - 增加 `Unwrap()`，保留中间件包装链的兼容性。
+  - `internal/httpx/connect_admin_test.go`：
+    - `TestConnectAdminWatchSyncProgress_StreamsUntilTerminal` 改为在 `prometheus.NewRegistry()` 开启中间件场景下运行，防止回归。
+  - `web/e2e/tests/admin.spec.ts`：
+    - 新增 `WatchSyncProgress 不应出现 Flusher internal 错误` 用例，监听 console/page error 中的关键错误信号。
+- 验证：
+  - `GOCACHE=/tmp/go-build go test ./internal/httpx -count=1` 通过。
+  - `docker compose -f docker-compose.ci.yml --profile e2e up --build -d --wait --wait-timeout 120` 通过。
+  - `BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh` 通过（34/34）。
+  - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright` 通过（32 passed + 1 flaky，新增用例通过）。
+
 ## 新任务：Admin 局部补同步交互重构（Executing Plans）
 
 - [x] 1. 实现后端 `inspect roots` 接口（批量、部分成功）并接入 Admin 路由鉴权

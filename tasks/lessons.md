@@ -55,3 +55,9 @@
   - 发布后优先核对镜像标签对应的 `org.opencontainers.image.revision`（或 `sha-<commit>` tag）是否匹配目标提交。
   - 多平台 manifest 若行为异常，需检查各平台 digest 是否被错误混入历史条目（尤其 self-hosted runner 的临时目录残留）。
   - CI 上传构建 digest artifact 时必须使用“每次运行唯一且清理过”的临时目录，不能复用固定 `/tmp` 路径。
+- 用户纠正：冒烟与 E2E 覆盖不足，遗漏了 Connect streaming 在中间件包装下的运行时错误（`http.Flusher` 缺失）。
+- 规则：
+  - 所有会包装 `http.ResponseWriter` 的中间件，必须透传 streaming 相关接口（至少 `http.Flusher`，并保留 `Unwrap` 能力）。
+  - 新增/修改 Connect server streaming 能力时，必须加“启用全部中间件（含 Prometheus）”的后端回归测试。
+  - 每次修复线上 streaming 问题后，E2E 至少补一个可观测守卫（console/page error 或网络级断言），避免仅靠功能按钮通过。
+  - 服务端改动验证 E2E 时，默认使用 `docker compose ... up --build`，避免旧镜像掩盖修复结果。
