@@ -71,6 +71,51 @@ curl -sS http://localhost:1323/readyz
 - 搜索页：`http://localhost:1323/`
 - 管理页：`http://localhost:1323/admin/`
 
+### 2.6 本地 Docker + 真实凭据跑 admin live E2E
+
+当你需要对 `/admin` 关键环节做真实数据实测（不使用 route mock）时，使用 live 覆盖配置。
+支持两种认证输入：
+
+- 直接提供 `NPA_TOKEN`
+- 或提供 `NPA_CLIENT_ID/NPA_CLIENT_SECRET/NPA_SUB_ID`，由服务端自动换取 token
+
+示例（OAuth 三元组方式）：
+
+```bash
+# 1) 启动服务（提供真实 OAuth 凭据；也可改为直接传 NPA_TOKEN）
+NPA_CLIENT_ID='<your-client-id>' \
+NPA_CLIENT_SECRET='<your-client-secret>' \
+NPA_SUB_ID='<your-sub-id>' \
+NPA_SUB_TYPE='enterprise' \
+docker compose \
+  -f docker-compose.ci.yml \
+  -f docker-compose.e2e-live.yml \
+  up --build -d --wait --wait-timeout 120
+
+# 2) 运行 admin live E2E（InspectRoots + 全量启动）
+docker compose \
+  -f docker-compose.ci.yml \
+  -f docker-compose.e2e-live.yml \
+  --profile e2e run --rm playwright \
+  npx playwright test e2e/tests/admin.live.spec.ts
+
+# 3) 清理
+docker compose \
+  -f docker-compose.ci.yml \
+  -f docker-compose.e2e-live.yml \
+  --profile e2e down --volumes
+```
+
+说明：
+- live 测试通过 `E2E_LIVE=1` 启用（由 `docker-compose.e2e-live.yml` 注入）。
+- `docker-compose.e2e-live.yml` 会把服务端认证来源切到你传入的真实 token 或 OAuth 三元组。
+- `InspectRoots` 用例依赖已有根目录 catalog；若环境未建立，会在用例内显式 skip。
+
+可选性能调优（用于 `/npan.v1.AdminService/InspectRoots`）：
+
+- `NPA_INSPECT_ROOTS_MAX_CONCURRENCY`：目录详情并发度，默认 `6`
+- `NPA_INSPECT_ROOTS_PER_FOLDER_TIMEOUT`：单目录请求超时（Go duration），默认 `10s`
+
 ## 3. 首次同步（两种方式）
 
 ### 3.1 方式 A：管理后台（推荐）

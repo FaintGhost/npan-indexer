@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -24,8 +25,9 @@ import (
 )
 
 type adminConnectTestAPI struct {
-	folderInfo map[int64]models.NpanFolder
-	folderErrs map[int64]error
+	folderInfo        map[int64]models.NpanFolder
+	folderErrs        map[int64]error
+	getFolderInfoHook func(context.Context, int64)
 }
 
 type adminConnectStatsIndex struct {
@@ -48,7 +50,10 @@ func (a *adminConnectTestAPI) ListFolderChildren(context.Context, int64, int64) 
 	return models.FolderChildrenPage{}, errors.New("not implemented")
 }
 
-func (a *adminConnectTestAPI) GetFolderInfo(_ context.Context, folderID int64) (models.NpanFolder, error) {
+func (a *adminConnectTestAPI) GetFolderInfo(ctx context.Context, folderID int64) (models.NpanFolder, error) {
+	if a.getFolderInfoHook != nil {
+		a.getFolderInfoHook(ctx, folderID)
+	}
 	if err, ok := a.folderErrs[folderID]; ok {
 		return models.NpanFolder{}, err
 	}
@@ -56,6 +61,101 @@ func (a *adminConnectTestAPI) GetFolderInfo(_ context.Context, folderID int64) (
 		return folder, nil
 	}
 	return models.NpanFolder{}, errors.New("not found")
+}
+
+func TestConnectAdminInspectRoots_ConcurrentAndOrdered(t *testing.T) {
+	prevConcurrency := inspectRootsMaxConcurrency
+	prevPerFolderTimeout := inspectRootsPerFolderTimeout
+	inspectRootsMaxConcurrency = 2
+	inspectRootsPerFolderTimeout = 0
+	defer func() {
+		inspectRootsMaxConcurrency = prevConcurrency
+		inspectRootsPerFolderTimeout = prevPerFolderTimeout
+	}()
+
+	var inFlight int32
+	var maxInFlight int32
+	started := make(chan int64, 4)
+	release := make(chan struct{})
+
+	handlers := newTestHandlers(t)
+	handlers.apiFactory = func(_ string, _ npan.AuthResolverOptions) npan.API {
+		return &adminConnectTestAPI{
+			folderInfo: map[int64]models.NpanFolder{
+				1: {ID: 1, Name: "root-1", ItemCount: 10},
+				2: {ID: 2, Name: "root-2", ItemCount: 20},
+				3: {ID: 3, Name: "root-3", ItemCount: 30},
+			},
+			getFolderInfoHook: func(_ context.Context, folderID int64) {
+				current := atomic.AddInt32(&inFlight, 1)
+				for {
+					observed := atomic.LoadInt32(&maxInFlight)
+					if current <= observed || atomic.CompareAndSwapInt32(&maxInFlight, observed, current) {
+						break
+					}
+				}
+				started <- folderID
+				if folderID == 1 || folderID == 2 {
+					<-release
+				}
+				atomic.AddInt32(&inFlight, -1)
+			},
+		}
+	}
+
+	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	ts := httptest.NewServer(e)
+	defer ts.Close()
+
+	client := npanv1connect.NewAdminServiceClient(ts.Client(), ts.URL)
+	req := connect.NewRequest(&npanv1.InspectRootsRequest{FolderIds: []int64{1, 2, 3}})
+	req.Header().Set("X-API-Key", testAdminKey)
+	req.Header().Set("Authorization", "Bearer dummy-token")
+
+	resultCh := make(chan struct {
+		resp *connect.Response[npanv1.InspectRootsResponse]
+		err  error
+	}, 1)
+	go func() {
+		resp, err := client.InspectRoots(context.Background(), req)
+		resultCh <- struct {
+			resp *connect.Response[npanv1.InspectRootsResponse]
+			err  error
+		}{resp: resp, err: err}
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected first folder request to start")
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected second folder request to start")
+	}
+
+	if got := atomic.LoadInt32(&maxInFlight); got < 2 {
+		t.Fatalf("expected concurrent GetFolderInfo, maxInFlight=%d", got)
+	}
+	close(release)
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			t.Fatalf("InspectRoots returned error: %v", result.err)
+		}
+		items := result.resp.Msg.GetItems()
+		if len(items) != 3 {
+			t.Fatalf("expected 3 items, got %d", len(items))
+		}
+		if items[0].GetFolderId() != 1 || items[1].GetFolderId() != 2 || items[2].GetFolderId() != 3 {
+			t.Fatalf("expected ordered items [1,2,3], got [%d,%d,%d]",
+				items[0].GetFolderId(), items[1].GetFolderId(), items[2].GetFolderId())
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("InspectRoots did not finish in time")
+	}
 }
 
 func (a *adminConnectTestAPI) GetDownloadURL(context.Context, int64, *int64) (models.DownloadURLResult, error) {

@@ -12,7 +12,7 @@ import (
 )
 
 type Config struct {
-	ServerAddr             string
+	ServerAddr              string
 	ServerReadHeaderTimeout time.Duration
 	ServerReadTimeout       time.Duration
 	ServerWriteTimeout      time.Duration
@@ -35,20 +35,22 @@ type Config struct {
 	MeiliAPIKey string
 	MeiliIndex  string
 
-	CheckpointTemplate string
-	ProgressFile       string
-	SyncStateFile        string
-	IncrementalQuery     string
-	SyncWindowOverlapMS  int64
+	CheckpointTemplate  string
+	ProgressFile        string
+	SyncStateFile       string
+	IncrementalQuery    string
+	SyncWindowOverlapMS int64
 
 	DefaultIncludeDepartments bool
 	DefaultRootFolderIDs      []int64
 	DefaultDepartmentIDs      []int64
 
-	SyncMaxConcurrent int
-	SyncMinTimeMS     int
-	SyncRootWorkers   int
-	SyncProgressEvery int
+	SyncMaxConcurrent            int
+	SyncMinTimeMS                int
+	SyncRootWorkers              int
+	SyncProgressEvery            int
+	InspectRootsMaxConcurrency   int
+	InspectRootsPerFolderTimeout time.Duration
 
 	Retry models.RetryPolicyOptions
 }
@@ -162,8 +164,8 @@ func Load() Config {
 		MeiliAPIKey: readString("MEILI_API_KEY", ""),
 		MeiliIndex:  readString("MEILI_INDEX", "npan_items"),
 
-		CheckpointTemplate: readString("NPA_CHECKPOINT_FILE", "./data/checkpoints/full-crawl.json"),
-		ProgressFile:       readString("NPA_PROGRESS_FILE", "./data/progress/full-sync-progress.json"),
+		CheckpointTemplate:  readString("NPA_CHECKPOINT_FILE", "./data/checkpoints/full-crawl.json"),
+		ProgressFile:        readString("NPA_PROGRESS_FILE", "./data/progress/full-sync-progress.json"),
 		SyncStateFile:       readString("NPA_SYNC_STATE_FILE", "./data/progress/incremental-sync-state.json"),
 		IncrementalQuery:    readString("NPA_INCREMENTAL_QUERY_WORDS", "* OR *"),
 		SyncWindowOverlapMS: readInt64("NPA_SYNC_WINDOW_OVERLAP_MS", 2000),
@@ -172,10 +174,12 @@ func Load() Config {
 		DefaultRootFolderIDs:      rootIDs,
 		DefaultDepartmentIDs:      readInt64List("NPA_DEPARTMENT_IDS"),
 
-		SyncMaxConcurrent: readInt("NPA_SYNC_MAX_CONCURRENT", 2),
-		SyncMinTimeMS:     readInt("NPA_SYNC_MIN_TIME_MS", 200),
-		SyncRootWorkers:   readInt("NPA_SYNC_ROOT_WORKERS", 2),
-		SyncProgressEvery: readInt("NPA_SYNC_PROGRESS_EVERY", 1),
+		SyncMaxConcurrent:            readInt("NPA_SYNC_MAX_CONCURRENT", 2),
+		SyncMinTimeMS:                readInt("NPA_SYNC_MIN_TIME_MS", 200),
+		SyncRootWorkers:              readInt("NPA_SYNC_ROOT_WORKERS", 2),
+		SyncProgressEvery:            readInt("NPA_SYNC_PROGRESS_EVERY", 1),
+		InspectRootsMaxConcurrency:   readInt("NPA_INSPECT_ROOTS_MAX_CONCURRENCY", 6),
+		InspectRootsPerFolderTimeout: readDuration("NPA_INSPECT_ROOTS_PER_FOLDER_TIMEOUT", 10*time.Second),
 
 		Retry: models.RetryPolicyOptions{
 			MaxRetries:  readInt("NPA_MAX_RETRIES", 3),

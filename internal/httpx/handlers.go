@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v5"
 
@@ -22,17 +23,21 @@ type searchService interface {
 }
 
 type Handlers struct {
-	cfg          config.Config
-	queryService searchService
-	syncManager  *service.SyncManager
-	apiFactory   func(token string, authOptions npan.AuthResolverOptions) npan.API
+	cfg                          config.Config
+	queryService                 searchService
+	syncManager                  *service.SyncManager
+	apiFactory                   func(token string, authOptions npan.AuthResolverOptions) npan.API
+	inspectRootsMaxConcurrency   int
+	inspectRootsPerFolderTimeout time.Duration
 }
 
 func NewHandlers(cfg config.Config, queryService search.Searcher, syncManager *service.SyncManager) *Handlers {
 	return &Handlers{
-		cfg:          cfg,
-		queryService: queryService,
-		syncManager:  syncManager,
+		cfg:                          cfg,
+		queryService:                 queryService,
+		syncManager:                  syncManager,
+		inspectRootsMaxConcurrency:   cfg.InspectRootsMaxConcurrency,
+		inspectRootsPerFolderTimeout: cfg.InspectRootsPerFolderTimeout,
 	}
 }
 

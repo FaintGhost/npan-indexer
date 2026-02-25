@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -21,6 +22,8 @@ type adminConnectServer struct {
 }
 
 var watchSyncProgressPollInterval = 2 * time.Second
+var inspectRootsMaxConcurrency = 6
+var inspectRootsPerFolderTimeout = 10 * time.Second
 
 func newAdminConnectServer(handlers *Handlers) *adminConnectServer {
 	return &adminConnectServer{handlers: handlers}
@@ -99,28 +102,112 @@ func (s *adminConnectServer) InspectRoots(ctx context.Context, req *connect.Requ
 	}
 
 	api := s.handlers.newAPIClient(token, authOptions)
+	type inspectJob struct {
+		index    int
+		folderID int64
+	}
+	type inspectResult struct {
+		index int
+		item  *npanv1.InspectRootItem
+		err   *npanv1.InspectRootError
+	}
+
+	workers := s.handlers.inspectRootsMaxConcurrency
+	if workers <= 0 {
+		workers = inspectRootsMaxConcurrency
+	}
+	if workers <= 0 {
+		workers = 1
+	}
+	if workers > len(folderIDs) {
+		workers = len(folderIDs)
+	}
+
+	jobs := make(chan inspectJob, len(folderIDs))
+	results := make(chan inspectResult, len(folderIDs))
+
+	worker := func() {
+		for job := range jobs {
+			folderCtx := ctx
+			cancel := func() {}
+			perFolderTimeout := s.handlers.inspectRootsPerFolderTimeout
+			if perFolderTimeout <= 0 {
+				perFolderTimeout = inspectRootsPerFolderTimeout
+			}
+			if perFolderTimeout > 0 {
+				folderCtx, cancel = context.WithTimeout(ctx, perFolderTimeout)
+			}
+
+			folder, infoErr := api.GetFolderInfo(folderCtx, job.folderID)
+			cancel()
+
+			if infoErr != nil {
+				results <- inspectResult{
+					index: job.index,
+					err: &npanv1.InspectRootError{
+						FolderId: job.folderID,
+						Message:  "获取目录信息失败",
+					},
+				}
+				continue
+			}
+
+			estimate := folder.ItemCount + 1
+			if estimate < 0 {
+				estimate = 0
+			}
+
+			results <- inspectResult{
+				index: job.index,
+				item: &npanv1.InspectRootItem{
+					FolderId:           job.folderID,
+					Name:               folder.Name,
+					ItemCount:          folder.ItemCount,
+					EstimatedTotalDocs: estimate,
+				},
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker()
+		}()
+	}
+
+	for index, folderID := range folderIDs {
+		jobs <- inspectJob{index: index, folderID: folderID}
+	}
+	close(jobs)
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	orderedItems := make([]*npanv1.InspectRootItem, len(folderIDs))
+	orderedErrors := make([]*npanv1.InspectRootError, len(folderIDs))
+	for result := range results {
+		if result.item != nil {
+			orderedItems[result.index] = result.item
+			continue
+		}
+		orderedErrors[result.index] = result.err
+	}
+
 	resp := &npanv1.InspectRootsResponse{
 		Items: make([]*npanv1.InspectRootItem, 0, len(folderIDs)),
 	}
-	for _, folderID := range folderIDs {
-		folder, infoErr := api.GetFolderInfo(ctx, folderID)
-		if infoErr != nil {
-			resp.Errors = append(resp.Errors, &npanv1.InspectRootError{
-				FolderId: folderID,
-				Message:  "获取目录信息失败",
-			})
-			continue
+	for i := range folderIDs {
+		if orderedItems[i] != nil {
+			resp.Items = append(resp.Items, orderedItems[i])
 		}
-		estimate := folder.ItemCount + 1
-		if estimate < 0 {
-			estimate = 0
+		if orderedErrors[i] != nil {
+			resp.Errors = append(resp.Errors, orderedErrors[i])
 		}
-		resp.Items = append(resp.Items, &npanv1.InspectRootItem{
-			FolderId:           folderID,
-			Name:               folder.Name,
-			ItemCount:          folder.ItemCount,
-			EstimatedTotalDocs: estimate,
-		})
 	}
 
 	return connect.NewResponse(resp), nil

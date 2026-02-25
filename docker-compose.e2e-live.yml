@@ -1,0 +1,14 @@
+services:
+  npan:
+    environment:
+      # live e2e 优先使用真实 token；若留空则由 client_id/client_secret 动态换取
+      NPA_TOKEN: ${NPA_TOKEN:-}
+      NPA_CLIENT_ID: ${NPA_CLIENT_ID:?NPA_CLIENT_ID is required for live e2e}
+      NPA_CLIENT_SECRET: ${NPA_CLIENT_SECRET:?NPA_CLIENT_SECRET is required for live e2e}
+      NPA_SUB_ID: ${NPA_SUB_ID:?NPA_SUB_ID is required for live e2e}
+      NPA_SUB_TYPE: ${NPA_SUB_TYPE:-enterprise}
+      MEILI_INDEX: ${MEILI_INDEX:-npan_items_live}
+
+  playwright:
+    environment:
+      E2E_LIVE: "1"

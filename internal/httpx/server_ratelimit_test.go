@@ -33,9 +33,11 @@ func newTestHandlers(t *testing.T) *Handlers {
 	})
 
 	return &Handlers{
-		cfg:          config.Config{AllowConfigAuthFallback: true},
-		queryService: &mockSearchService{},
-		syncManager:  syncManager,
+		cfg:                          config.Config{AllowConfigAuthFallback: true},
+		queryService:                 &mockSearchService{},
+		syncManager:                  syncManager,
+		inspectRootsMaxConcurrency:   inspectRootsMaxConcurrency,
+		inspectRootsPerFolderTimeout: inspectRootsPerFolderTimeout,
 	}
 }
 
