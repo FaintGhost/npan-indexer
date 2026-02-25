@@ -126,6 +126,19 @@ func (s *adminConnectServer) InspectRoots(ctx context.Context, req *connect.Requ
 	return connect.NewResponse(resp), nil
 }
 
+func (s *adminConnectServer) GetIndexStats(ctx context.Context, _ *connect.Request[npanv1.GetIndexStatsRequest]) (*connect.Response[npanv1.GetIndexStatsResponse], error) {
+	if s.handlers == nil || s.handlers.syncManager == nil {
+		return nil, connect.NewError(connect.CodeInternal, errors.New("同步服务未初始化"))
+	}
+
+	count, err := s.handlers.syncManager.GetIndexDocumentCount(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, errors.New("无法读取索引状态"))
+	}
+
+	return connect.NewResponse(&npanv1.GetIndexStatsResponse{DocumentCount: count}), nil
+}
+
 func (s *adminConnectServer) GetSyncProgress(_ context.Context, _ *connect.Request[npanv1.GetSyncProgressRequest]) (*connect.Response[npanv1.GetSyncProgressResponse], error) {
 	if s.handlers == nil || s.handlers.syncManager == nil {
 		return nil, connect.NewError(connect.CodeInternal, errors.New("同步服务未初始化"))
@@ -236,14 +249,12 @@ func fromProtoSyncMode(mode *npanv1.SyncMode) models.SyncMode {
 		return ""
 	}
 	switch *mode {
-	case npanv1.SyncMode_SYNC_MODE_AUTO:
-		return models.SyncModeAuto
 	case npanv1.SyncMode_SYNC_MODE_FULL:
 		return models.SyncModeFull
 	case npanv1.SyncMode_SYNC_MODE_INCREMENTAL:
 		return models.SyncModeIncremental
 	default:
-		return ""
+		return models.SyncMode(fmt.Sprintf("invalid(%d)", int32(*mode)))
 	}
 }
 
@@ -321,9 +332,6 @@ func toProtoSyncStatus(raw string) npanv1.SyncStatus {
 
 func toProtoSyncMode(raw string) *npanv1.SyncMode {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "auto":
-		mode := npanv1.SyncMode_SYNC_MODE_AUTO
-		return &mode
 	case "full":
 		mode := npanv1.SyncMode_SYNC_MODE_FULL
 		return &mode

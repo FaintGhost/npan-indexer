@@ -7,7 +7,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isAdminMethodRequest(
   url: string,
-  methodName: "StartSync" | "CancelSync" | "WatchSyncProgress",
+  methodName:
+    | "StartSync"
+    | "CancelSync"
+    | "WatchSyncProgress"
+    | "GetIndexStats"
+    | "InspectRoots",
 ): boolean {
   return url.includes(`/npan.v1.AdminService/${methodName}`);
 }
@@ -125,21 +130,55 @@ test.describe("Admin 同步控制", () => {
   });
 
   test("显示同步模式选择器", async ({ authenticatedPage }) => {
-    // All three mode buttons should be visible
-    await expect(adminPage.modeButtons.auto).toBeVisible();
+    // Two mode buttons should be visible
     await expect(adminPage.modeButtons.full).toBeVisible();
     await expect(adminPage.modeButtons.incremental).toBeVisible();
-    // "自适应" should be selected by default (has bg-white class)
-    await expect(adminPage.modeButtons.auto).toHaveClass(/bg-white/);
+    // "全量" should be selected by default
+    await expect(adminPage.modeButtons.full).toHaveClass(/bg-white/);
   });
 
   test("选择全量模式", async ({ authenticatedPage }) => {
     await adminPage.selectMode("full");
     // "全量" should be selected
     await expect(adminPage.modeButtons.full).toHaveClass(/bg-white/);
-    // Others should not be selected
-    await expect(adminPage.modeButtons.auto).not.toHaveClass(/bg-white/);
+    // Other mode should not be selected
     await expect(adminPage.modeButtons.incremental).not.toHaveClass(/bg-white/);
+  });
+
+  test("未建索引时增量模式不可用并显示提示", async ({ authenticatedPage }) => {
+    await authenticatedPage.route("**/npan.v1.AdminService/GetIndexStats", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ documentCount: "0" }),
+      });
+    });
+
+    await authenticatedPage.reload();
+    await expect(
+      authenticatedPage.getByRole("heading", { name: "同步管理" }),
+    ).toBeVisible();
+    await expect(authenticatedPage.getByText("请先执行一次全量索引")).toBeVisible();
+    await expect(adminPage.modeButtons.incremental).toBeDisabled();
+  });
+
+  test("运行中仅保留取消和刷新目录详情", async ({ authenticatedPage }) => {
+    const syncResponse = authenticatedPage.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        isAdminMethodRequest(r.url(), "StartSync"),
+      { timeout: 5_000 },
+    );
+    await adminPage.startSyncButton.click();
+    await syncResponse;
+
+    await expect(adminPage.startSyncButton).toBeDisabled({ timeout: 5_000 });
+    await expect(adminPage.modeButtons.full).toBeDisabled();
+    await expect(adminPage.modeButtons.incremental).toBeDisabled();
+    await expect(adminPage.cancelSyncButton).toBeVisible();
+
+    await authenticatedPage.getByRole("button", { name: /刷新目录详情/ }).click();
+    await expect(authenticatedPage.getByRole("button", { name: /刷新目录详情/ })).toBeVisible();
   });
 
   test("启动同步发送正确请求", async ({ authenticatedPage }) => {
@@ -278,11 +317,12 @@ test.describe("Admin 同步控制", () => {
     // Wait for POST to complete
     await syncResponse;
 
-    // UI should automatically show "同步进行中" without page.reload()
-    // The button text changes to "同步进行中" when isRunning is true
-    await expect(adminPage.startSyncButton).toContainText("同步进行中", {
+    // 新交互中按钮文案固定为“启动同步”，运行中通过禁用和取消按钮体现状态
+    await expect(adminPage.startSyncButton).toContainText("启动同步", {
       timeout: 5_000,
     });
+    await expect(adminPage.startSyncButton).toBeDisabled();
+    await expect(adminPage.cancelSyncButton).toBeVisible();
   });
 
   test("WatchSyncProgress 不应出现 Flusher internal 错误", async ({

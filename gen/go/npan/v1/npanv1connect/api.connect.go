@@ -66,6 +66,9 @@ const (
 	// AdminServiceInspectRootsProcedure is the fully-qualified name of the AdminService's InspectRoots
 	// RPC.
 	AdminServiceInspectRootsProcedure = "/npan.v1.AdminService/InspectRoots"
+	// AdminServiceGetIndexStatsProcedure is the fully-qualified name of the AdminService's
+	// GetIndexStats RPC.
+	AdminServiceGetIndexStatsProcedure = "/npan.v1.AdminService/GetIndexStats"
 	// AdminServiceGetSyncProgressProcedure is the fully-qualified name of the AdminService's
 	// GetSyncProgress RPC.
 	AdminServiceGetSyncProgressProcedure = "/npan.v1.AdminService/GetSyncProgress"
@@ -464,6 +467,7 @@ func (UnimplementedSearchServiceHandler) DownloadURL(context.Context, *connect.R
 type AdminServiceClient interface {
 	StartSync(context.Context, *connect.Request[v1.StartSyncRequest]) (*connect.Response[v1.StartSyncResponse], error)
 	InspectRoots(context.Context, *connect.Request[v1.InspectRootsRequest]) (*connect.Response[v1.InspectRootsResponse], error)
+	GetIndexStats(context.Context, *connect.Request[v1.GetIndexStatsRequest]) (*connect.Response[v1.GetIndexStatsResponse], error)
 	GetSyncProgress(context.Context, *connect.Request[v1.GetSyncProgressRequest]) (*connect.Response[v1.GetSyncProgressResponse], error)
 	WatchSyncProgress(context.Context, *connect.Request[v1.WatchSyncProgressRequest]) (*connect.ServerStreamForClient[v1.WatchSyncProgressResponse], error)
 	CancelSync(context.Context, *connect.Request[v1.CancelSyncRequest]) (*connect.Response[v1.CancelSyncResponse], error)
@@ -492,6 +496,12 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(adminServiceMethods.ByName("InspectRoots")),
 			connect.WithClientOptions(opts...),
 		),
+		getIndexStats: connect.NewClient[v1.GetIndexStatsRequest, v1.GetIndexStatsResponse](
+			httpClient,
+			baseURL+AdminServiceGetIndexStatsProcedure,
+			connect.WithSchema(adminServiceMethods.ByName("GetIndexStats")),
+			connect.WithClientOptions(opts...),
+		),
 		getSyncProgress: connect.NewClient[v1.GetSyncProgressRequest, v1.GetSyncProgressResponse](
 			httpClient,
 			baseURL+AdminServiceGetSyncProgressProcedure,
@@ -517,6 +527,7 @@ func NewAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 type adminServiceClient struct {
 	startSync         *connect.Client[v1.StartSyncRequest, v1.StartSyncResponse]
 	inspectRoots      *connect.Client[v1.InspectRootsRequest, v1.InspectRootsResponse]
+	getIndexStats     *connect.Client[v1.GetIndexStatsRequest, v1.GetIndexStatsResponse]
 	getSyncProgress   *connect.Client[v1.GetSyncProgressRequest, v1.GetSyncProgressResponse]
 	watchSyncProgress *connect.Client[v1.WatchSyncProgressRequest, v1.WatchSyncProgressResponse]
 	cancelSync        *connect.Client[v1.CancelSyncRequest, v1.CancelSyncResponse]
@@ -530,6 +541,11 @@ func (c *adminServiceClient) StartSync(ctx context.Context, req *connect.Request
 // InspectRoots calls npan.v1.AdminService.InspectRoots.
 func (c *adminServiceClient) InspectRoots(ctx context.Context, req *connect.Request[v1.InspectRootsRequest]) (*connect.Response[v1.InspectRootsResponse], error) {
 	return c.inspectRoots.CallUnary(ctx, req)
+}
+
+// GetIndexStats calls npan.v1.AdminService.GetIndexStats.
+func (c *adminServiceClient) GetIndexStats(ctx context.Context, req *connect.Request[v1.GetIndexStatsRequest]) (*connect.Response[v1.GetIndexStatsResponse], error) {
+	return c.getIndexStats.CallUnary(ctx, req)
 }
 
 // GetSyncProgress calls npan.v1.AdminService.GetSyncProgress.
@@ -551,6 +567,7 @@ func (c *adminServiceClient) CancelSync(ctx context.Context, req *connect.Reques
 type AdminServiceHandler interface {
 	StartSync(context.Context, *connect.Request[v1.StartSyncRequest]) (*connect.Response[v1.StartSyncResponse], error)
 	InspectRoots(context.Context, *connect.Request[v1.InspectRootsRequest]) (*connect.Response[v1.InspectRootsResponse], error)
+	GetIndexStats(context.Context, *connect.Request[v1.GetIndexStatsRequest]) (*connect.Response[v1.GetIndexStatsResponse], error)
 	GetSyncProgress(context.Context, *connect.Request[v1.GetSyncProgressRequest]) (*connect.Response[v1.GetSyncProgressResponse], error)
 	WatchSyncProgress(context.Context, *connect.Request[v1.WatchSyncProgressRequest], *connect.ServerStream[v1.WatchSyncProgressResponse]) error
 	CancelSync(context.Context, *connect.Request[v1.CancelSyncRequest]) (*connect.Response[v1.CancelSyncResponse], error)
@@ -573,6 +590,12 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 		AdminServiceInspectRootsProcedure,
 		svc.InspectRoots,
 		connect.WithSchema(adminServiceMethods.ByName("InspectRoots")),
+		connect.WithHandlerOptions(opts...),
+	)
+	adminServiceGetIndexStatsHandler := connect.NewUnaryHandler(
+		AdminServiceGetIndexStatsProcedure,
+		svc.GetIndexStats,
+		connect.WithSchema(adminServiceMethods.ByName("GetIndexStats")),
 		connect.WithHandlerOptions(opts...),
 	)
 	adminServiceGetSyncProgressHandler := connect.NewUnaryHandler(
@@ -599,6 +622,8 @@ func NewAdminServiceHandler(svc AdminServiceHandler, opts ...connect.HandlerOpti
 			adminServiceStartSyncHandler.ServeHTTP(w, r)
 		case AdminServiceInspectRootsProcedure:
 			adminServiceInspectRootsHandler.ServeHTTP(w, r)
+		case AdminServiceGetIndexStatsProcedure:
+			adminServiceGetIndexStatsHandler.ServeHTTP(w, r)
 		case AdminServiceGetSyncProgressProcedure:
 			adminServiceGetSyncProgressHandler.ServeHTTP(w, r)
 		case AdminServiceWatchSyncProgressProcedure:
@@ -620,6 +645,10 @@ func (UnimplementedAdminServiceHandler) StartSync(context.Context, *connect.Requ
 
 func (UnimplementedAdminServiceHandler) InspectRoots(context.Context, *connect.Request[v1.InspectRootsRequest]) (*connect.Response[v1.InspectRootsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("npan.v1.AdminService.InspectRoots is not implemented"))
+}
+
+func (UnimplementedAdminServiceHandler) GetIndexStats(context.Context, *connect.Request[v1.GetIndexStatsRequest]) (*connect.Response[v1.GetIndexStatsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("npan.v1.AdminService.GetIndexStats is not implemented"))
 }
 
 func (UnimplementedAdminServiceHandler) GetSyncProgress(context.Context, *connect.Request[v1.GetSyncProgressRequest]) (*connect.Response[v1.GetSyncProgressResponse], error) {

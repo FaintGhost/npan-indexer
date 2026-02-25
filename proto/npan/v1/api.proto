@@ -25,7 +25,8 @@ enum SyncStatus {
 
 enum SyncMode {
   SYNC_MODE_UNSPECIFIED = 0;
-  SYNC_MODE_AUTO = 1;
+  reserved 1;
+  reserved "SYNC_MODE_AUTO";
   SYNC_MODE_FULL = 2;
   SYNC_MODE_INCREMENTAL = 3;
 }
@@ -269,6 +270,7 @@ message DownloadURLResponse {
 service AdminService {
   rpc StartSync(StartSyncRequest) returns (StartSyncResponse);
   rpc InspectRoots(InspectRootsRequest) returns (InspectRootsResponse);
+  rpc GetIndexStats(GetIndexStatsRequest) returns (GetIndexStatsResponse);
   rpc GetSyncProgress(GetSyncProgressRequest) returns (GetSyncProgressResponse);
   rpc WatchSyncProgress(WatchSyncProgressRequest) returns (stream WatchSyncProgressResponse);
   rpc CancelSync(CancelSyncRequest) returns (CancelSyncResponse);
@@ -313,6 +315,12 @@ message InspectRootsRequest {
 message InspectRootsResponse {
   repeated InspectRootItem items = 1;
   repeated InspectRootError errors = 2;
+}
+
+message GetIndexStatsRequest {}
+
+message GetIndexStatsResponse {
+  int64 document_count = 1;
 }
 
 message GetSyncProgressRequest {}

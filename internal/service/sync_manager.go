@@ -158,7 +158,19 @@ func (m *SyncManager) Cancel() bool {
 	return true
 }
 
+func (m *SyncManager) GetIndexDocumentCount(ctx context.Context) (int64, error) {
+	if m.index == nil {
+		return 0, fmt.Errorf("索引服务未初始化")
+	}
+	return m.index.DocumentCount(ctx)
+}
+
 func (m *SyncManager) Start(api npan.API, request SyncStartRequest) error {
+	effectiveMode, err := resolveMode(request.Mode)
+	if err != nil {
+		return err
+	}
+
 	m.mu.Lock()
 	if m.running {
 		m.mu.Unlock()
@@ -171,7 +183,7 @@ func (m *SyncManager) Start(api npan.API, request SyncStartRequest) error {
 	m.mu.Unlock()
 
 	if m.metricsReporter != nil {
-		m.metricsReporter.ReportSyncStarted(request.Mode)
+		m.metricsReporter.ReportSyncStarted(effectiveMode)
 	}
 
 	go func() {
@@ -328,17 +340,16 @@ func syncCatalogFields(progress *models.SyncProgressState) {
 	progress.CatalogRoots = uniqueSorted(roots)
 }
 
-func resolveMode(mode models.SyncMode, state *models.SyncState) models.SyncMode {
+func resolveMode(mode models.SyncMode) (models.SyncMode, error) {
 	switch mode {
+	case "":
+		return models.SyncModeFull, nil
 	case models.SyncModeFull:
-		return models.SyncModeFull
+		return models.SyncModeFull, nil
 	case models.SyncModeIncremental:
-		return models.SyncModeIncremental
+		return models.SyncModeIncremental, nil
 	default:
-		if state != nil && state.LastSyncTime > 0 {
-			return models.SyncModeIncremental
-		}
-		return models.SyncModeFull
+		return "", fmt.Errorf("不支持的同步模式: %s（可选: full|incremental）", mode)
 	}
 }
 
@@ -737,11 +748,18 @@ func (m *SyncManager) runIncremental(ctx context.Context, api npan.API, progress
 
 func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRequest) error {
 	// Mode resolution
+	effectiveMode, err := resolveMode(request.Mode)
+	if err != nil {
+		return err
+	}
+
 	syncStateStore := storage.NewJSONSyncStateStore(m.syncStateFile)
 	syncState, _ := syncStateStore.Load()
-	effectiveMode := resolveMode(request.Mode, syncState)
 
 	if effectiveMode == models.SyncModeIncremental {
+		if syncState == nil || syncState.LastSyncTime <= 0 {
+			return fmt.Errorf("增量同步需要先执行一次全量同步")
+		}
 		return m.runIncrementalPath(ctx, api, request, syncState, syncStateStore)
 	}
 

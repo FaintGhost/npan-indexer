@@ -1,6 +1,7 @@
 import type { Timestamp } from '@bufbuild/protobuf/wkt'
 import type {
   CrawlStats as ProtoCrawlStats,
+  GetIndexStatsResponse,
   GetSyncProgressResponse,
   InspectRootsResponse as ProtoInspectRootsResponse,
   RootSyncProgress as ProtoRootSyncProgress,
@@ -56,8 +57,6 @@ function mapSyncMode(mode: SyncMode | undefined): SyncProgress['mode'] {
       return 'full'
     case SyncMode.INCREMENTAL:
       return 'incremental'
-    case SyncMode.AUTO:
-      return 'auto'
     default:
       return undefined
   }
@@ -187,8 +186,13 @@ export function toProtoSyncMode(mode: string): SyncMode {
       return SyncMode.FULL
     case 'incremental':
       return SyncMode.INCREMENTAL
-    case 'auto':
     default:
-      return SyncMode.AUTO
+      return SyncMode.FULL
   }
+}
+
+export function fromProtoGetIndexStatsResponse(
+  response: GetIndexStatsResponse,
+): number {
+  return int64ToNumber(response.documentCount)
 }

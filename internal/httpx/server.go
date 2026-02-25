@@ -191,19 +191,5 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 	api.GET("/search/local", handlers.LocalSearch)
 	api.GET("/download-url", handlers.DownloadURL)
 
-	// Admin (requires API key, uses server-configured credentials for upstream API)
-	admin := e.Group("/api/v1/admin", APIKeyAuth(adminAPIKey), ConfigFallbackAuth(), RateLimitMiddleware(context.Background(), 5, 10))
-	admin.POST("/sync", handlers.StartFullSync)
-	admin.GET("/sync", handlers.GetFullSyncProgress)
-	admin.DELETE("/sync", handlers.CancelFullSync)
-	admin.POST("/roots/inspect", handlers.InspectRoots)
-	// Legacy routes for backward compatibility
-	admin.POST("/sync/full", handlers.StartFullSync)
-	admin.POST("/sync/start", handlers.StartFullSync)
-	admin.GET("/sync/full/progress", handlers.GetFullSyncProgress)
-	admin.GET("/sync/progress", handlers.GetFullSyncProgress)
-	admin.POST("/sync/full/cancel", handlers.CancelFullSync)
-	admin.POST("/sync/cancel", handlers.CancelFullSync)
-
 	return e
 }

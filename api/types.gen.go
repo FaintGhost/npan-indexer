@@ -30,38 +30,6 @@ const (
 	Ready    ReadyResponseStatus = "ready"
 )
 
-// Defines values for SyncMode.
-const (
-	Auto        SyncMode = "auto"
-	Full        SyncMode = "full"
-	Incremental SyncMode = "incremental"
-)
-
-// Defines values for SyncStatus.
-const (
-	Cancelled   SyncStatus = "cancelled"
-	Done        SyncStatus = "done"
-	Error       SyncStatus = "error"
-	Idle        SyncStatus = "idle"
-	Interrupted SyncStatus = "interrupted"
-	Running     SyncStatus = "running"
-)
-
-// CrawlStats defines model for CrawlStats.
-type CrawlStats struct {
-	// EndedAt Unix timestamp.
-	EndedAt         int `json:"endedAt"`
-	FailedRequests  int `json:"failedRequests"`
-	FilesDiscovered int `json:"filesDiscovered"`
-	FilesIndexed    int `json:"filesIndexed"`
-	FoldersVisited  int `json:"foldersVisited"`
-	PagesFetched    int `json:"pagesFetched"`
-	SkippedFiles    int `json:"skippedFiles"`
-
-	// StartedAt Unix timestamp.
-	StartedAt int `json:"startedAt"`
-}
-
 // DownloadURLResponse defines model for DownloadURLResponse.
 type DownloadURLResponse struct {
 	DownloadUrl string `json:"download_url"`
@@ -84,17 +52,6 @@ type HealthResponse struct {
 	Status      string `json:"status"`
 }
 
-// IncrementalSyncStats defines model for IncrementalSyncStats.
-type IncrementalSyncStats struct {
-	ChangesFetched int `json:"changesFetched"`
-	CursorAfter    int `json:"cursorAfter"`
-	CursorBefore   int `json:"cursorBefore"`
-	Deleted        int `json:"deleted"`
-	SkippedDeletes int `json:"skippedDeletes"`
-	SkippedUpserts int `json:"skippedUpserts"`
-	Upserted       int `json:"upserted"`
-}
-
 // IndexDocument defines model for IndexDocument.
 type IndexDocument struct {
 	// CreatedAt Unix timestamp.
@@ -115,38 +72,8 @@ type IndexDocument struct {
 	Type       ItemType `json:"type"`
 }
 
-// InspectRootError defines model for InspectRootError.
-type InspectRootError struct {
-	FolderId int    `json:"folder_id"`
-	Message  string `json:"message"`
-}
-
-// InspectRootItem defines model for InspectRootItem.
-type InspectRootItem struct {
-	EstimatedTotalDocs int    `json:"estimated_total_docs"`
-	FolderId           int    `json:"folder_id"`
-	ItemCount          int    `json:"item_count"`
-	Name               string `json:"name"`
-}
-
-// InspectRootsRequest defines model for InspectRootsRequest.
-type InspectRootsRequest struct {
-	FolderIds []int `json:"folder_ids"`
-}
-
-// InspectRootsResponse defines model for InspectRootsResponse.
-type InspectRootsResponse struct {
-	Errors *[]InspectRootError `json:"errors,omitempty"`
-	Items  []InspectRootItem   `json:"items"`
-}
-
 // ItemType defines model for ItemType.
 type ItemType string
-
-// MessageResponse defines model for MessageResponse.
-type MessageResponse struct {
-	Message string `json:"message"`
-}
 
 // QueryResult defines model for QueryResult.
 type QueryResult struct {
@@ -179,85 +106,6 @@ type RemoteSearchResponse struct {
 	PageCount    int                `json:"page_count"`
 	PageId       int                `json:"page_id"`
 	TotalCount   int                `json:"total_count"`
-}
-
-// RootSyncProgress defines model for RootSyncProgress.
-type RootSyncProgress struct {
-	EstimatedTotalDocs *int       `json:"estimatedTotalDocs"`
-	RootFolderId       int        `json:"rootFolderId"`
-	Stats              CrawlStats `json:"stats"`
-	Status             string     `json:"status"`
-
-	// UpdatedAt Unix timestamp.
-	UpdatedAt int `json:"updatedAt"`
-}
-
-// SyncMode defines model for SyncMode.
-type SyncMode string
-
-// SyncProgressState defines model for SyncProgressState.
-type SyncProgressState struct {
-	ActiveRoot     *int       `json:"activeRoot"`
-	AggregateStats CrawlStats `json:"aggregateStats"`
-
-	// CatalogRootNames Map of catalog root folder ID to name.
-	CatalogRootNames *map[string]string `json:"catalogRootNames,omitempty"`
-
-	// CatalogRootProgress Historical root progress catalog (includes previous scoped runs).
-	CatalogRootProgress *map[string]RootSyncProgress `json:"catalogRootProgress,omitempty"`
-
-	// CatalogRoots Historical root catalog for admin root detail list.
-	CatalogRoots     *[]int                `json:"catalogRoots,omitempty"`
-	CompletedRoots   []int                 `json:"completedRoots"`
-	IncrementalStats *IncrementalSyncStats `json:"incrementalStats"`
-	LastError        *string               `json:"lastError,omitempty"`
-	Mode             *SyncMode             `json:"mode,omitempty"`
-
-	// RootNames Map of root folder ID to name.
-	RootNames *map[string]string `json:"rootNames,omitempty"`
-
-	// RootProgress Map of root folder ID (as string key) to its progress.
-	RootProgress map[string]RootSyncProgress `json:"rootProgress"`
-	Roots        []int                       `json:"roots"`
-
-	// StartedAt Unix timestamp.
-	StartedAt int        `json:"startedAt"`
-	Status    SyncStatus `json:"status"`
-
-	// UpdatedAt Unix timestamp.
-	UpdatedAt    int               `json:"updatedAt"`
-	Verification *SyncVerification `json:"verification"`
-}
-
-// SyncStartRequest defines model for SyncStartRequest.
-type SyncStartRequest struct {
-	CheckpointTemplate *string `json:"checkpoint_template,omitempty"`
-	DepartmentIds      *[]int  `json:"department_ids,omitempty"`
-
-	// ForceRebuild 清空索引后重建，重新应用设置并从头爬取
-	ForceRebuild        *bool     `json:"force_rebuild"`
-	IncludeDepartments  *bool     `json:"include_departments"`
-	IncrementalQuery    *string   `json:"incremental_query,omitempty"`
-	Mode                *SyncMode `json:"mode,omitempty"`
-	PreserveRootCatalog *bool     `json:"preserve_root_catalog"`
-	ProgressEvery       *int      `json:"progress_every,omitempty"`
-	ResumeProgress      *bool     `json:"resume_progress"`
-	RootFolderIds       *[]int    `json:"root_folder_ids,omitempty"`
-	RootWorkers         *int      `json:"root_workers,omitempty"`
-	WindowOverlapMs     *int      `json:"window_overlap_ms,omitempty"`
-}
-
-// SyncStatus defines model for SyncStatus.
-type SyncStatus string
-
-// SyncVerification defines model for SyncVerification.
-type SyncVerification struct {
-	CrawledDocCount    int       `json:"crawledDocCount"`
-	DiscoveredDocCount int       `json:"discoveredDocCount"`
-	MeiliDocCount      int       `json:"meiliDocCount"`
-	SkippedCount       int       `json:"skippedCount"`
-	Verified           bool      `json:"verified"`
-	Warnings           *[]string `json:"warnings,omitempty"`
 }
 
 // TokenRequest defines model for TokenRequest.
@@ -350,12 +198,6 @@ type RemoteSearchParams struct {
 	SearchInFolder   *int    `form:"search_in_folder,omitempty" json:"search_in_folder,omitempty"`
 	UpdatedTimeRange *string `form:"updated_time_range,omitempty" json:"updated_time_range,omitempty"`
 }
-
-// InspectRootsJSONRequestBody defines body for InspectRoots for application/json ContentType.
-type InspectRootsJSONRequestBody = InspectRootsRequest
-
-// StartSyncJSONRequestBody defines body for StartSync for application/json ContentType.
-type StartSyncJSONRequestBody = SyncStartRequest
 
 // CreateTokenJSONRequestBody defines body for CreateToken for application/json ContentType.
 type CreateTokenJSONRequestBody = TokenRequest

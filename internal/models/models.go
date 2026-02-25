@@ -101,7 +101,6 @@ type RootSyncProgress struct {
 type SyncMode string
 
 const (
-	SyncModeAuto        SyncMode = "auto"
 	SyncModeFull        SyncMode = "full"
 	SyncModeIncremental SyncMode = "incremental"
 )

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/meilisearch/meilisearch-go"
 	"github.com/prometheus/client_golang/prometheus"
 
 	npanv1 "npan/gen/go/npan/v1"
@@ -17,6 +18,7 @@ import (
 	"npan/internal/config"
 	"npan/internal/models"
 	"npan/internal/npan"
+	"npan/internal/search"
 	"npan/internal/service"
 	"npan/internal/storage"
 )
@@ -24,6 +26,22 @@ import (
 type adminConnectTestAPI struct {
 	folderInfo map[int64]models.NpanFolder
 	folderErrs map[int64]error
+}
+
+type adminConnectStatsIndex struct {
+	meilisearch.IndexManager
+	stats *meilisearch.StatsIndex
+	err   error
+}
+
+func (i *adminConnectStatsIndex) GetStatsWithContext(context.Context) (*meilisearch.StatsIndex, error) {
+	if i.err != nil {
+		return nil, i.err
+	}
+	if i.stats == nil {
+		return &meilisearch.StatsIndex{}, nil
+	}
+	return i.stats, nil
 }
 
 func (a *adminConnectTestAPI) ListFolderChildren(context.Context, int64, int64) (models.FolderChildrenPage, error) {
@@ -122,6 +140,104 @@ func TestConnectAdminInspectRoots_PartialSuccess(t *testing.T) {
 	}
 	if got := resp.Msg.GetItems()[0].GetEstimatedTotalDocs(); got != 11 {
 		t.Fatalf("expected estimated_total_docs=11, got %d", got)
+	}
+}
+
+func TestConnectAdminGetIndexStats_Success(t *testing.T) {
+	t.Parallel()
+
+	progressStore := storage.NewJSONProgressStore(filepath.Join(t.TempDir(), "progress.json"))
+	stubIndex := search.NewMeiliIndexFromManager(&adminConnectStatsIndex{
+		stats: &meilisearch.StatsIndex{NumberOfDocuments: 12},
+	})
+	syncManager := service.NewSyncManager(service.SyncManagerArgs{
+		Index:         stubIndex,
+		ProgressStore: progressStore,
+	})
+
+	handlers := &Handlers{
+		cfg:          config.Config{AllowConfigAuthFallback: true},
+		queryService: &mockSearchService{},
+		syncManager:  syncManager,
+	}
+
+	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	ts := httptest.NewServer(e)
+	defer ts.Close()
+
+	client := npanv1connect.NewAdminServiceClient(ts.Client(), ts.URL)
+	req := connect.NewRequest(&npanv1.GetIndexStatsRequest{})
+	req.Header().Set("X-API-Key", testAdminKey)
+	resp, err := client.GetIndexStats(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GetIndexStats returned error: %v", err)
+	}
+	if got := resp.Msg.GetDocumentCount(); got != 12 {
+		t.Fatalf("expected document_count=12, got %d", got)
+	}
+}
+
+func TestConnectAdminGetIndexStats_ZeroDocument(t *testing.T) {
+	t.Parallel()
+
+	progressStore := storage.NewJSONProgressStore(filepath.Join(t.TempDir(), "progress.json"))
+	stubIndex := search.NewMeiliIndexFromManager(&adminConnectStatsIndex{
+		stats: &meilisearch.StatsIndex{NumberOfDocuments: 0},
+	})
+	syncManager := service.NewSyncManager(service.SyncManagerArgs{
+		Index:         stubIndex,
+		ProgressStore: progressStore,
+	})
+
+	handlers := &Handlers{
+		cfg:          config.Config{AllowConfigAuthFallback: true},
+		queryService: &mockSearchService{},
+		syncManager:  syncManager,
+	}
+
+	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	ts := httptest.NewServer(e)
+	defer ts.Close()
+
+	client := npanv1connect.NewAdminServiceClient(ts.Client(), ts.URL)
+	req := connect.NewRequest(&npanv1.GetIndexStatsRequest{})
+	req.Header().Set("X-API-Key", testAdminKey)
+	resp, err := client.GetIndexStats(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GetIndexStats returned error: %v", err)
+	}
+	if got := resp.Msg.GetDocumentCount(); got != 0 {
+		t.Fatalf("expected document_count=0, got %d", got)
+	}
+}
+
+func TestConnectAdminGetIndexStats_InternalError(t *testing.T) {
+	t.Parallel()
+
+	progressStore := storage.NewJSONProgressStore(filepath.Join(t.TempDir(), "progress.json"))
+	syncManager := service.NewSyncManager(service.SyncManagerArgs{
+		ProgressStore: progressStore,
+	})
+
+	handlers := &Handlers{
+		cfg:          config.Config{AllowConfigAuthFallback: true},
+		queryService: &mockSearchService{},
+		syncManager:  syncManager,
+	}
+
+	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	ts := httptest.NewServer(e)
+	defer ts.Close()
+
+	client := npanv1connect.NewAdminServiceClient(ts.Client(), ts.URL)
+	req := connect.NewRequest(&npanv1.GetIndexStatsRequest{})
+	req.Header().Set("X-API-Key", testAdminKey)
+	_, err := client.GetIndexStats(context.Background(), req)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if got := connect.CodeOf(err); got != connect.CodeInternal {
+		t.Fatalf("expected internal, got %v", got)
 	}
 }
 

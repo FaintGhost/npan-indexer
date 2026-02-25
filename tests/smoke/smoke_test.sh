@@ -89,6 +89,51 @@ assert_202_or_409() {
   [[ "$code" == "202" || "$code" == "409" ]]
 }
 
+assert_200_or_404_connect_not_found() {
+  local code="$1" body="$2"
+  if [[ "$code" == "404" ]]; then
+    return 0
+  fi
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -e '.code == "not_found" or .error.code == "not_found" or .message == "未找到同步进度"' > /dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+assert_200_or_409_connect_abort() {
+  local code="$1" body="$2"
+  if [[ "$code" == "409" ]]; then
+    return 0
+  fi
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -e '.code == "aborted" or .error.code == "aborted" or .message == "当前没有运行中的同步任务"' > /dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+assert_connect_start_sync_response() {
+  local code="$1" body="$2"
+  if [[ "$code" == "409" ]]; then
+    return 0
+  fi
+  if [[ "$code" == "200" ]]; then
+    if echo "$body" | jq -e 'has("message")' > /dev/null 2>&1; then
+      return 0
+    fi
+    echo "$body" | jq -e '.code == "aborted" or .error.code == "aborted"' > /dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+assert_connect_index_stats() {
+  local code="$1" body="$2"
+  [[ "$code" == "200" ]] \
+    && echo "$body" | jq -e '.documentCount != null or . == {}' > /dev/null 2>&1
+}
+
 assert_health() {
   local code="$1" body="$2"
   [[ "$code" == "200" ]] && echo "$body" | jq -e '.status == "ok"' > /dev/null 2>&1
@@ -216,20 +261,23 @@ run_test "GET /api/v1/download-url without key → 401" \
   assert_401_unauthorized \
   "${BASE_URL}/api/v1/download-url?file_id=1"
 
-run_test "GET /api/v1/admin/sync without key → 401" \
-  assert_401_unauthorized \
-  "${BASE_URL}/api/v1/admin/sync"
-
-run_test "POST /api/v1/admin/sync without key → 401" \
+run_test "POST /npan.v1.AdminService/GetSyncProgress without key → 401" \
   assert_401_unauthorized \
   -X POST -H "Content-Type: application/json" \
   -d '{}' \
-  "${BASE_URL}/api/v1/admin/sync"
+  "${BASE_URL}/npan.v1.AdminService/GetSyncProgress"
 
-run_test "DELETE /api/v1/admin/sync without key → 401" \
+run_test "POST /npan.v1.AdminService/StartSync without key → 401" \
   assert_401_unauthorized \
-  -X DELETE \
-  "${BASE_URL}/api/v1/admin/sync"
+  -X POST -H "Content-Type: application/json" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AdminService/StartSync"
+
+run_test "POST /npan.v1.AdminService/CancelSync without key → 401" \
+  assert_401_unauthorized \
+  -X POST -H "Content-Type: application/json" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AdminService/CancelSync"
 
 # ===========================================================================
 # 4. Token endpoint
@@ -328,57 +376,62 @@ run_test "GET /api/v1/download-url?file_id=999 → 400 (dummy token)" \
   "${BASE_URL}/api/v1/download-url?file_id=999"
 
 # ===========================================================================
-# 8. Sync lifecycle (needs API key)
+# 8. Admin Connect lifecycle (needs API key)
 # ===========================================================================
-section "Sync Lifecycle (POST/GET/DELETE /api/v1/admin/sync)"
+section "Admin Connect Lifecycle"
 
-# GET progress — initially no sync has run
-run_test "GET /api/v1/admin/sync → 200 or 404 (no prior sync)" \
-  assert_200_or_404 \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/admin/sync"
-
-# DELETE when nothing is running → 409
-run_test "DELETE /api/v1/admin/sync (nothing running) → 409 conflict" \
-  assert_409 \
-  -X DELETE \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/admin/sync"
-
-# Start sync — will be accepted (202) even though upstream is dummy
-run_test "POST /api/v1/admin/sync → 202 accepted" \
-  assert_202 \
+run_test "POST /npan.v1.AdminService/GetIndexStats → 200 with documentCount" \
+  assert_connect_index_stats \
   -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  -d '{"mode":"full"}' \
-  "${BASE_URL}/api/v1/admin/sync"
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AdminService/GetIndexStats"
 
-# Brief pause to let sync register progress
-sleep 2
-
-# GET progress — with dummy token sync may fail before writing progress (404) or succeed (200)
-run_test "GET /api/v1/admin/sync (after start) → 200 or 404" \
-  assert_200_or_404 \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/admin/sync"
-
-# Cancel sync — 200 if still running, 409 if already finished/failed
-run_test "DELETE /api/v1/admin/sync (cancel) → 200 or 409" \
-  assert_200_or_409 \
-  -X DELETE \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/admin/sync"
-
-# Wait for previous sync to fully stop
-sleep 2
-
-# Start again — 202 if accepted, 409 if previous sync still winding down
-run_test "POST /api/v1/admin/sync again → 202 or 409" \
-  assert_202_or_409 \
+run_test "POST /npan.v1.AdminService/GetSyncProgress → 200(not_found) or 404" \
+  assert_200_or_404_connect_not_found \
   -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  -d '{"mode":"full"}' \
-  "${BASE_URL}/api/v1/admin/sync"
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AdminService/GetSyncProgress"
+
+run_test "POST /npan.v1.AdminService/CancelSync (nothing running) → 200(aborted) or 409" \
+  assert_200_or_409_connect_abort \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AdminService/CancelSync"
+
+run_test "POST /npan.v1.AdminService/StartSync → 200 or 409" \
+  assert_connect_start_sync_response \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{"mode":"SYNC_MODE_FULL"}' \
+  "${BASE_URL}/npan.v1.AdminService/StartSync"
+
+sleep 2
+
+run_test "POST /npan.v1.AdminService/GetSyncProgress (after start) → 200 or 404" \
+  assert_200_or_404 \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AdminService/GetSyncProgress"
+
+run_test "POST /npan.v1.AdminService/CancelSync (after start) → 200 or 409" \
+  assert_200_or_409_connect_abort \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AdminService/CancelSync"
+
+sleep 2
+
+run_test "POST /npan.v1.AdminService/InspectRoots with empty folder_ids → 400" \
+  assert_400 \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{"folderIds":[]}' \
+  "${BASE_URL}/npan.v1.AdminService/InspectRoots"
 
 # ===========================================================================
 # 9. Metrics

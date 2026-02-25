@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -37,23 +37,32 @@ function toProtoStatus(status: string) {
   }
 }
 
+function toProtoMode(mode?: string) {
+  switch (mode) {
+    case 'full':
+      return 'SYNC_MODE_FULL'
+    case 'incremental':
+      return 'SYNC_MODE_INCREMENTAL'
+    default:
+      return undefined
+  }
+}
+
 function toConnectProgressResponse(progress: Record<string, unknown>) {
   return {
     state: {
       ...progress,
       status: toProtoStatus(String(progress.status ?? 'idle')),
-      mode: progress.mode ? 'SYNC_MODE_AUTO' : undefined,
+      mode: toProtoMode(progress.mode ? String(progress.mode) : undefined),
     },
   }
 }
 
 const validProgress = {
   status: 'idle',
+  mode: 'full',
   startedAt: 0,
   updatedAt: 0,
-  meiliHost: 'http://localhost:7700',
-  meiliIndex: 'documents',
-  checkpointTemplate: '',
   roots: [],
   completedRoots: [],
   aggregateStats: {
@@ -67,6 +76,31 @@ const validProgress = {
     endedAt: 0,
   },
   rootProgress: {},
+}
+
+function mockAdminBasics(options?: {
+  progress?: Record<string, unknown>
+  indexDocumentCount?: number
+  indexStatsStatus?: number
+}) {
+  const progress = options?.progress ?? validProgress
+  const indexDocumentCount = options?.indexDocumentCount ?? 10
+  const indexStatsStatus = options?.indexStatsStatus ?? 200
+
+  server.use(
+    http.post('/npan.v1.AdminService/GetSyncProgress', () => {
+      return HttpResponse.json(toConnectProgressResponse(progress))
+    }),
+    http.post('/npan.v1.AdminService/GetIndexStats', () => {
+      if (indexStatsStatus !== 200) {
+        return HttpResponse.json({ code: 'internal', message: 'boom' }, { status: indexStatsStatus })
+      }
+      return HttpResponse.json({ documentCount: String(indexDocumentCount) })
+    }),
+    http.post('/npan.v1.AdminService/WatchSyncProgress', () => {
+      return HttpResponse.json({ code: 'unimplemented' }, { status: 501 })
+    }),
+  )
 }
 
 describe('AdminSyncPage', () => {
@@ -83,136 +117,234 @@ describe('AdminSyncPage', () => {
 
   it('shows admin panel when key is stored', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
+    mockAdminBasics()
+
+    render(<AdminSyncPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
+    })
+  })
+
+  it('defaults to full mode and only renders two mode buttons', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+    mockAdminBasics()
+
+    render(<AdminSyncPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '全量' })).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: '增量' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '自适应' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '全量' })).toHaveClass('bg-white')
+  })
+
+  it('shows incremental disabled hint while checking index status', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
     server.use(
       http.post('/npan.v1.AdminService/GetSyncProgress', () => {
         return HttpResponse.json(toConnectProgressResponse(validProgress))
       }),
-    )
-
-    render(<AdminSyncPage />, { wrapper })
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
-    })
-  })
-
-  it('closes dialog after valid key input', async () => {
-    server.use(
-      http.post('/npan.v1.AdminService/GetSyncProgress', ({ request }) => {
-        const key = request.headers.get('X-API-Key')
-        if (key === 'valid-key') {
-          return HttpResponse.json({})
-        }
-        return HttpResponse.json(
-          { code: 'unauthenticated', message: 'Invalid' },
-          { status: 401 },
-        )
+      http.post('/npan.v1.AdminService/GetIndexStats', async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        return HttpResponse.json({ documentCount: '10' })
+      }),
+      http.post('/npan.v1.AdminService/WatchSyncProgress', () => {
+        return HttpResponse.json({ code: 'unimplemented' }, { status: 501 })
       }),
     )
 
     render(<AdminSyncPage />, { wrapper })
+
+    expect(await screen.findByText('正在检查索引状态...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '增量' })).toBeDisabled()
+  })
+
+  it('shows empty-index hint and blocks incremental start', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+    mockAdminBasics({ indexDocumentCount: 0 })
+
+    render(<AdminSyncPage />, { wrapper })
+
+    await screen.findByText('请先执行一次全量索引')
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /^启动同步$/ }))
+    expect(await screen.findByText('请先执行一次全量索引')).toBeInTheDocument()
+  })
+
+  it('shows unknown-index hint when index status request fails', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+    mockAdminBasics({ indexStatsStatus: 500 })
+
+    render(<AdminSyncPage />, { wrapper })
+
+    expect(await screen.findByText('无法确认索引状态，请稍后重试')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '增量' })).toBeDisabled()
+  })
+
+  it('running state disables mode switch and start but keeps refresh and cancel', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+
+    let inspectCalled = false
+    mockAdminBasics({
+      progress: {
+        ...validProgress,
+        status: 'running',
+        roots: [1001],
+        catalogRoots: [1001],
+        catalogRootNames: { '1001': 'A' },
+        catalogRootProgress: {
+          '1001': {
+            rootFolderId: 1001,
+            status: 'running',
+            estimatedTotalDocs: 11,
+            stats: validProgress.aggregateStats,
+            updatedAt: 0,
+          },
+        },
+      },
+    })
+    server.use(
+      http.post('/npan.v1.AdminService/InspectRoots', () => {
+        inspectCalled = true
+        return HttpResponse.json({ items: [], errors: [] })
+      }),
+    )
+
+    render(<AdminSyncPage />, { wrapper })
+
+    await screen.findByText('运行中')
+    expect(screen.getByRole('button', { name: '全量' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '增量' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeDisabled()
 
     const user = userEvent.setup()
-    await user.type(screen.getByPlaceholderText(/API Key/i), 'valid-key')
-    await user.click(screen.getByRole('button', { name: /确认/i }))
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
-    })
+    const refreshBtn = screen.getByRole('button', { name: /刷新目录详情/i })
+    expect(refreshBtn).toBeEnabled()
+    await user.click(refreshBtn)
+    await waitFor(() => expect(inspectCalled).toBe(true))
+    expect(screen.getByRole('button', { name: '取消同步' })).toBeInTheDocument()
   })
 
-  it('shows progress when sync is running', async () => {
+  it('hides root selection switches in incremental mode', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
-    server.use(
-      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
-        return HttpResponse.json(toConnectProgressResponse({
-          ...validProgress,
-          status: 'running',
-          roots: [100, 200],
-          completedRoots: [100],
-          aggregateStats: {
-            ...validProgress.aggregateStats,
-            filesIndexed: 300,
+    mockAdminBasics({
+      progress: {
+        ...validProgress,
+        catalogRoots: [1001],
+        catalogRootNames: { '1001': 'A' },
+        catalogRootProgress: {
+          '1001': {
+            rootFolderId: 1001,
+            status: 'done',
+            estimatedTotalDocs: 11,
+            stats: {
+              ...validProgress.aggregateStats,
+              filesIndexed: 10,
+              foldersVisited: 1,
+            },
+            updatedAt: 0,
           },
-        }))
+        },
+      },
+      indexDocumentCount: 10,
+    })
+
+    render(<AdminSyncPage />, { wrapper })
+
+    await screen.findByRole('button', { name: '增量' })
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: '增量' }))
+    await user.click(screen.getByRole('button', { name: /展开/i }))
+    expect(screen.queryByRole('switch', { name: /选择根目录/i })).not.toBeInTheDocument()
+  })
+
+  it('blocks force rebuild with scoped full selection', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+    let startCalled = false
+    mockAdminBasics({
+      progress: {
+        ...validProgress,
+        catalogRoots: [1001, 1002],
+        catalogRootNames: { '1001': 'A', '1002': 'B' },
+        catalogRootProgress: {
+          '1001': {
+            rootFolderId: 1001,
+            status: 'done',
+            estimatedTotalDocs: 11,
+            stats: { ...validProgress.aggregateStats, filesIndexed: 10, foldersVisited: 1 },
+            updatedAt: 0,
+          },
+          '1002': {
+            rootFolderId: 1002,
+            status: 'done',
+            estimatedTotalDocs: 21,
+            stats: { ...validProgress.aggregateStats, filesIndexed: 20, foldersVisited: 1 },
+            updatedAt: 0,
+          },
+        },
+      },
+    })
+    server.use(
+      http.post('/npan.v1.AdminService/StartSync', () => {
+        startCalled = true
+        return HttpResponse.json({ message: 'Sync started' })
       }),
     )
 
     render(<AdminSyncPage />, { wrapper })
 
-    await waitFor(() => {
-      expect(screen.getByText('运行中')).toBeInTheDocument()
-      expect(screen.getByText(/300/)).toBeInTheDocument()
-    })
+    await screen.findByText(/当前已勾选/) 
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('switch', { name: /强制重建索引/i }))
+    await user.click(screen.getByRole('button', { name: /^启动同步$/ }))
+
+    expect(await screen.findByText('强制重建仅允许全量全库执行，请先取消勾选目录')).toBeInTheDocument()
+    expect(startCalled).toBe(false)
   })
 
-  it('inspects folders first, then starts scoped full sync from selected roots', async () => {
+  it('starts scoped full sync with selected roots', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
 
     let inspectCalled = false
     let capturedBody: Record<string, unknown> | null = null
+    mockAdminBasics({
+      progress: {
+        ...validProgress,
+        catalogRoots: [1001, 1002, 1003],
+        catalogRootNames: {
+          '1001': 'A',
+          '1002': 'B',
+          '1003': 'C',
+        },
+        catalogRootProgress: {
+          '1001': {
+            rootFolderId: 1001,
+            status: 'done',
+            estimatedTotalDocs: 11,
+            stats: { ...validProgress.aggregateStats, filesIndexed: 10, foldersVisited: 1 },
+            updatedAt: 0,
+          },
+          '1002': {
+            rootFolderId: 1002,
+            status: 'done',
+            estimatedTotalDocs: 21,
+            stats: { ...validProgress.aggregateStats, filesIndexed: 20, foldersVisited: 1 },
+            updatedAt: 0,
+          },
+          '1003': {
+            rootFolderId: 1003,
+            status: 'done',
+            estimatedTotalDocs: 31,
+            stats: { ...validProgress.aggregateStats, filesIndexed: 30, foldersVisited: 1 },
+            updatedAt: 0,
+          },
+        },
+      },
+    })
     server.use(
-      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
-        return HttpResponse.json(toConnectProgressResponse({
-          ...validProgress,
-          catalogRoots: [1001, 1002, 1003],
-          catalogRootNames: {
-            1001: 'A',
-            1002: 'B',
-            1003: 'C',
-          },
-          catalogRootProgress: {
-            '1001': {
-              rootFolderId: 1001,
-              status: 'done',
-              estimatedTotalDocs: 11,
-              stats: {
-                foldersVisited: 1,
-                filesIndexed: 10,
-                filesDiscovered: 10,
-                skippedFiles: 0,
-                pagesFetched: 1,
-                failedRequests: 0,
-                startedAt: 0,
-                endedAt: 0,
-              },
-              updatedAt: 0,
-            },
-            '1002': {
-              rootFolderId: 1002,
-              status: 'done',
-              estimatedTotalDocs: 21,
-              stats: {
-                foldersVisited: 1,
-                filesIndexed: 20,
-                filesDiscovered: 20,
-                skippedFiles: 0,
-                pagesFetched: 1,
-                failedRequests: 0,
-                startedAt: 0,
-                endedAt: 0,
-              },
-              updatedAt: 0,
-            },
-            '1003': {
-              rootFolderId: 1003,
-              status: 'done',
-              estimatedTotalDocs: 31,
-              stats: {
-                foldersVisited: 1,
-                filesIndexed: 30,
-                filesDiscovered: 30,
-                skippedFiles: 0,
-                pagesFetched: 1,
-                failedRequests: 0,
-                startedAt: 0,
-                endedAt: 0,
-              },
-              updatedAt: 0,
-            },
-          },
-        }))
-      }),
       http.post('/npan.v1.AdminService/InspectRoots', async ({ request }) => {
         inspectCalled = true
         const body: unknown = await request.json()
@@ -231,7 +363,7 @@ describe('AdminSyncPage', () => {
         const body: unknown = await request.json()
         assertRecord(body)
         capturedBody = body
-        return HttpResponse.json({ message: 'Sync started' }, { status: 202 })
+        return HttpResponse.json({ message: 'Sync started' })
       }),
     )
 
@@ -242,15 +374,11 @@ describe('AdminSyncPage', () => {
     })
 
     const user = userEvent.setup()
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /刷新目录详情/i }))
     expect(inspectCalled).toBe(true)
-
-    await user.click(screen.getByRole('button', { name: /^全量$/ }))
     await user.click(screen.getByRole('button', { name: /展开/i }))
     await user.click(screen.getByRole('switch', { name: /选择根目录 1002/i }))
-
-    await user.click(screen.getByRole('button', { name: /按勾选目录启动全量/i }))
+    await user.click(screen.getByRole('button', { name: /^启动同步$/ }))
 
     await waitFor(() => {
       expect(capturedBody).not.toBeNull()
@@ -260,5 +388,6 @@ describe('AdminSyncPage', () => {
     expect(payload.rootFolderIds).toEqual(['1001', '1003'])
     expect(payload.includeDepartments).toBe(false)
     expect(payload.preserveRootCatalog).toBe(true)
+    expect(payload.mode).toBe('SYNC_MODE_FULL')
   })
 })

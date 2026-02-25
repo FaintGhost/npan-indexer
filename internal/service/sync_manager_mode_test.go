@@ -6,30 +6,25 @@ import (
 	"npan/internal/models"
 )
 
-func TestResolveMode_AutoNoState(t *testing.T) {
+func TestResolveMode_EmptyDefaultsToFull(t *testing.T) {
 	t.Parallel()
 
-	got := resolveMode(models.SyncModeAuto, nil)
+	got, err := resolveMode("")
+	if err != nil {
+		t.Fatalf("resolveMode returned error: %v", err)
+	}
 	if got != models.SyncModeFull {
 		t.Fatalf("expected %q, got %q", models.SyncModeFull, got)
-	}
-}
-
-func TestResolveMode_AutoWithCursor(t *testing.T) {
-	t.Parallel()
-
-	state := &models.SyncState{LastSyncTime: 1700000000}
-	got := resolveMode(models.SyncModeAuto, state)
-	if got != models.SyncModeIncremental {
-		t.Fatalf("expected %q, got %q", models.SyncModeIncremental, got)
 	}
 }
 
 func TestResolveMode_ExplicitFull(t *testing.T) {
 	t.Parallel()
 
-	state := &models.SyncState{LastSyncTime: 1700000000}
-	got := resolveMode(models.SyncModeFull, state)
+	got, err := resolveMode(models.SyncModeFull)
+	if err != nil {
+		t.Fatalf("resolveMode returned error: %v", err)
+	}
 	if got != models.SyncModeFull {
 		t.Fatalf("expected %q, got %q", models.SyncModeFull, got)
 	}
@@ -38,18 +33,19 @@ func TestResolveMode_ExplicitFull(t *testing.T) {
 func TestResolveMode_ExplicitIncremental(t *testing.T) {
 	t.Parallel()
 
-	got := resolveMode(models.SyncModeIncremental, nil)
+	got, err := resolveMode(models.SyncModeIncremental)
+	if err != nil {
+		t.Fatalf("resolveMode returned error: %v", err)
+	}
 	if got != models.SyncModeIncremental {
 		t.Fatalf("expected %q, got %q", models.SyncModeIncremental, got)
 	}
 }
 
-func TestResolveMode_AutoZeroCursor(t *testing.T) {
+func TestResolveMode_InvalidModeReturnsError(t *testing.T) {
 	t.Parallel()
 
-	state := &models.SyncState{LastSyncTime: 0}
-	got := resolveMode(models.SyncModeAuto, state)
-	if got != models.SyncModeFull {
-		t.Fatalf("expected %q, got %q", models.SyncModeFull, got)
+	if _, err := resolveMode(models.SyncMode("auto")); err == nil {
+		t.Fatalf("expected error for invalid mode")
 	}
 }

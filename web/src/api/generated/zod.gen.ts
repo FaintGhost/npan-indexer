@@ -13,11 +13,7 @@ export const zSyncStatus = z.enum([
     'interrupted'
 ]);
 
-export const zSyncMode = z.enum([
-    'auto',
-    'full',
-    'incremental'
-]);
+export const zSyncMode = z.enum(['full', 'incremental']);
 
 export const zErrorCode = z.enum([
     'UNAUTHORIZED',
@@ -353,47 +349,3 @@ export const zDownloadUrlData = z.object({
  * Download URL generated.
  */
 export const zDownloadUrlResponse2 = zDownloadUrlResponse;
-
-export const zStartSyncData = z.object({
-    body: zSyncStartRequest,
-    path: z.never().optional(),
-    query: z.never().optional()
-});
-
-/**
- * Sync job accepted.
- */
-export const zStartSyncResponse = zMessageResponse;
-
-export const zCancelSyncData = z.object({
-    body: z.never().optional(),
-    path: z.never().optional(),
-    query: z.never().optional()
-});
-
-/**
- * Cancel signal sent.
- */
-export const zCancelSyncResponse = zMessageResponse;
-
-export const zGetSyncProgressData = z.object({
-    body: z.never().optional(),
-    path: z.never().optional(),
-    query: z.never().optional()
-});
-
-/**
- * Current sync progress state.
- */
-export const zGetSyncProgressResponse = zSyncProgressState;
-
-export const zInspectRootsData = z.object({
-    body: zInspectRootsRequest,
-    path: z.never().optional(),
-    query: z.never().optional()
-});
-
-/**
- * Root folder inspection result (supports partial success).
- */
-export const zInspectRootsResponse2 = zInspectRootsResponse;

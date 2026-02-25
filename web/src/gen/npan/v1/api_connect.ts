@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { AppDownloadURLRequest, AppDownloadURLResponse, AppSearchRequest, AppSearchResponse, CancelSyncRequest, CancelSyncResponse, CreateTokenRequest, CreateTokenResponse, DownloadURLRequest, DownloadURLResponse, GetSyncProgressRequest, GetSyncProgressResponse, HealthRequest, HealthResponse, InspectRootsRequest, InspectRootsResponse, LocalSearchRequest, LocalSearchResponse, ReadyzRequest, ReadyzResponse, RemoteSearchRequest, RemoteSearchResponse, StartSyncRequest, StartSyncResponse, WatchSyncProgressRequest, WatchSyncProgressResponse } from "./api_pb.js";
+import { AppDownloadURLRequest, AppDownloadURLResponse, AppSearchRequest, AppSearchResponse, CancelSyncRequest, CancelSyncResponse, CreateTokenRequest, CreateTokenResponse, DownloadURLRequest, DownloadURLResponse, GetIndexStatsRequest, GetIndexStatsResponse, GetSyncProgressRequest, GetSyncProgressResponse, HealthRequest, HealthResponse, InspectRootsRequest, InspectRootsResponse, LocalSearchRequest, LocalSearchResponse, ReadyzRequest, ReadyzResponse, RemoteSearchRequest, RemoteSearchResponse, StartSyncRequest, StartSyncResponse, WatchSyncProgressRequest, WatchSyncProgressResponse } from "./api_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -136,6 +136,15 @@ export const AdminService = {
       name: "InspectRoots",
       I: InspectRootsRequest,
       O: InspectRootsResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * @generated from rpc npan.v1.AdminService.GetIndexStats
+     */
+    getIndexStats: {
+      name: "GetIndexStats",
+      I: GetIndexStatsRequest,
+      O: GetIndexStatsResponse,
       kind: MethodKind.Unary,
     },
     /**

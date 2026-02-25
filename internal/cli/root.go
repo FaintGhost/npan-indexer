@@ -582,10 +582,27 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 	var incrementalQueryWords string
 	var mode string
 
+	resolveSyncMode := func(raw string) (models.SyncMode, error) {
+		normalized := strings.ToLower(strings.TrimSpace(raw))
+		switch normalized {
+		case "", string(models.SyncModeFull):
+			return models.SyncModeFull, nil
+		case string(models.SyncModeIncremental):
+			return models.SyncModeIncremental, nil
+		default:
+			return "", fmt.Errorf("不支持的同步模式: %s（可选: full|incremental）", raw)
+		}
+	}
+
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "自适应同步到 Meilisearch（自动选择全量或增量）",
+		Short: "同步到 Meilisearch（全量或增量）",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			syncMode, err := resolveSyncMode(mode)
+			if err != nil {
+				return err
+			}
+
 			token, authOptions, err := resolveToken(cmd.Context(), cfg, options)
 			if err != nil {
 				return err
@@ -629,8 +646,6 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 			})
 
 			api := newAPIClient(firstNotEmpty(options.baseURL, cfg.BaseURL), token, authOptions)
-
-			syncMode := models.SyncMode(mode)
 
 			if err := syncManager.Start(api, service.SyncStartRequest{
 				Mode:               syncMode,
@@ -720,7 +735,7 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 	cmd.Flags().StringVar(&syncStateFile, "sync-state-file", cfg.SyncStateFile, "增量游标状态文件路径")
 	cmd.Flags().Int64Var(&windowOverlapMS, "window-overlap-ms", 2000, "增量窗口回看毫秒数，防止边界漏数")
 	cmd.Flags().StringVar(&incrementalQueryWords, "incremental-query-words", cfg.IncrementalQuery, "增量查询词（默认 * OR *，可覆盖）")
-	cmd.Flags().StringVar(&mode, "mode", "auto", "同步模式: auto|full|incremental")
+	cmd.Flags().StringVar(&mode, "mode", "full", "同步模式: full|incremental")
 
 	return cmd
 }

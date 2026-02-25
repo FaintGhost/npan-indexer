@@ -3,12 +3,14 @@ import { createClient, Code, ConnectError } from '@connectrpc/connect'
 import { useMutation, useQuery } from '@connectrpc/connect-query'
 import {
   cancelSync as cancelSyncMethod,
+  getIndexStats as getIndexStatsMethod,
   getSyncProgress as getSyncProgressMethod,
   inspectRoots as inspectRootsMethod,
   startSync as startSyncMethod,
 } from '@/gen/npan/v1/api-AdminService_connectquery'
 import { AdminService } from '@/gen/npan/v1/api_pb'
 import {
+  fromProtoGetIndexStatsResponse,
   fromProtoGetSyncProgressResponse,
   fromProtoInspectRootsResponse,
   fromProtoSyncProgressState,
@@ -29,10 +31,12 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 const POLL_INTERVAL = 2000
 const STREAM_RECONNECT_DELAY = 500
 
+type SyncModeValue = 'full' | 'incremental'
+type IndexState = 'checking' | 'ready' | 'empty' | 'unknown'
+
 const SYNC_MODES = [
-  { value: 'auto', label: '自适应', description: '有游标走增量，否则全量' },
   { value: 'full', label: '全量', description: '重新爬取所有目录' },
-  { value: 'incremental', label: '增量', description: '仅同步最近变更' },
+  { value: 'incremental', label: '增量', description: '仅同步新增、更新、删除' },
 ] as const
 
 function getSelectableRootIDs(progress: SyncProgress | null): number[] {
@@ -98,16 +102,43 @@ function normalizeSyncProgressTimestamps(progress: SyncProgress): SyncProgress {
   }
 }
 
+function getIncrementalBlockedReason(indexState: IndexState): string {
+  switch (indexState) {
+    case 'checking':
+      return '正在检查索引状态...'
+    case 'empty':
+      return '请先执行一次全量索引'
+    case 'unknown':
+      return '无法确认索引状态，请稍后重试'
+    default:
+      return ''
+  }
+}
+
+function getIndexStateHint(indexState: IndexState): string {
+  switch (indexState) {
+    case 'ready':
+      return '索引状态正常，可执行增量同步'
+    case 'checking':
+      return '正在检查索引状态...'
+    case 'empty':
+      return '请先执行一次全量索引'
+    case 'unknown':
+    default:
+      return '无法确认索引状态，请稍后重试'
+  }
+}
+
 export function AdminSyncPage() {
   const auth = useAdminAuth()
   const [progress, setProgress] = useState<SyncProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [inspectError, setInspectError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [mode, setMode] = useState<string>('auto')
+  const [mode, setMode] = useState<SyncModeValue>('full')
   const [forceRebuild, setForceRebuild] = useState(false)
   const [selectedRootIDs, setSelectedRootIDs] = useState<number[]>([])
-  const selectionInitializedRef = useRef(false)
+  const knownRootIDsRef = useRef<Set<number>>(new Set())
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean
     title: string
@@ -153,6 +184,12 @@ export function AdminSyncPage() {
     // getting stuck if the stream is unavailable or temporarily broken.
     refetchInterval: POLL_INTERVAL,
   })
+  const indexStatsQuery = useQuery(getIndexStatsMethod, {}, {
+    enabled: hasAuth,
+    transport,
+    retry: false,
+    select: (response) => fromProtoGetIndexStatsResponse(response),
+  })
   const startSyncMutation = useMutation(startSyncMethod, {
     transport,
     retry: false,
@@ -171,8 +208,17 @@ export function AdminSyncPage() {
       setProgress(null)
       setError(null)
       setInspectError(null)
+      setSelectedRootIDs([])
+      knownRootIDsRef.current = new Set()
     }
   }, [hasAuth])
+
+  useEffect(() => {
+    const err = indexStatsQuery.error
+    if (err instanceof ConnectError && err.code === Code.Unauthenticated) {
+      onUnauthorized()
+    }
+  }, [indexStatsQuery.error, onUnauthorized])
 
   useEffect(() => {
     if (progressQuery.data === undefined) {
@@ -272,7 +318,7 @@ export function AdminSyncPage() {
   const startSync = useCallback(
     async (
       rootFolderIds: number[],
-      selectedMode: string = 'auto',
+      selectedMode: SyncModeValue = 'full',
       selectedForceRebuild: boolean = false,
       options?: { preserveRootCatalog?: boolean },
     ): Promise<boolean> => {
@@ -300,7 +346,7 @@ export function AdminSyncPage() {
               }
             : {
                 status: 'running',
-                mode: selectedMode as 'auto' | 'full' | 'incremental',
+                mode: selectedMode,
                 startedAt: Date.now(),
                 updatedAt: Date.now(),
                 roots: [],
@@ -435,7 +481,22 @@ export function AdminSyncPage() {
   const inspectLoading = inspectRootsMutation.isPending
   const initialLoading = hasAuth && progressQuery.isPending && progress === null
   const isRunning = progress?.status === 'running'
-  const isBusy = loading || inspectLoading || isRunning
+  const indexState: IndexState = useMemo(() => {
+    if (!hasAuth || indexStatsQuery.isPending) {
+      return 'checking'
+    }
+    if (indexStatsQuery.error) {
+      return 'unknown'
+    }
+    const docCount = indexStatsQuery.data
+    if (docCount == null) {
+      return 'checking'
+    }
+    return docCount === 0 ? 'empty' : 'ready'
+  }, [hasAuth, indexStatsQuery.data, indexStatsQuery.error, indexStatsQuery.isPending])
+  const canSwitchMode = !isRunning && !loading
+  const canStartSync = !isRunning && !loading && (mode !== 'incremental' || indexState === 'ready')
+  const canInspectRoots = !inspectLoading
   const selectableRootIDs = useMemo(
     () => getSelectableRootIDs(progress),
     [progress],
@@ -447,10 +508,19 @@ export function AdminSyncPage() {
   }, [mode, selectableRootIDs, selectedRootIDs])
 
   useEffect(() => {
-    if (selectionInitializedRef.current) return
     if (selectableRootIDs.length === 0) return
-    setSelectedRootIDs(selectableRootIDs)
-    selectionInitializedRef.current = true
+    setSelectedRootIDs((prev) => {
+      const next = new Set(prev)
+      let changed = false
+      for (const rootID of selectableRootIDs) {
+        if (knownRootIDsRef.current.has(rootID)) continue
+        knownRootIDsRef.current.add(rootID)
+        next.add(rootID)
+        changed = true
+      }
+      if (!changed) return prev
+      return [...next].sort((a, b) => a - b)
+    })
   }, [selectableRootIDs])
 
   const handleInspectRoots = async () => {
@@ -474,6 +544,16 @@ export function AdminSyncPage() {
   }
 
   const handleStartSync = async () => {
+    if (isRunning) {
+      setMessage('当前已有同步任务运行中，请先取消后再启动')
+      return
+    }
+
+    if (mode === 'incremental' && indexState !== 'ready') {
+      setMessage(getIncrementalBlockedReason(indexState))
+      return
+    }
+
     if (forceRebuild && selectedScopedRoots.length > 0) {
       setMessage('强制重建仅允许全量全库执行，请先取消勾选目录')
       return
@@ -556,57 +636,55 @@ export function AdminSyncPage() {
       </div>
 
       <div className="mb-6 space-y-3">
-        {!isRunning && (
-          <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-            {SYNC_MODES.map((m) => (
-              <button
-                key={m.value}
-                type="button"
-                onClick={() => setMode(m.value)}
-                disabled={isBusy}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  mode === m.value
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                } disabled:cursor-not-allowed disabled:opacity-60`}
-                title={m.description}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+          {SYNC_MODES.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => setMode(m.value)}
+              disabled={
+                !canSwitchMode || (m.value === 'incremental' && indexState !== 'ready')
+              }
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                mode === m.value
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+              title={m.description}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
 
-        {!isRunning && (
-          <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
-            <p className="block text-sm font-medium text-slate-700">
-              根目录详情
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleInspectRoots}
-                disabled={isBusy || selectableRootIDs.length === 0}
-                className="shrink-0 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {inspectLoading ? '拉取中...' : '刷新目录详情'}
-              </button>
-            </div>
-            <p className="text-xs text-slate-400">
-              该操作仅刷新已存在根目录的详情，不会启动同步。
-            </p>
-            {selectableRootIDs.length === 0 && (
-              <p className="text-xs text-amber-600">
-                当前没有可刷新目录，请先完成一次全量同步以生成根目录列表。
-              </p>
-            )}
-            {mode === 'full' && selectableRootIDs.length > 0 && (
-              <p className="text-xs text-slate-500">
-                当前已勾选 {selectedScopedRoots.length} / {selectableRootIDs.length} 个根目录；启动全量时将仅同步勾选目录。
-              </p>
-            )}
+        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+          <p className="block text-sm font-medium text-slate-700">
+            根目录详情
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleInspectRoots}
+              disabled={!canInspectRoots}
+              className="shrink-0 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {inspectLoading ? '拉取中...' : '刷新目录详情'}
+            </button>
           </div>
-        )}
+          <p className="text-xs text-slate-400">
+            该操作仅刷新已存在根目录的详情，不会启动同步。
+          </p>
+          {selectableRootIDs.length === 0 && (
+            <p className="text-xs text-amber-600">
+              当前没有可刷新目录，请先完成一次全量同步以生成根目录列表。
+            </p>
+          )}
+          {mode === 'full' && selectableRootIDs.length > 0 && (
+            <p className="text-xs text-slate-500">
+              当前已勾选 {selectedScopedRoots.length} / {selectableRootIDs.length} 个根目录；启动全量时将仅同步勾选目录。
+            </p>
+          )}
+        </div>
 
         {!isRunning && mode === 'full' && (
           <button
@@ -614,7 +692,7 @@ export function AdminSyncPage() {
             role="switch"
             aria-checked={forceRebuild}
             onClick={() => setForceRebuild(!forceRebuild)}
-            disabled={isBusy}
+            disabled={isRunning || loading}
             className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span
@@ -643,22 +721,13 @@ export function AdminSyncPage() {
           <button
             type="button"
             onClick={handleStartSync}
-            disabled={isBusy}
+            disabled={!canStartSync}
             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading && !isRunning && (
+            {loading && (
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
             )}
-            {isRunning && (
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            )}
-            {loading && !isRunning
-              ? '启动中...'
-              : isRunning
-                ? '同步进行中'
-                : mode === 'full' && selectedScopedRoots.length > 0
-                  ? '按勾选目录启动全量'
-                  : '启动同步'}
+            启动同步
           </button>
 
           {isRunning && (
@@ -671,6 +740,16 @@ export function AdminSyncPage() {
               取消同步
             </button>
           )}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <p
+            className={`text-xs ${
+              indexState === 'ready' ? 'text-slate-600' : 'text-amber-700'
+            }`}
+          >
+            {getIndexStateHint(indexState)}
+          </p>
         </div>
       </div>
 
@@ -706,17 +785,21 @@ export function AdminSyncPage() {
       {!initialLoading && progress && (
         <SyncProgressDisplay
           progress={progress}
-          rootSelection={{
-            selectedRootIds: selectedRootIDs,
-            disabled: isBusy,
-            onToggleRoot: (rootID) => {
-              setSelectedRootIDs((prev) =>
-                prev.includes(rootID)
-                  ? prev.filter((id) => id !== rootID)
-                  : [...prev, rootID].sort((a, b) => a - b),
-              )
-            },
-          }}
+          rootSelection={
+            mode === 'full'
+              ? {
+                  selectedRootIds: selectedRootIDs,
+                  disabled: isRunning || loading,
+                  onToggleRoot: (rootID) => {
+                    setSelectedRootIDs((prev) =>
+                      prev.includes(rootID)
+                        ? prev.filter((id) => id !== rootID)
+                        : [...prev, rootID].sort((a, b) => a - b),
+                    )
+                  },
+                }
+              : undefined
+          }
         />
       )}
 

@@ -7,7 +7,6 @@ export class AdminPage {
   readonly startSyncButton: Locator;
   readonly cancelSyncButton: Locator;
   readonly modeButtons: {
-    auto: Locator;
     full: Locator;
     incremental: Locator;
   };
@@ -28,7 +27,6 @@ export class AdminPage {
     });
     this.cancelSyncButton = page.getByRole("button", { name: "取消同步" });
     this.modeButtons = {
-      auto: page.getByRole("button", { name: "自适应" }),
       full: page.getByRole("button", { name: "全量" }),
       incremental: page.getByRole("button", { name: "增量" }),
     };
@@ -59,7 +57,7 @@ export class AdminPage {
     }, key);
   }
 
-  async selectMode(mode: "auto" | "full" | "incremental"): Promise<void> {
+  async selectMode(mode: "full" | "incremental"): Promise<void> {
     await this.modeButtons[mode].click();
   }
 

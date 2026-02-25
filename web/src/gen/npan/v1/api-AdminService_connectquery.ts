@@ -15,6 +15,11 @@ export const startSync = AdminService.method.startSync;
 export const inspectRoots = AdminService.method.inspectRoots;
 
 /**
+ * @generated from rpc npan.v1.AdminService.GetIndexStats
+ */
+export const getIndexStats = AdminService.method.getIndexStats;
+
+/**
  * @generated from rpc npan.v1.AdminService.GetSyncProgress
  */
 export const getSyncProgress = AdminService.method.getSyncProgress;

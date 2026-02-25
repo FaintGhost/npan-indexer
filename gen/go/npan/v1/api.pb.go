@@ -137,7 +137,6 @@ type SyncMode int32
 
 const (
 	SyncMode_SYNC_MODE_UNSPECIFIED SyncMode = 0
-	SyncMode_SYNC_MODE_AUTO        SyncMode = 1
 	SyncMode_SYNC_MODE_FULL        SyncMode = 2
 	SyncMode_SYNC_MODE_INCREMENTAL SyncMode = 3
 )
@@ -146,13 +145,11 @@ const (
 var (
 	SyncMode_name = map[int32]string{
 		0: "SYNC_MODE_UNSPECIFIED",
-		1: "SYNC_MODE_AUTO",
 		2: "SYNC_MODE_FULL",
 		3: "SYNC_MODE_INCREMENTAL",
 	}
 	SyncMode_value = map[string]int32{
 		"SYNC_MODE_UNSPECIFIED": 0,
-		"SYNC_MODE_AUTO":        1,
 		"SYNC_MODE_FULL":        2,
 		"SYNC_MODE_INCREMENTAL": 3,
 	}
@@ -2519,6 +2516,86 @@ func (x *InspectRootsResponse) GetErrors() []*InspectRootError {
 	return nil
 }
 
+type GetIndexStatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIndexStatsRequest) Reset() {
+	*x = GetIndexStatsRequest{}
+	mi := &file_npan_v1_api_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIndexStatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIndexStatsRequest) ProtoMessage() {}
+
+func (x *GetIndexStatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_npan_v1_api_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIndexStatsRequest.ProtoReflect.Descriptor instead.
+func (*GetIndexStatsRequest) Descriptor() ([]byte, []int) {
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{32}
+}
+
+type GetIndexStatsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DocumentCount int64                  `protobuf:"varint,1,opt,name=document_count,json=documentCount,proto3" json:"document_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetIndexStatsResponse) Reset() {
+	*x = GetIndexStatsResponse{}
+	mi := &file_npan_v1_api_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetIndexStatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetIndexStatsResponse) ProtoMessage() {}
+
+func (x *GetIndexStatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_npan_v1_api_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetIndexStatsResponse.ProtoReflect.Descriptor instead.
+func (*GetIndexStatsResponse) Descriptor() ([]byte, []int) {
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *GetIndexStatsResponse) GetDocumentCount() int64 {
+	if x != nil {
+		return x.DocumentCount
+	}
+	return 0
+}
+
 type GetSyncProgressRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -2527,7 +2604,7 @@ type GetSyncProgressRequest struct {
 
 func (x *GetSyncProgressRequest) Reset() {
 	*x = GetSyncProgressRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[32]
+	mi := &file_npan_v1_api_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2539,7 +2616,7 @@ func (x *GetSyncProgressRequest) String() string {
 func (*GetSyncProgressRequest) ProtoMessage() {}
 
 func (x *GetSyncProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[32]
+	mi := &file_npan_v1_api_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2552,7 +2629,7 @@ func (x *GetSyncProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncProgressRequest.ProtoReflect.Descriptor instead.
 func (*GetSyncProgressRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{32}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{34}
 }
 
 type GetSyncProgressResponse struct {
@@ -2564,7 +2641,7 @@ type GetSyncProgressResponse struct {
 
 func (x *GetSyncProgressResponse) Reset() {
 	*x = GetSyncProgressResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[33]
+	mi := &file_npan_v1_api_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2576,7 +2653,7 @@ func (x *GetSyncProgressResponse) String() string {
 func (*GetSyncProgressResponse) ProtoMessage() {}
 
 func (x *GetSyncProgressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[33]
+	mi := &file_npan_v1_api_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2589,7 +2666,7 @@ func (x *GetSyncProgressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncProgressResponse.ProtoReflect.Descriptor instead.
 func (*GetSyncProgressResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{33}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetSyncProgressResponse) GetState() *SyncProgressState {
@@ -2607,7 +2684,7 @@ type WatchSyncProgressRequest struct {
 
 func (x *WatchSyncProgressRequest) Reset() {
 	*x = WatchSyncProgressRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[34]
+	mi := &file_npan_v1_api_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2619,7 +2696,7 @@ func (x *WatchSyncProgressRequest) String() string {
 func (*WatchSyncProgressRequest) ProtoMessage() {}
 
 func (x *WatchSyncProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[34]
+	mi := &file_npan_v1_api_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2632,7 +2709,7 @@ func (x *WatchSyncProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchSyncProgressRequest.ProtoReflect.Descriptor instead.
 func (*WatchSyncProgressRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{34}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{36}
 }
 
 type WatchSyncProgressResponse struct {
@@ -2644,7 +2721,7 @@ type WatchSyncProgressResponse struct {
 
 func (x *WatchSyncProgressResponse) Reset() {
 	*x = WatchSyncProgressResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[35]
+	mi := &file_npan_v1_api_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2656,7 +2733,7 @@ func (x *WatchSyncProgressResponse) String() string {
 func (*WatchSyncProgressResponse) ProtoMessage() {}
 
 func (x *WatchSyncProgressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[35]
+	mi := &file_npan_v1_api_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2669,7 +2746,7 @@ func (x *WatchSyncProgressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchSyncProgressResponse.ProtoReflect.Descriptor instead.
 func (*WatchSyncProgressResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{35}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *WatchSyncProgressResponse) GetState() *SyncProgressState {
@@ -2687,7 +2764,7 @@ type CancelSyncRequest struct {
 
 func (x *CancelSyncRequest) Reset() {
 	*x = CancelSyncRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[36]
+	mi := &file_npan_v1_api_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2699,7 +2776,7 @@ func (x *CancelSyncRequest) String() string {
 func (*CancelSyncRequest) ProtoMessage() {}
 
 func (x *CancelSyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[36]
+	mi := &file_npan_v1_api_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2712,7 +2789,7 @@ func (x *CancelSyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelSyncRequest.ProtoReflect.Descriptor instead.
 func (*CancelSyncRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{36}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{38}
 }
 
 type CancelSyncResponse struct {
@@ -2724,7 +2801,7 @@ type CancelSyncResponse struct {
 
 func (x *CancelSyncResponse) Reset() {
 	*x = CancelSyncResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[37]
+	mi := &file_npan_v1_api_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2736,7 +2813,7 @@ func (x *CancelSyncResponse) String() string {
 func (*CancelSyncResponse) ProtoMessage() {}
 
 func (x *CancelSyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[37]
+	mi := &file_npan_v1_api_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2749,7 +2826,7 @@ func (x *CancelSyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelSyncResponse.ProtoReflect.Descriptor instead.
 func (*CancelSyncResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{37}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *CancelSyncResponse) GetMessage() string {
@@ -3008,7 +3085,10 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"folder_ids\x18\x01 \x03(\x03B\x0e\xbaH\v\x92\x01\b\b\x01\"\x04\"\x02 \x00R\tfolderIds\"y\n" +
 	"\x14InspectRootsResponse\x12.\n" +
 	"\x05items\x18\x01 \x03(\v2\x18.npan.v1.InspectRootItemR\x05items\x121\n" +
-	"\x06errors\x18\x02 \x03(\v2\x19.npan.v1.InspectRootErrorR\x06errors\"\x18\n" +
+	"\x06errors\x18\x02 \x03(\v2\x19.npan.v1.InspectRootErrorR\x06errors\"\x16\n" +
+	"\x14GetIndexStatsRequest\">\n" +
+	"\x15GetIndexStatsResponse\x12%\n" +
+	"\x0edocument_count\x18\x01 \x01(\x03R\rdocumentCount\"\x18\n" +
 	"\x16GetSyncProgressRequest\"K\n" +
 	"\x17GetSyncProgressResponse\x120\n" +
 	"\x05state\x18\x01 \x01(\v2\x1a.npan.v1.SyncProgressStateR\x05state\"\x1a\n" +
@@ -3030,12 +3110,11 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x10SYNC_STATUS_DONE\x10\x03\x12\x15\n" +
 	"\x11SYNC_STATUS_ERROR\x10\x04\x12\x19\n" +
 	"\x15SYNC_STATUS_CANCELLED\x10\x05\x12\x1b\n" +
-	"\x17SYNC_STATUS_INTERRUPTED\x10\x06*h\n" +
+	"\x17SYNC_STATUS_INTERRUPTED\x10\x06*j\n" +
 	"\bSyncMode\x12\x19\n" +
 	"\x15SYNC_MODE_UNSPECIFIED\x10\x00\x12\x12\n" +
-	"\x0eSYNC_MODE_AUTO\x10\x01\x12\x12\n" +
 	"\x0eSYNC_MODE_FULL\x10\x02\x12\x19\n" +
-	"\x15SYNC_MODE_INCREMENTAL\x10\x03*\xcf\x01\n" +
+	"\x15SYNC_MODE_INCREMENTAL\x10\x03\"\x04\b\x01\x10\x01*\x0eSYNC_MODE_AUTO*\xcf\x01\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17ERROR_CODE_UNAUTHORIZED\x10\x01\x12\x1a\n" +
@@ -3060,10 +3139,11 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\rSearchService\x12K\n" +
 	"\fRemoteSearch\x12\x1c.npan.v1.RemoteSearchRequest\x1a\x1d.npan.v1.RemoteSearchResponse\x12H\n" +
 	"\vLocalSearch\x12\x1b.npan.v1.LocalSearchRequest\x1a\x1c.npan.v1.LocalSearchResponse\x12H\n" +
-	"\vDownloadURL\x12\x1b.npan.v1.DownloadURLRequest\x1a\x1c.npan.v1.DownloadURLResponse2\x9a\x03\n" +
+	"\vDownloadURL\x12\x1b.npan.v1.DownloadURLRequest\x1a\x1c.npan.v1.DownloadURLResponse2\xea\x03\n" +
 	"\fAdminService\x12B\n" +
 	"\tStartSync\x12\x19.npan.v1.StartSyncRequest\x1a\x1a.npan.v1.StartSyncResponse\x12K\n" +
-	"\fInspectRoots\x12\x1c.npan.v1.InspectRootsRequest\x1a\x1d.npan.v1.InspectRootsResponse\x12T\n" +
+	"\fInspectRoots\x12\x1c.npan.v1.InspectRootsRequest\x1a\x1d.npan.v1.InspectRootsResponse\x12N\n" +
+	"\rGetIndexStats\x12\x1d.npan.v1.GetIndexStatsRequest\x1a\x1e.npan.v1.GetIndexStatsResponse\x12T\n" +
 	"\x0fGetSyncProgress\x12\x1f.npan.v1.GetSyncProgressRequest\x1a .npan.v1.GetSyncProgressResponse\x12\\\n" +
 	"\x11WatchSyncProgress\x12!.npan.v1.WatchSyncProgressRequest\x1a\".npan.v1.WatchSyncProgressResponse0\x01\x12E\n" +
 	"\n" +
@@ -3082,7 +3162,7 @@ func file_npan_v1_api_proto_rawDescGZIP() []byte {
 }
 
 var file_npan_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_npan_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_npan_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_npan_v1_api_proto_goTypes = []any{
 	(ItemType)(0),                     // 0: npan.v1.ItemType
 	(SyncStatus)(0),                   // 1: npan.v1.SyncStatus
@@ -3121,36 +3201,38 @@ var file_npan_v1_api_proto_goTypes = []any{
 	(*StartSyncResponse)(nil),         // 34: npan.v1.StartSyncResponse
 	(*InspectRootsRequest)(nil),       // 35: npan.v1.InspectRootsRequest
 	(*InspectRootsResponse)(nil),      // 36: npan.v1.InspectRootsResponse
-	(*GetSyncProgressRequest)(nil),    // 37: npan.v1.GetSyncProgressRequest
-	(*GetSyncProgressResponse)(nil),   // 38: npan.v1.GetSyncProgressResponse
-	(*WatchSyncProgressRequest)(nil),  // 39: npan.v1.WatchSyncProgressRequest
-	(*WatchSyncProgressResponse)(nil), // 40: npan.v1.WatchSyncProgressResponse
-	(*CancelSyncRequest)(nil),         // 41: npan.v1.CancelSyncRequest
-	(*CancelSyncResponse)(nil),        // 42: npan.v1.CancelSyncResponse
-	nil,                               // 43: npan.v1.SyncProgressState.RootNamesEntry
-	nil,                               // 44: npan.v1.SyncProgressState.RootProgressEntry
-	nil,                               // 45: npan.v1.SyncProgressState.CatalogRootNamesEntry
-	nil,                               // 46: npan.v1.SyncProgressState.CatalogRootProgressEntry
-	(*timestamppb.Timestamp)(nil),     // 47: google.protobuf.Timestamp
+	(*GetIndexStatsRequest)(nil),      // 37: npan.v1.GetIndexStatsRequest
+	(*GetIndexStatsResponse)(nil),     // 38: npan.v1.GetIndexStatsResponse
+	(*GetSyncProgressRequest)(nil),    // 39: npan.v1.GetSyncProgressRequest
+	(*GetSyncProgressResponse)(nil),   // 40: npan.v1.GetSyncProgressResponse
+	(*WatchSyncProgressRequest)(nil),  // 41: npan.v1.WatchSyncProgressRequest
+	(*WatchSyncProgressResponse)(nil), // 42: npan.v1.WatchSyncProgressResponse
+	(*CancelSyncRequest)(nil),         // 43: npan.v1.CancelSyncRequest
+	(*CancelSyncResponse)(nil),        // 44: npan.v1.CancelSyncResponse
+	nil,                               // 45: npan.v1.SyncProgressState.RootNamesEntry
+	nil,                               // 46: npan.v1.SyncProgressState.RootProgressEntry
+	nil,                               // 47: npan.v1.SyncProgressState.CatalogRootNamesEntry
+	nil,                               // 48: npan.v1.SyncProgressState.CatalogRootProgressEntry
+	(*timestamppb.Timestamp)(nil),     // 49: google.protobuf.Timestamp
 }
 var file_npan_v1_api_proto_depIdxs = []int32{
 	0,  // 0: npan.v1.IndexDocument.type:type_name -> npan.v1.ItemType
 	5,  // 1: npan.v1.QueryResult.items:type_name -> npan.v1.IndexDocument
-	47, // 2: npan.v1.CrawlStats.started_at_ts:type_name -> google.protobuf.Timestamp
-	47, // 3: npan.v1.CrawlStats.ended_at_ts:type_name -> google.protobuf.Timestamp
+	49, // 2: npan.v1.CrawlStats.started_at_ts:type_name -> google.protobuf.Timestamp
+	49, // 3: npan.v1.CrawlStats.ended_at_ts:type_name -> google.protobuf.Timestamp
 	7,  // 4: npan.v1.RootSyncProgress.stats:type_name -> npan.v1.CrawlStats
-	47, // 5: npan.v1.RootSyncProgress.updated_at_ts:type_name -> google.protobuf.Timestamp
+	49, // 5: npan.v1.RootSyncProgress.updated_at_ts:type_name -> google.protobuf.Timestamp
 	1,  // 6: npan.v1.SyncProgressState.status:type_name -> npan.v1.SyncStatus
 	2,  // 7: npan.v1.SyncProgressState.mode:type_name -> npan.v1.SyncMode
-	43, // 8: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
+	45, // 8: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
 	7,  // 9: npan.v1.SyncProgressState.aggregate_stats:type_name -> npan.v1.CrawlStats
-	44, // 10: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
-	45, // 11: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
-	46, // 12: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
+	46, // 10: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
+	47, // 11: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
+	48, // 12: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
 	9,  // 13: npan.v1.SyncProgressState.incremental_stats:type_name -> npan.v1.IncrementalSyncStats
 	10, // 14: npan.v1.SyncProgressState.verification:type_name -> npan.v1.SyncVerification
-	47, // 15: npan.v1.SyncProgressState.started_at_ts:type_name -> google.protobuf.Timestamp
-	47, // 16: npan.v1.SyncProgressState.updated_at_ts:type_name -> google.protobuf.Timestamp
+	49, // 15: npan.v1.SyncProgressState.started_at_ts:type_name -> google.protobuf.Timestamp
+	49, // 16: npan.v1.SyncProgressState.updated_at_ts:type_name -> google.protobuf.Timestamp
 	3,  // 17: npan.v1.ErrorResponse.code:type_name -> npan.v1.ErrorCode
 	14, // 18: npan.v1.RemoteSearchResponse.files:type_name -> npan.v1.RemoteSearchItem
 	14, // 19: npan.v1.RemoteSearchResponse.folders:type_name -> npan.v1.RemoteSearchItem
@@ -3176,24 +3258,26 @@ var file_npan_v1_api_proto_depIdxs = []int32{
 	31, // 39: npan.v1.SearchService.DownloadURL:input_type -> npan.v1.DownloadURLRequest
 	33, // 40: npan.v1.AdminService.StartSync:input_type -> npan.v1.StartSyncRequest
 	35, // 41: npan.v1.AdminService.InspectRoots:input_type -> npan.v1.InspectRootsRequest
-	37, // 42: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
-	39, // 43: npan.v1.AdminService.WatchSyncProgress:input_type -> npan.v1.WatchSyncProgressRequest
-	41, // 44: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
-	19, // 45: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
-	21, // 46: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
-	23, // 47: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
-	25, // 48: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
-	27, // 49: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
-	15, // 50: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
-	30, // 51: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
-	32, // 52: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
-	34, // 53: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
-	36, // 54: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
-	38, // 55: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
-	40, // 56: npan.v1.AdminService.WatchSyncProgress:output_type -> npan.v1.WatchSyncProgressResponse
-	42, // 57: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
-	45, // [45:58] is the sub-list for method output_type
-	32, // [32:45] is the sub-list for method input_type
+	37, // 42: npan.v1.AdminService.GetIndexStats:input_type -> npan.v1.GetIndexStatsRequest
+	39, // 43: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
+	41, // 44: npan.v1.AdminService.WatchSyncProgress:input_type -> npan.v1.WatchSyncProgressRequest
+	43, // 45: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
+	19, // 46: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
+	21, // 47: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
+	23, // 48: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
+	25, // 49: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
+	27, // 50: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
+	15, // 51: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
+	30, // 52: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
+	32, // 53: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
+	34, // 54: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
+	36, // 55: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
+	38, // 56: npan.v1.AdminService.GetIndexStats:output_type -> npan.v1.GetIndexStatsResponse
+	40, // 57: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
+	42, // 58: npan.v1.AdminService.WatchSyncProgress:output_type -> npan.v1.WatchSyncProgressResponse
+	44, // 59: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
+	46, // [46:60] is the sub-list for method output_type
+	32, // [32:46] is the sub-list for method input_type
 	32, // [32:32] is the sub-list for extension type_name
 	32, // [32:32] is the sub-list for extension extendee
 	0,  // [0:32] is the sub-list for field type_name
@@ -3222,7 +3306,7 @@ func file_npan_v1_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_npan_v1_api_proto_rawDesc), len(file_npan_v1_api_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   42,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   5,
 		},
