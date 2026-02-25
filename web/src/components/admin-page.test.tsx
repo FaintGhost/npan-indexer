@@ -389,5 +389,41 @@ describe('AdminSyncPage', () => {
     expect(payload.includeDepartments).toBe(false)
     expect(payload.preserveRootCatalog).toBe(true)
     expect(payload.mode).toBe('SYNC_MODE_FULL')
+    expect(payload.resumeProgress).toBeUndefined()
+  })
+
+  it('full sync with force rebuild explicitly disables resume', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+
+    let capturedBody: Record<string, unknown> | null = null
+    mockAdminBasics({ progress: validProgress })
+    server.use(
+      http.post('/npan.v1.AdminService/StartSync', async ({ request }) => {
+        const body: unknown = await request.json()
+        assertRecord(body)
+        capturedBody = body
+        return HttpResponse.json({ message: 'Sync started' })
+      }),
+    )
+
+    render(<AdminSyncPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('switch', { name: /强制重建索引/i }))
+    await user.click(screen.getByRole('button', { name: /^启动同步$/ }))
+    await user.click(screen.getByRole('button', { name: '确认重建' }))
+
+    await waitFor(() => {
+      expect(capturedBody).not.toBeNull()
+    })
+
+    const payload = getRecord(capturedBody)
+    expect(payload.mode).toBe('SYNC_MODE_FULL')
+    expect(payload.forceRebuild).toBe(true)
+    expect(payload.resumeProgress).toBe(false)
   })
 })

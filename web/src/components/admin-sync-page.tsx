@@ -332,7 +332,8 @@ export function AdminSyncPage() {
           includeDepartments: rootFolderIds.length > 0 ? false : undefined,
           preserveRootCatalog:
             preserveRootCatalog && !selectedForceRebuild ? true : undefined,
-          resumeProgress: selectedMode !== 'full' && !selectedForceRebuild,
+          // 默认允许断点续传；仅在强制重建时显式关闭。
+          resumeProgress: selectedForceRebuild ? false : undefined,
           forceRebuild: selectedForceRebuild || undefined,
         })
         await progressQuery.refetch()

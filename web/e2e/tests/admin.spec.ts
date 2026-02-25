@@ -26,6 +26,71 @@ function isFullSyncMode(value: unknown): boolean {
   );
 }
 
+function buildMockFullProgress(status: "SYNC_STATUS_IDLE" | "SYNC_STATUS_INTERRUPTED") {
+  const rootProgressItem = {
+    rootFolderId: "1001",
+    status: "done",
+    estimatedTotalDocs: "11",
+    stats: {
+      foldersVisited: 1,
+      filesIndexed: 10,
+      filesDiscovered: 10,
+      skippedFiles: 0,
+      pagesFetched: 1,
+      failedRequests: 0,
+      startedAt: "0",
+      endedAt: "0",
+    },
+    updatedAt: "0",
+  };
+
+  return {
+    state: {
+      status,
+      mode: "SYNC_MODE_FULL",
+      startedAt: "0",
+      updatedAt: String(Date.now()),
+      roots: ["1001", "1002"],
+      rootNames: {
+        "1001": "A",
+        "1002": "B",
+      },
+      completedRoots: [],
+      aggregateStats: {
+        foldersVisited: 0,
+        filesIndexed: 0,
+        filesDiscovered: 0,
+        skippedFiles: 0,
+        pagesFetched: 0,
+        failedRequests: 0,
+        startedAt: "0",
+        endedAt: "0",
+      },
+      rootProgress: {
+        "1001": rootProgressItem,
+        "1002": {
+          ...rootProgressItem,
+          rootFolderId: "1002",
+          estimatedTotalDocs: "21",
+        },
+      },
+      catalogRoots: ["1001", "1002"],
+      catalogRootNames: {
+        "1001": "A",
+        "1002": "B",
+      },
+      catalogRootProgress: {
+        "1001": rootProgressItem,
+        "1002": {
+          ...rootProgressItem,
+          rootFolderId: "1002",
+          estimatedTotalDocs: "21",
+        },
+      },
+    },
+  };
+}
+
 test.describe("Admin 认证流程", () => {
   let adminPage: AdminPage;
 
@@ -160,6 +225,128 @@ test.describe("Admin 同步控制", () => {
     ).toBeVisible();
     await expect(authenticatedPage.getByText("请先执行一次全量索引")).toBeVisible();
     await expect(adminPage.modeButtons.incremental).toBeDisabled();
+  });
+
+  test("中断后再次全量启动保持断点续传语义", async ({ authenticatedPage }) => {
+    const startPayloads: Record<string, unknown>[] = [];
+    let phase: "before-restart" | "after-restart" = "before-restart";
+
+    await authenticatedPage.route("**/npan.v1.AdminService/GetIndexStats", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ documentCount: "100" }),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/GetSyncProgress", async (route) => {
+      const payload =
+        phase === "before-restart"
+          ? buildMockFullProgress("SYNC_STATUS_IDLE")
+          : buildMockFullProgress("SYNC_STATUS_INTERRUPTED");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(payload),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/WatchSyncProgress", async (route) => {
+      await route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "unimplemented" }),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/StartSync", async (route) => {
+      const body: unknown = route.request().postDataJSON();
+      if (isRecord(body)) {
+        startPayloads.push(body);
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "ok" }),
+      });
+    });
+
+    await authenticatedPage.reload();
+    await expect(authenticatedPage.getByText("当前已勾选 2 / 2")).toBeVisible();
+
+    await adminPage.startSyncButton.click();
+    await expect.poll(() => startPayloads.length).toBe(1);
+
+    phase = "after-restart";
+    await authenticatedPage.reload();
+    await expect(adminPage.startSyncButton).toBeEnabled();
+
+    await adminPage.startSyncButton.click();
+    await expect.poll(() => startPayloads.length).toBe(2);
+
+    const second = startPayloads[1];
+    expect(isFullSyncMode(second.mode)).toBe(true);
+    expect(second.forceRebuild).toBeUndefined();
+    expect(second.resumeProgress).toBeUndefined();
+    expect(second.rootFolderIds).toEqual(["1001", "1002"]);
+  });
+
+  test("中断后全量强制重建应显式关闭断点续传", async ({ authenticatedPage }) => {
+    const startPayloads: Record<string, unknown>[] = [];
+
+    await authenticatedPage.route("**/npan.v1.AdminService/GetIndexStats", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ documentCount: "100" }),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/GetSyncProgress", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(buildMockFullProgress("SYNC_STATUS_INTERRUPTED")),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/WatchSyncProgress", async (route) => {
+      await route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "unimplemented" }),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/StartSync", async (route) => {
+      const body: unknown = route.request().postDataJSON();
+      if (isRecord(body)) {
+        startPayloads.push(body);
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "ok" }),
+      });
+    });
+
+    await authenticatedPage.reload();
+    await expect(authenticatedPage.getByRole("heading", { name: "同步管理" })).toBeVisible();
+
+    await authenticatedPage.getByRole("button", { name: /展开/ }).click();
+    await authenticatedPage.getByRole("switch", { name: /选择根目录 1001/ }).click();
+    await authenticatedPage.getByRole("switch", { name: /选择根目录 1002/ }).click();
+
+    await authenticatedPage.getByRole("switch", { name: /强制重建索引/i }).click();
+    await adminPage.startSyncButton.click();
+    await authenticatedPage.getByRole("button", { name: "确认重建" }).click();
+
+    await expect.poll(() => startPayloads.length).toBe(1);
+    const payload = startPayloads[0];
+    expect(isFullSyncMode(payload.mode)).toBe(true);
+    expect(payload.forceRebuild).toBe(true);
+    expect(payload.resumeProgress).toBe(false);
+    expect(payload.rootFolderIds).toBeUndefined();
   });
 
   test("运行中仅保留取消和刷新目录详情", async ({ authenticatedPage }) => {
