@@ -1,19 +1,36 @@
 import { z } from 'zod'
-import {
-  zIndexDocument,
-  zQueryResult,
-  zDownloadUrlResponse,
-  zErrorResponse,
-} from '@/api/generated/zod.gen'
-
-export const IndexDocumentSchema = zIndexDocument
+export const IndexDocumentSchema = z.object({
+  doc_id: z.string(),
+  source_id: z.number().int(),
+  type: z.enum(['file', 'folder']),
+  name: z.string(),
+  path_text: z.string(),
+  parent_id: z.number().int(),
+  modified_at: z.number().int(),
+  created_at: z.number().int(),
+  size: z.number().int(),
+  sha1: z.string(),
+  in_trash: z.boolean(),
+  is_deleted: z.boolean(),
+  highlighted_name: z.string().optional(),
+})
 export type IndexDocument = z.infer<typeof IndexDocumentSchema>
 
-export const SearchResponseSchema = zQueryResult
+export const SearchResponseSchema = z.object({
+  items: z.array(IndexDocumentSchema),
+  total: z.number().int(),
+})
 export type SearchResponse = z.infer<typeof SearchResponseSchema>
 
-export const DownloadURLResponseSchema = zDownloadUrlResponse
+export const DownloadURLResponseSchema = z.object({
+  file_id: z.number().int(),
+  download_url: z.string().url().min(1),
+})
 export type DownloadURLResponse = z.infer<typeof DownloadURLResponseSchema>
 
-export const ErrorResponseSchema = zErrorResponse
+export const ErrorResponseSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  request_id: z.string().optional(),
+})
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>

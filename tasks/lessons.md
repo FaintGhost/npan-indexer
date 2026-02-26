@@ -2,11 +2,11 @@
 
 ## 2026-02-24
 
-- 用户纠正：新增能力时要确保前后端通过 `openapi.yaml` 对齐（当前项目以 `api/openapi.yaml` 为契约源）。
+- 用户纠正：项目已全面迁移到 Connect-RPC，新增能力应以 `proto/npan/v1/api.proto` 为唯一契约源。
 - 规则：
-  - 在实现前先检查 `api/openapi.yaml` 是否已覆盖所需字段。
-  - 若有字段变更，先改 `api/openapi.yaml`，再生成 `api/types.gen.go` 与 `web/src/api/generated/*`。
-  - 实现完成前必须执行等价 `generate-check`（生成 + `git diff --exit-code`）。
+  - 在实现前先检查 `proto/npan/v1/api.proto` 是否已覆盖所需字段。
+  - 若有字段变更，先改 proto，再执行 `buf lint && buf generate`。
+  - 禁止在运行时代码新增 `/api/v1/*` 路径；历史文档（`docs/archive/**`、`docs/plans/**`、`tasks/**`）可保留。
 - 用户纠正：新增功能后必须跑完整验证链（前后端单测、冒烟测试、E2E 测试）。
 - 规则：
   - 默认收口命令至少包含：`go test ./...`、`cd web && bun vitest run`。

@@ -177,9 +177,8 @@ GOCACHE=/tmp/go-build go test ./...
 # 前端测试
 cd web && bun vitest run
 
-# 生成 OpenAPI 衍生代码（Go + TS/Zod）
-make generate
-make generate-check
+# 防回退检查（禁止在运行时代码引入 /api/v1 路径）
+make rest-guard
 
 # CI 冒烟测试（34 项）
 make smoke-test
@@ -212,10 +211,7 @@ make e2e-test
 
 ## 7. 契约与代码生成说明（开发者关心）
 
-当前仓库是“双契约并存”：
-
-- Connect 契约（Buf/Proto）：`proto/npan/v1/api.proto`
-- REST 契约（OpenAPI）：`api/openapi.yaml`
+当前仓库使用 Connect 契约（Buf/Proto）：`proto/npan/v1/api.proto`。
 
 对应生成链路：
 
@@ -223,9 +219,6 @@ make e2e-test
 # Connect / protobuf / connect-go / connect-es
 buf lint
 buf generate
-
-# OpenAPI -> Go DTO + TS/Zod
-make generate
 ```
 
 ## 8. CI / 测试环境端口说明
@@ -255,7 +248,7 @@ make generate
 
 ### Q3: E2E 大量超时
 
-迁移后页面主要走 Connect 路径，若自定义测试仍在等待 `/api/v1/...`，会超时。请改为等待 `/npan.v1.*` 请求。
+迁移后页面走 Connect 路径，若自定义测试仍在等待旧 HTTP 路径，会超时。请改为等待 `/npan.v1.*` 请求。
 
 ## 10. 许可证
 

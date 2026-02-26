@@ -1,16 +1,19 @@
-.PHONY: generate-go generate-ts generate generate-check test test-frontend smoke-test e2e-test
+.PHONY: rest-guard test test-frontend smoke-test e2e-test
 
-generate-go:
-	go generate ./api/...
-
-generate-ts:
-	cd web && bun run generate
-
-generate: generate-go generate-ts
-
-generate-check: generate
-	@git diff --exit-code -- api/types.gen.go web/src/api/generated/ \
-		|| (echo "ERROR: generated files are out of date. Run 'make generate' and commit the changes." && exit 1)
+rest-guard:
+	@if rg -n "/api/v1/" \
+		--glob '!docs/archive/**' \
+		--glob '!docs/plans/**' \
+		--glob '!tasks/**' \
+		--glob '!Makefile' \
+		--glob '!web/dist/**' \
+		--glob '!**/*.md' \
+		--glob '!**/*.yaml' \
+		--glob '!**/*.yml' \
+		.; then \
+		echo "ERROR: runtime code must not contain REST /api/v1 paths"; \
+		exit 1; \
+	fi
 
 test:
 	go test ./... -short -count=1 -race

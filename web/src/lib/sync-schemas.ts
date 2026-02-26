@@ -1,10 +1,4 @@
 import { z } from 'zod'
-import {
-  zCrawlStats,
-  zRootSyncProgress,
-  zIncrementalSyncStats,
-  zSyncProgressState,
-} from '@/api/generated/zod.gen'
 
 export const ProtoTimestampSchema = z.union([
   z.string(),
@@ -15,22 +9,65 @@ export const ProtoTimestampSchema = z.union([
 ])
 export type ProtoTimestamp = z.infer<typeof ProtoTimestampSchema>
 
-export const CrawlStatsSchema = zCrawlStats.extend({
+export const CrawlStatsSchema = z.object({
+  foldersVisited: z.number().int(),
+  filesIndexed: z.number().int(),
+  filesDiscovered: z.number().int(),
+  skippedFiles: z.number().int(),
+  pagesFetched: z.number().int(),
+  failedRequests: z.number().int(),
+  startedAt: z.number().int(),
+  endedAt: z.number().int(),
+}).extend({
   startedAtTs: ProtoTimestampSchema.optional(),
   endedAtTs: ProtoTimestampSchema.optional(),
 })
 export type CrawlStats = z.infer<typeof CrawlStatsSchema>
 
-export const RootProgressSchema = zRootSyncProgress.extend({
+export const RootProgressSchema = z.object({
+  rootFolderId: z.number().int(),
+  status: z.string(),
+  estimatedTotalDocs: z.number().int().nullable().optional(),
+  updatedAt: z.number().int(),
+}).extend({
   stats: CrawlStatsSchema,
   updatedAtTs: ProtoTimestampSchema.optional(),
 })
 export type RootProgress = z.infer<typeof RootProgressSchema>
 
-export const IncrementalSyncStatsSchema = zIncrementalSyncStats
+export const IncrementalSyncStatsSchema = z.object({
+  changesFetched: z.number().int(),
+  upserted: z.number().int(),
+  deleted: z.number().int(),
+  skippedUpserts: z.number().int(),
+  skippedDeletes: z.number().int(),
+  cursorBefore: z.number().int(),
+  cursorAfter: z.number().int(),
+})
 export type IncrementalSyncStats = z.infer<typeof IncrementalSyncStatsSchema>
 
-export const SyncProgressSchema = zSyncProgressState.extend({
+const SyncVerificationSchema = z.object({
+  meiliDocCount: z.number().int(),
+  crawledDocCount: z.number().int(),
+  discoveredDocCount: z.number().int(),
+  skippedCount: z.number().int(),
+  verified: z.boolean(),
+  warnings: z.array(z.string()).optional(),
+})
+
+export const SyncProgressSchema = z.object({
+  status: z.enum(['idle', 'running', 'done', 'error', 'cancelled', 'interrupted']),
+  mode: z.enum(['full', 'incremental']).optional(),
+  startedAt: z.number().int(),
+  updatedAt: z.number().int(),
+  roots: z.array(z.number().int()),
+  rootNames: z.record(z.string()).optional(),
+  completedRoots: z.array(z.number().int()),
+  activeRoot: z.number().int().nullable().optional(),
+  lastError: z.string().optional(),
+  verification: SyncVerificationSchema.nullable().optional(),
+  incrementalStats: IncrementalSyncStatsSchema.optional(),
+}).extend({
   startedAtTs: ProtoTimestampSchema.optional(),
   updatedAtTs: ProtoTimestampSchema.optional(),
   aggregateStats: CrawlStatsSchema,

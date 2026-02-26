@@ -63,26 +63,15 @@ jobs:
 
       - run: cd web && bun run test
 
-  generate-check:
+  rest-guard:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
-
-      - uses: oven-sh/setup-bun@v2
-
-      - run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
-
-      - run: cd web && bun install --frozen-lockfile
-
-      - run: make generate-check
+      - run: make rest-guard
 
   smoke-test:
-    needs: [unit-test-go, unit-test-frontend, generate-check]
+    needs: [unit-test-go, unit-test-frontend, rest-guard]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

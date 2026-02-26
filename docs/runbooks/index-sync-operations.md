@@ -19,9 +19,9 @@
     - `est=xx.x%(docs=a/b roots=c/d)`：按已知根目录 `estimatedTotalDocs` 估算，`a` 为已处理文档数（`files+folders`），`b` 为估算总文档数。
     - `est=n/a`：当前根目录无法可靠获取总量，不显示百分比（不影响同步本身）。
 3. 或服务方式触发：
-  - `POST /api/v1/admin/sync` (body: `{"mode": "full"}`)
-  - 查看进度：`GET /api/v1/admin/sync`
-  - 取消同步：`DELETE /api/v1/admin/sync`
+  - `POST /npan.v1.AdminService/StartSync` (body: `{"mode": "SYNC_MODE_FULL"}`)
+  - 查看进度：`POST /npan.v1.AdminService/GetSyncProgress` (body: `{}`)
+  - 取消同步：`POST /npan.v1.AdminService/CancelSync` (body: `{}`)
 3. 同步完成后确认指标：
   - 遍历目录数量
   - 索引文档数量

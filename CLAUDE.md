@@ -9,14 +9,13 @@
 `npan` 是一个将 Npan 云盘文件元数据同步到 Meilisearch 的服务，提供：
 - Web 搜索页面（React + Vite）
 - 管理后台（同步启动/取消/进度）
-- REST API（兼容层）
-- Connect-RPC API（迁移后的主路径）
+- Connect-RPC API（主路径）
 
 当前迁移状态：
 - 已接入 `buf` 生成链路
 - 后端使用 `connect-go`
 - 前端使用 `connect-es` + `connect-query`
-- REST 路由仍保留（兼容 smoke / 部分脚本 / 旧客户端）
+- 运行时已全面切换到 Connect（不再提供 `/api/v1/*`）
 
 ## 1. 技术栈与运行边界
 
@@ -25,7 +24,6 @@
 - RPC：Buf + Protobuf + Connect-RPC（Connect/gRPC/gRPC-Web handler 由 connect-go 生成）
 - 契约：
   - Protobuf（Connect 路径）：`proto/npan/v1/api.proto`
-  - OpenAPI（REST/Zod/Go DTO）：`api/openapi.yaml`
 
 ## 2. 目录地图（优先阅读）
 
@@ -55,29 +53,21 @@
 - `buf.yaml` / `buf.gen.yaml`：Buf lint/codegen 配置
 - `gen/go/npan/v1`：Buf 生成的 Go protobuf / connect-go 代码
 - `web/src/gen`：Buf 生成的前端 protobuf / connect-es / connect-query 代码
-- `api/openapi.yaml`：REST 契约（兼容层 + Zod schema 源）
-- `api/types.gen.go`：OpenAPI 生成的 Go DTO
-- `web/src/api/generated`：OpenAPI 生成的 TS types + Zod schemas
 
 ## 3. 路由现状（迁移后很关键）
 
-在 `internal/httpx/server.go` 中，当前是“Connect + REST 共存”：
+在 `internal/httpx/server.go` 中，当前是 Connect-only：
 
-- Connect-RPC（新主路径）
+- Connect-RPC（主路径）
   - `/npan.v1.HealthService/*`
   - `/npan.v1.AppService/*`
   - `/npan.v1.AuthService/*`
   - `/npan.v1.SearchService/*`
   - `/npan.v1.AdminService/*`
-- REST（兼容层，仍被 smoke 覆盖）
-  - `/api/v1/app/*`
-  - `/api/v1/*`
-  - `/api/v1/admin/*`
 
 实践建议：
 - 前端新逻辑优先接 Connect
-- REST 仅在兼容性/外部调用场景保留或补丁修复
-- 改 E2E 时优先检查等待条件是否仍写成旧 REST 路径
+- 改 E2E 时优先校验 Connect `POST /npan.v1.*` 请求体
 
 ## 4. 生成链路（改契约时必须看）
 
@@ -94,24 +84,6 @@ buf generate
 - `gen/go/npan/v1/*.pb.go`
 - `gen/go/npan/v1/npanv1connect/*.connect.go`
 - `web/src/gen/**/*`
-
-### 4.2 REST / OpenAPI（兼容 DTO + Zod）
-
-修改 `api/openapi.yaml` 后：
-
-```bash
-make generate
-```
-
-会更新：
-- `api/types.gen.go`
-- `web/src/api/generated/*`
-
-校验生成产物是否提交完整：
-
-```bash
-make generate-check
-```
 
 ## 5. 开发与验证命令（默认使用 Bun）
 
@@ -163,7 +135,7 @@ docker compose -f docker-compose.ci.yml --profile e2e down --volumes
 现象：`waitForRequest` / `waitForResponse` 大量超时。
 
 高概率原因：
-- 页面已经改为 Connect `POST /npan.v1.*`，但测试仍在等 REST `/api/v1/*`
+- 页面已经改为 Connect `POST /npan.v1.*`，但测试仍在等旧协议路径
 - Connect 请求参数在 JSON body 中，不在 URL query 上（例如 `page=2`）
 
 处理方式：
@@ -173,13 +145,12 @@ docker compose -f docker-compose.ci.yml --profile e2e down --volumes
 
 ### 6.2 生成代码不一致
 
-现象：测试通过但 CI `generate-check` 失败。
+现象：本地编译通过但 CI 失败。
 
 排查顺序：
-1. 是否同时改了 `proto/...` 与 `api/openapi.yaml`（需要双链路生成）
-2. 是否漏跑 `buf generate`
-3. 是否漏跑 `make generate`
-4. 是否把生成目录完整提交（`gen/go`, `web/src/gen`, `web/src/api/generated`, `api/types.gen.go`）
+1. 是否改了 `proto/...` 但漏跑 `buf generate`
+2. 是否漏提 `gen/go` 与 `web/src/gen` 产物
+3. 是否修改了连接层 adapter 但未同步测试
 
 ### 6.3 `go:embed` / 前端产物
 
@@ -219,7 +190,6 @@ GOCACHE=/tmp/go-build go test ./...
 
 请同时考虑：
 - Connect protobuf 契约（Buf）
-- REST/OpenAPI 契约（OpenAPI + Zod）
 - E2E 与 smoke 的断言路径/请求格式是否需要更新
 
 ## 8. 提交前最小检查单
@@ -227,7 +197,6 @@ GOCACHE=/tmp/go-build go test ./...
 ```bash
 # 1) 契约生成（如改了契约）
 buf lint && buf generate
-make generate-check
 
 # 2) 单测
 GOCACHE=/tmp/go-build go test ./...
@@ -244,4 +213,4 @@ docker compose -f docker-compose.ci.yml --profile e2e down --volumes
 
 如果你刚接手这个仓库，建议第一轮只做两件事：
 1. 跑通 `go test ./...` 与 `cd web && bun vitest run`
-2. 阅读 `internal/httpx/server.go` 和 `web/src/routes/index.lazy.tsx`，确认 Connect/REST 共存结构
+2. 阅读 `internal/httpx/server.go` 和 `web/src/routes/index.lazy.tsx`，确认 Connect-only 结构
