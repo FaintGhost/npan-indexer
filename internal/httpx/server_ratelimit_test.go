@@ -60,7 +60,8 @@ func TestNewServer_RateLimitOnSearchEndpoint(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/app/search?query=test", nil)
+			req := httptest.NewRequest(http.MethodPost, "/npan.v1.AppService/AppSearch", strings.NewReader(`{"query":"test"}`))
+			req.Header.Set("Content-Type", "application/json")
 			req.RemoteAddr = "192.168.1.100:12345"
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)

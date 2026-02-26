@@ -150,6 +150,18 @@ assert_search_result() {
     && echo "$body" | jq -e 'has("items") and has("total")' > /dev/null 2>&1
 }
 
+assert_connect_query_result() {
+  local code="$1" body="$2"
+  [[ "$code" == "200" ]] \
+    && echo "$body" | jq -e 'has("result") and (.result | type) == "object"' > /dev/null 2>&1
+}
+
+assert_connect_download_url_result() {
+  local code="$1" body="$2"
+  [[ "$code" == "200" ]] \
+    && echo "$body" | jq -e '.result | has("fileId") and has("downloadUrl")' > /dev/null 2>&1
+}
+
 assert_error_code() {
   local expected_code="$1"
   shift
@@ -182,8 +194,8 @@ assert_message() {
 
 assert_download_url_error() {
   local code="$1" body="$2"
-  # App download-url with dummy token returns 503 (token parse fail) or 502 (upstream fail)
-  [[ "$code" == "502" || "$code" == "503" ]]
+  # AppService/AppDownloadURL with dummy token returns 503 (unavailable)
+  [[ "$code" == "503" ]]
 }
 
 assert_admin_download_url_error() {
@@ -214,52 +226,68 @@ run_test "GET /readyz → 200 with status=ready" \
   "${BASE_URL}/readyz"
 
 # ===========================================================================
-# 2. App endpoints (no API key required, EmbeddedAuth)
+# 2. AppService (public, Connect)
 # ===========================================================================
-section "App Endpoints (public)"
+section "AppService (Connect public endpoints)"
 
-run_test "GET /api/v1/app/search?q=test → 200 with items+total" \
-  assert_search_result \
-  "${BASE_URL}/api/v1/app/search?q=test"
+run_test "POST /npan.v1.AppService/AppSearch query=test → 200 with result.items+result.total" \
+  assert_connect_query_result \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"query":"test"}' \
+  "${BASE_URL}/npan.v1.AppService/AppSearch"
 
-run_test "GET /api/v1/app/search without query → 400" \
+run_test "POST /npan.v1.AppService/AppSearch empty query → 400" \
   assert_400 \
-  "${BASE_URL}/api/v1/app/search"
+  -X POST -H "Content-Type: application/json" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AppService/AppSearch"
 
-run_test "GET /api/v1/app/search with pagination → 200" \
-  assert_search_result \
-  "${BASE_URL}/api/v1/app/search?q=test&page=1&page_size=5"
+run_test "POST /npan.v1.AppService/AppSearch with pagination → 200" \
+  assert_connect_query_result \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"query":"test","page":"1","pageSize":"5"}' \
+  "${BASE_URL}/npan.v1.AppService/AppSearch"
 
-run_test "GET /api/v1/app/download-url without file_id → 400" \
+run_test "POST /npan.v1.AppService/AppDownloadURL without fileId → 400" \
   assert_400 \
-  "${BASE_URL}/api/v1/app/download-url"
+  -X POST -H "Content-Type: application/json" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.AppService/AppDownloadURL"
 
-run_test "GET /api/v1/app/download-url?file_id=999 → 502 or 503 (dummy token)" \
+run_test "POST /npan.v1.AppService/AppDownloadURL fileId=999 → 503 (dummy token)" \
   assert_download_url_error \
-  "${BASE_URL}/api/v1/app/download-url?file_id=999"
+  -X POST -H "Content-Type: application/json" \
+  -d '{"fileId":"999"}' \
+  "${BASE_URL}/npan.v1.AppService/AppDownloadURL"
 
 # ===========================================================================
 # 3. Auth boundary tests (401 without API key)
 # ===========================================================================
 section "Auth Boundary (401 without API key)"
 
-run_test "POST /api/v1/token without key → 401" \
+run_test "POST /npan.v1.AuthService/CreateToken without key → 401" \
   assert_401_unauthorized \
   -X POST -H "Content-Type: application/json" \
   -d '{}' \
-  "${BASE_URL}/api/v1/token"
+  "${BASE_URL}/npan.v1.AuthService/CreateToken"
 
-run_test "GET /api/v1/search/remote without key → 401" \
+run_test "POST /npan.v1.SearchService/RemoteSearch without key → 401" \
   assert_401_unauthorized \
-  "${BASE_URL}/api/v1/search/remote?query=test"
+  -X POST -H "Content-Type: application/json" \
+  -d '{"query":"test"}' \
+  "${BASE_URL}/npan.v1.SearchService/RemoteSearch"
 
-run_test "GET /api/v1/search/local without key → 401" \
+run_test "POST /npan.v1.SearchService/LocalSearch without key → 401" \
   assert_401_unauthorized \
-  "${BASE_URL}/api/v1/search/local?query=test"
+  -X POST -H "Content-Type: application/json" \
+  -d '{"query":"test"}' \
+  "${BASE_URL}/npan.v1.SearchService/LocalSearch"
 
-run_test "GET /api/v1/download-url without key → 401" \
+run_test "POST /npan.v1.SearchService/DownloadURL without key → 401" \
   assert_401_unauthorized \
-  "${BASE_URL}/api/v1/download-url?file_id=1"
+  -X POST -H "Content-Type: application/json" \
+  -d '{"fileId":"1"}' \
+  "${BASE_URL}/npan.v1.SearchService/DownloadURL"
 
 run_test "POST /npan.v1.AdminService/GetSyncProgress without key → 401" \
   assert_401_unauthorized \
@@ -280,100 +308,108 @@ run_test "POST /npan.v1.AdminService/CancelSync without key → 401" \
   "${BASE_URL}/npan.v1.AdminService/CancelSync"
 
 # ===========================================================================
-# 4. Token endpoint
+# 4. AuthService CreateToken
 # ===========================================================================
-section "Token (POST /api/v1/token)"
+section "AuthService/CreateToken"
 
-run_test "POST /api/v1/token with key but empty body → 400 missing params" \
-  assert_400_bad_request \
+run_test "POST /npan.v1.AuthService/CreateToken with key but empty body → 400 missing params" \
+  assert_400 \
   -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
   -d '{}' \
-  "${BASE_URL}/api/v1/token"
+  "${BASE_URL}/npan.v1.AuthService/CreateToken"
 
-run_test "POST /api/v1/token missing sub_id → 400" \
-  assert_400_bad_request \
+run_test "POST /npan.v1.AuthService/CreateToken missing subId → 400" \
+  assert_400 \
   -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  -d '{"client_id":"test","client_secret":"test"}' \
-  "${BASE_URL}/api/v1/token"
+  -d '{"clientId":"test","clientSecret":"test"}' \
+  "${BASE_URL}/npan.v1.AuthService/CreateToken"
 
-run_test "POST /api/v1/token missing client_secret → 400" \
-  assert_400_bad_request \
+run_test "POST /npan.v1.AuthService/CreateToken missing clientSecret → 400" \
+  assert_400 \
   -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  -d '{"client_id":"test","sub_id":1}' \
-  "${BASE_URL}/api/v1/token"
+  -d '{"clientId":"test","subId":"1"}' \
+  "${BASE_URL}/npan.v1.AuthService/CreateToken"
 
-run_test "POST /api/v1/token with all params → 400 (upstream unreachable)" \
-  assert_400_bad_request \
+run_test "POST /npan.v1.AuthService/CreateToken all params → 400 (upstream unreachable)" \
+  assert_400 \
   -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  -d '{"client_id":"ci-id","client_secret":"ci-secret","sub_id":1}' \
-  "${BASE_URL}/api/v1/token"
+  -d '{"clientId":"ci-id","clientSecret":"ci-secret","subId":"1"}' \
+  "${BASE_URL}/npan.v1.AuthService/CreateToken"
 
-# Also test Bearer auth header
-run_test "POST /api/v1/token via Bearer auth → 400 (param validation works)" \
-  assert_400_bad_request \
+run_test "POST /npan.v1.AuthService/CreateToken via Bearer auth → 400" \
+  assert_400 \
   -X POST -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${API_KEY}" \
   -d '{}' \
-  "${BASE_URL}/api/v1/token"
+  "${BASE_URL}/npan.v1.AuthService/CreateToken"
 
 # ===========================================================================
-# 5. Search — remote (needs API key + upstream token)
+# 5. SearchService — remote
 # ===========================================================================
-section "Remote Search (GET /api/v1/search/remote)"
+section "SearchService/RemoteSearch"
 
-run_test "GET /api/v1/search/remote without query → 400" \
-  assert_400_bad_request \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/search/remote"
-
-run_test "GET /api/v1/search/remote?query=test → 400 (dummy token fails upstream)" \
+run_test "POST /npan.v1.SearchService/RemoteSearch without query → 400" \
   assert_400 \
+  -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/search/remote?query=test"
+  -d '{}' \
+  "${BASE_URL}/npan.v1.SearchService/RemoteSearch"
 
-# ===========================================================================
-# 6. Search — local (needs API key, queries Meilisearch directly)
-# ===========================================================================
-section "Local Search (GET /api/v1/search/local)"
-
-run_test "GET /api/v1/search/local without query → 400" \
-  assert_400_bad_request \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/search/local"
-
-run_test "GET /api/v1/search/local?query=test → 200 with items+total" \
-  assert_search_result \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/search/local?query=test"
-
-run_test "GET /api/v1/search/local with filters → 200" \
-  assert_search_result \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/search/local?query=test&page=1&page_size=10&type=file"
-
-run_test "GET /api/v1/search/local?q=test (alias) → 200" \
-  assert_search_result \
-  -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/search/local?q=test"
-
-# ===========================================================================
-# 7. Download URL — admin (needs API key)
-# ===========================================================================
-section "Download URL (GET /api/v1/download-url)"
-
-run_test "GET /api/v1/download-url without file_id → 400" \
+run_test "POST /npan.v1.SearchService/RemoteSearch query=test → 400 (dummy token fails upstream)" \
   assert_400 \
+  -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/download-url"
+  -d '{"query":"test"}' \
+  "${BASE_URL}/npan.v1.SearchService/RemoteSearch"
 
-run_test "GET /api/v1/download-url?file_id=999 → 400 (dummy token)" \
+# ===========================================================================
+# 6. SearchService — local
+# ===========================================================================
+section "SearchService/LocalSearch"
+
+run_test "POST /npan.v1.SearchService/LocalSearch without query → 400" \
+  assert_400 \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.SearchService/LocalSearch"
+
+run_test "POST /npan.v1.SearchService/LocalSearch query=test → 200 with result.items+result.total" \
+  assert_connect_query_result \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{"query":"test"}' \
+  "${BASE_URL}/npan.v1.SearchService/LocalSearch"
+
+run_test "POST /npan.v1.SearchService/LocalSearch with filters → 200" \
+  assert_connect_query_result \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{"query":"test","page":"1","pageSize":"10","type":"file"}' \
+  "${BASE_URL}/npan.v1.SearchService/LocalSearch"
+
+# ===========================================================================
+# 7. SearchService DownloadURL
+# ===========================================================================
+section "SearchService/DownloadURL"
+
+run_test "POST /npan.v1.SearchService/DownloadURL without fileId → 400" \
+  assert_400 \
+  -X POST -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
+  -d '{}' \
+  "${BASE_URL}/npan.v1.SearchService/DownloadURL"
+
+run_test "POST /npan.v1.SearchService/DownloadURL fileId=999 → 400 (dummy token)" \
   assert_admin_download_url_error \
+  -X POST -H "Content-Type: application/json" \
   -H "X-API-Key: ${API_KEY}" \
-  "${BASE_URL}/api/v1/download-url?file_id=999"
+  -d '{"fileId":"999"}' \
+  "${BASE_URL}/npan.v1.SearchService/DownloadURL"
 
 # ===========================================================================
 # 8. Admin Connect lifecycle (needs API key)

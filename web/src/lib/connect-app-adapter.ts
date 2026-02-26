@@ -1,5 +1,6 @@
 import { ItemType } from '@/gen/npan/v1/api_pb'
 import type {
+  AppDownloadURLResponse,
   AppSearchResponse,
   IndexDocument as ProtoIndexDocument,
 } from '@/gen/npan/v1/api_pb'
@@ -51,4 +52,12 @@ export function fromProtoAppSearchResponse(response: AppSearchResponse): SearchR
     items: result.items.map(mapIndexDocument),
     total: int64ToNumber(result.total),
   }
+}
+
+export function fromProtoAppDownloadURLResponse(response: AppDownloadURLResponse): string {
+  const downloadURL = response.result?.downloadUrl
+  if (!downloadURL) {
+    throw new Error('生成下载链接失败，请稍后重试')
+  }
+  return downloadURL
 }

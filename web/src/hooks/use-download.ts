@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react'
-import { apiGet } from '@/lib/api-client'
-import { DownloadURLResponseSchema } from '@/lib/schemas'
+import { callUnaryMethod } from '@connectrpc/connect-query-core'
+import { appDownloadURL as appDownloadURLMethod } from '@/gen/npan/v1/api-AppService_connectquery'
+import { appTransport } from '@/lib/connect-transport'
+import { fromProtoAppDownloadURLResponse } from '@/lib/connect-app-adapter'
 
 type DownloadStatus = 'idle' | 'loading' | 'success' | 'error'
 
@@ -29,15 +31,16 @@ export function useDownload() {
     setStatus(fileId, 'loading')
 
     try {
-      const result = await apiGet(
-        '/api/v1/app/download-url',
-        { file_id: fileId },
-        DownloadURLResponseSchema,
+      const result = await callUnaryMethod(
+        appTransport,
+        appDownloadURLMethod,
+        { fileId: BigInt(fileId) },
       )
+      const downloadURL = fromProtoAppDownloadURLResponse(result)
 
-      cacheRef.current.set(fileId, result.download_url)
+      cacheRef.current.set(fileId, downloadURL)
       setStatus(fileId, 'success')
-      window.open(result.download_url, '_blank', 'noopener,noreferrer')
+      window.open(downloadURL, '_blank', 'noopener,noreferrer')
       setTimeout(() => setStatus(fileId, 'idle'), 1500)
     } catch {
       setStatus(fileId, 'error')

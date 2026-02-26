@@ -7,6 +7,52 @@ function requireLive(testName: string) {
   test.skip(!isLive, `${testName}: 需要设置 E2E_LIVE=1 并使用真实 NPA_TOKEN 环境`)
 }
 
+async function ensureCatalogRootsReady(authenticatedPage: import('@playwright/test').Page) {
+  const adminPage = new AdminPage(authenticatedPage)
+  await adminPage.goto()
+  await expect(adminPage.dialog).not.toBeVisible()
+  await expect(authenticatedPage.getByRole('heading', { name: '同步管理' })).toBeVisible()
+
+  const rootDetailsHeader = authenticatedPage.getByRole('button', { name: /根目录详情 \(/ })
+  const hasRootCatalog = await rootDetailsHeader
+    .waitFor({ state: 'visible', timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (hasRootCatalog) {
+    return
+  }
+
+  const startReq = authenticatedPage.waitForRequest(
+    (req) =>
+      req.method() === 'POST' && req.url().includes('/npan.v1.AdminService/StartSync'),
+    { timeout: 15_000 },
+  )
+  await adminPage.startSyncButton.click()
+  await startReq
+
+  const rootReady = await rootDetailsHeader
+    .waitFor({ state: 'visible', timeout: 120_000 })
+    .then(() => true)
+    .catch(() => false)
+
+  const cancelVisible = await adminPage.cancelSyncButton
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (cancelVisible) {
+    const cancelReq = authenticatedPage.waitForRequest(
+      (req) =>
+        req.method() === 'POST' && req.url().includes('/npan.v1.AdminService/CancelSync'),
+      { timeout: 15_000 },
+    )
+    await adminPage.cancelSyncButton.click()
+    await authenticatedPage.getByRole('button', { name: '确认取消' }).click()
+    await cancelReq
+  }
+
+  expect(rootReady).toBe(true)
+}
+
 test.describe('Admin Live（真实数据）', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -53,6 +99,8 @@ test.describe('Admin Live（真实数据）', () => {
     requireLive('live: InspectRoots 真实链路可返回并展示结果')
     test.setTimeout(180_000)
 
+    await ensureCatalogRootsReady(authenticatedPage)
+
     const adminPage = new AdminPage(authenticatedPage)
     await adminPage.goto()
     await expect(adminPage.dialog).not.toBeVisible()
@@ -64,10 +112,7 @@ test.describe('Admin Live（真实数据）', () => {
       .then(() => true)
       .catch(() => false)
 
-    if (!hasRootCatalog) {
-      test.skip(true, 'live 环境尚未建立根目录 catalog（请先跑一次全量以生成根目录详情）')
-      return
-    }
+    expect(hasRootCatalog).toBe(true)
 
     const inspectButton = authenticatedPage.getByRole('button', { name: /刷新目录详情/ })
     await expect(inspectButton).toBeEnabled()

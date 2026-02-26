@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '../tests/mocks/server'
+import { createTestProvider } from '../tests/test-providers'
 import { useDownload } from './use-download'
 
 describe('useDownload', () => {
+  const wrapper = createTestProvider()
   const mockOpen = vi.fn()
 
   beforeEach(() => {
@@ -19,17 +21,19 @@ describe('useDownload', () => {
 
   it('fetches download URL and opens in new tab', async () => {
     server.use(
-      http.get('/api/v1/app/download-url', ({ request }) => {
-        const url = new URL(request.url)
-        expect(url.searchParams.get('file_id')).toBe('42')
+      http.post('/npan.v1.AppService/AppDownloadURL', async ({ request }) => {
+        const body = await request.json() as { fileId?: string }
+        expect(body.fileId).toBe('42')
         return HttpResponse.json({
-          file_id: 42,
-          download_url: 'https://cdn.example.com/file.pdf',
+          result: {
+            fileId: '42',
+            downloadUrl: 'https://cdn.example.com/file.pdf',
+          },
         })
       }),
     )
 
-    const { result } = renderHook(() => useDownload())
+    const { result } = renderHook(() => useDownload(), { wrapper })
 
     await act(async () => {
       result.current.download(42)
@@ -48,16 +52,18 @@ describe('useDownload', () => {
 
   it('shows loading state during request', async () => {
     server.use(
-      http.get('/api/v1/app/download-url', async () => {
+      http.post('/npan.v1.AppService/AppDownloadURL', async () => {
         await new Promise((r) => setTimeout(r, 1000))
         return HttpResponse.json({
-          file_id: 42,
-          download_url: 'https://cdn.example.com/file.pdf',
+          result: {
+            fileId: '42',
+            downloadUrl: 'https://cdn.example.com/file.pdf',
+          },
         })
       }),
     )
 
-    const { result } = renderHook(() => useDownload())
+    const { result } = renderHook(() => useDownload(), { wrapper })
 
     act(() => {
       result.current.download(42)
@@ -68,15 +74,17 @@ describe('useDownload', () => {
 
   it('reverts to idle after success timeout', async () => {
     server.use(
-      http.get('/api/v1/app/download-url', () => {
+      http.post('/npan.v1.AppService/AppDownloadURL', () => {
         return HttpResponse.json({
-          file_id: 42,
-          download_url: 'https://cdn.example.com/file.pdf',
+          result: {
+            fileId: '42',
+            downloadUrl: 'https://cdn.example.com/file.pdf',
+          },
         })
       }),
     )
 
-    const { result } = renderHook(() => useDownload())
+    const { result } = renderHook(() => useDownload(), { wrapper })
 
     await act(async () => {
       result.current.download(42)
@@ -96,16 +104,18 @@ describe('useDownload', () => {
   it('uses cached URL on second download', async () => {
     let requestCount = 0
     server.use(
-      http.get('/api/v1/app/download-url', () => {
+      http.post('/npan.v1.AppService/AppDownloadURL', () => {
         requestCount++
         return HttpResponse.json({
-          file_id: 42,
-          download_url: 'https://cdn.example.com/file.pdf',
+          result: {
+            fileId: '42',
+            downloadUrl: 'https://cdn.example.com/file.pdf',
+          },
         })
       }),
     )
 
-    const { result } = renderHook(() => useDownload())
+    const { result } = renderHook(() => useDownload(), { wrapper })
 
     await act(async () => {
       result.current.download(42)
@@ -131,7 +141,7 @@ describe('useDownload', () => {
 
   it('shows error state on API failure', async () => {
     server.use(
-      http.get('/api/v1/app/download-url', () => {
+      http.post('/npan.v1.AppService/AppDownloadURL', () => {
         return HttpResponse.json(
           { code: 'INTERNAL_ERROR', message: 'Failed' },
           { status: 502 },
@@ -139,7 +149,7 @@ describe('useDownload', () => {
       }),
     )
 
-    const { result } = renderHook(() => useDownload())
+    const { result } = renderHook(() => useDownload(), { wrapper })
 
     await act(async () => {
       result.current.download(42)
@@ -151,7 +161,7 @@ describe('useDownload', () => {
   })
 
   it('returns idle for unknown file ids', () => {
-    const { result } = renderHook(() => useDownload())
+    const { result } = renderHook(() => useDownload(), { wrapper })
     expect(result.current.getStatus(999)).toBe('idle')
   })
 })

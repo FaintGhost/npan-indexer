@@ -169,13 +169,15 @@ test.describe('下载流程', () => {
     })
 
     // Mock download API - success by default
-    await page.route('**/api/v1/app/download-url**', (route) =>
+    await page.route('**/npan.v1.AppService/AppDownloadURL**', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          file_id: 1001,
-          download_url: 'https://example.com/fake-download.pdf',
+          result: {
+            fileId: '1001',
+            downloadUrl: 'https://example.com/fake-download.pdf',
+          },
         }),
       }),
     )
@@ -214,7 +216,7 @@ test.describe('下载流程', () => {
 
   test('下载失败显示重试状态', async ({ page }) => {
     // Override mock for this test - return error
-    await page.route('**/api/v1/app/download-url**', (route) =>
+    await page.route('**/npan.v1.AppService/AppDownloadURL**', (route) =>
       route.fulfill({
         status: 502,
         contentType: 'application/json',
@@ -234,7 +236,7 @@ test.describe('下载流程', () => {
 
   test('多个文件可同时下载', async ({ page }) => {
     const apiCalls: string[] = []
-    await page.route('**/api/v1/app/download-url**', async (route) => {
+    await page.route('**/npan.v1.AppService/AppDownloadURL**', async (route) => {
       apiCalls.push(route.request().url())
       // Add small delay to keep buttons in loading state
       await new Promise((r) => setTimeout(r, 200))
@@ -242,8 +244,10 @@ test.describe('下载流程', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          file_id: 1001,
-          download_url: 'https://example.com/fake-download.pdf',
+          result: {
+            fileId: '1001',
+            downloadUrl: 'https://example.com/fake-download.pdf',
+          },
         }),
       })
     })

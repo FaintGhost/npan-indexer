@@ -1,17 +1,21 @@
 import { http, HttpResponse } from 'msw'
 
 export const handlers = [
-  http.get('/api/v1/app/search', () => {
+  http.post('/npan.v1.AppService/AppSearch', () => {
     return HttpResponse.json({
-      items: [],
-      total: 0,
+      result: {
+        items: [],
+        total: '0',
+      },
     })
   }),
 
-  http.get('/api/v1/app/download-url', () => {
+  http.post('/npan.v1.AppService/AppDownloadURL', () => {
     return HttpResponse.json({
-      file_id: 1,
-      download_url: 'https://example.com/file.pdf',
+      result: {
+        fileId: '1',
+        downloadUrl: 'https://example.com/file.pdf',
+      },
     })
   }),
 ]

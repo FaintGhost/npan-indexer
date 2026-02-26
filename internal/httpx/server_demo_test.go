@@ -20,11 +20,14 @@ func TestNewServer_RegistersAppRoutes(t *testing.T) {
 	if !seen["GET /*"] {
 		t.Fatal("expected GET /* route to be registered")
 	}
-	if !seen["GET /api/v1/app/search"] {
-		t.Fatal("expected GET /api/v1/app/search route to be registered")
+	if !seen["echo_route_any /npan.v1.AppService/*"] {
+		t.Fatalf("expected AppService connect route group to be registered, got routes: %#v", seen)
 	}
-	if !seen["GET /api/v1/app/download-url"] {
-		t.Fatal("expected GET /api/v1/app/download-url route to be registered")
+	if !seen["echo_route_any /npan.v1.SearchService/*"] {
+		t.Fatal("expected SearchService connect route group to be registered")
+	}
+	if !seen["echo_route_any /npan.v1.AuthService/*"] {
+		t.Fatal("expected AuthService connect route group to be registered")
 	}
 }
 

@@ -11,7 +11,6 @@ Npan 外部索引服务：把 Npan 云盘文件元数据同步到 Meilisearch，
 
 - Web 搜索页：`/`（关键词检索、分页、下载）
 - 管理后台：`/admin/`（启动同步、取消同步、查看进度）
-- REST API（兼容）：`/api/v1/*`
 - Connect-RPC API（主路径）：`/npan.v1.*`
 
 ## 2. 快速部署（推荐：Docker Compose）
@@ -109,7 +108,7 @@ docker compose \
 说明：
 - live 测试通过 `E2E_LIVE=1` 启用（由 `docker-compose.e2e-live.yml` 注入）。
 - `docker-compose.e2e-live.yml` 会把服务端认证来源切到你传入的真实 token 或 OAuth 三元组。
-- `InspectRoots` 用例依赖已有根目录 catalog；若环境未建立，会在用例内显式 skip。
+- `InspectRoots` live 用例会自动预热：若尚无根目录 catalog，会先触发一次全量启动并等待目录列表出现。
 
 可选性能调优（用于 `/npan.v1.AdminService/InspectRoots`）：
 
@@ -122,7 +121,7 @@ docker compose \
 
 1. 打开 `http://localhost:1323/admin/`
 2. 输入 `NPA_ADMIN_API_KEY`
-3. 选择同步模式（自适应 / 全量 / 增量）
+3. 选择同步模式（全量 / 增量）
 4. 点击启动，同步状态会自动轮询刷新
 
 ### 3.2 方式 B：API 调用
@@ -131,15 +130,18 @@ docker compose \
 curl -sS -X POST \
   -H 'X-API-Key: <your-admin-key>' \
   -H 'Content-Type: application/json' \
-  -d '{"mode":"auto"}' \
-  http://localhost:1323/api/v1/admin/sync
+  -d '{"mode":"SYNC_MODE_FULL"}' \
+  http://localhost:1323/npan.v1.AdminService/StartSync
 ```
 
 查询进度：
 
 ```bash
-curl -sS -H 'X-API-Key: <your-admin-key>' \
-  http://localhost:1323/api/v1/admin/sync
+curl -sS -X POST \
+  -H 'X-API-Key: <your-admin-key>' \
+  -H 'Content-Type: application/json' \
+  -d '{}' \
+  http://localhost:1323/npan.v1.AdminService/GetSyncProgress
 ```
 
 ## 4. 本地开发（不走 Docker 全栈）
@@ -188,27 +190,21 @@ make e2e-test
 
 ## 6. API 入口总览
 
-### 6.1 公开（无需 API Key）
+### 6.1 Connect-RPC（运行时主路径）
 
-- `GET /healthz`
-- `GET /readyz`
-- `GET /api/v1/app/search`
-- `GET /api/v1/app/download-url`
-
-### 6.2 管理/API（需 API Key）
-
-REST：
-- `POST /api/v1/token`
-- `GET /api/v1/search/remote`
-- `GET /api/v1/search/local`
-- `GET /api/v1/download-url`
-- `POST|GET|DELETE /api/v1/admin/sync`
-
-Connect-RPC（迁移后的主路径）：
+- 公开：
+  - `/npan.v1.HealthService/*`
+  - `/npan.v1.AppService/*`
+- 管理（需 API Key）：
 - `/npan.v1.AppService/*`
 - `/npan.v1.AuthService/*`
 - `/npan.v1.SearchService/*`
 - `/npan.v1.AdminService/*`
+
+### 6.2 健康检查（HTTP）
+
+- `GET /healthz`
+- `GET /readyz`
 
 鉴权头支持：
 - `X-API-Key: <key>`

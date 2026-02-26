@@ -154,7 +154,7 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 	e.GET("/healthz", handlers.Health)
 	e.GET("/readyz", handlers.Readyz)
 
-	// Connect-RPC endpoints (gradual migration, coexist with REST).
+	// Connect-RPC endpoints (primary runtime API).
 	connectHandlerOptions := []connect.HandlerOption{
 		connect.WithInterceptors(NewConnectValidationInterceptor(slog.Default())),
 		connect.WithInterceptors(NewConnectErrorInterceptor(slog.Default())),
@@ -175,21 +175,9 @@ func NewServer(handlers *Handlers, adminAPIKey string, distFS fs.FS, promReg pro
 		Any("/*", echo.WrapHandler(adminConnectHandler))
 
 	// SPA frontend served from embedded Vite build output.
-	// Specific routes (/api, /healthz, /readyz) take priority over the catch-all.
+	// Specific routes (/npan.v1.*, /healthz, /readyz) take priority over the catch-all.
 	spa := spaHandler(distFS)
 	e.GET("/*", spa)
-
-	// App API (embedded auth — config fallback always enabled)
-	appAPI := e.Group("/api/v1/app", EmbeddedAuth())
-	appAPI.GET("/search", handlers.AppSearch)
-	appAPI.GET("/download-url", handlers.AppDownloadURL)
-
-	// API (requires API key)
-	api := e.Group("/api/v1", APIKeyAuth(adminAPIKey))
-	api.POST("/token", handlers.Token)
-	api.GET("/search/remote", handlers.RemoteSearch)
-	api.GET("/search/local", handlers.LocalSearch)
-	api.GET("/download-url", handlers.DownloadURL)
 
 	return e
 }

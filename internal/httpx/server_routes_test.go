@@ -11,7 +11,7 @@ const testAdminKey = "test-admin-key-1234567890"
 func TestRoutes_PublicEndpoints_NoAuthRequired(t *testing.T) {
 	t.Parallel()
 
-	e := NewServer(&Handlers{}, testAdminKey, testDistFS(), nil)
+	e := NewServer(newTestHandlers(t), testAdminKey, testDistFS(), nil)
 	endpoints := []struct {
 		method string
 		path   string
@@ -20,8 +20,7 @@ func TestRoutes_PublicEndpoints_NoAuthRequired(t *testing.T) {
 		{http.MethodGet, "/readyz"},
 		{http.MethodPost, "/npan.v1.HealthService/Health"},
 		{http.MethodPost, "/npan.v1.AppService/AppSearch"},
-		{http.MethodGet, "/api/v1/app/search?q=test"},
-		{http.MethodGet, "/api/v1/app/download-url?file_id=1"},
+		{http.MethodPost, "/npan.v1.AppService/AppDownloadURL"},
 	}
 
 	for _, ep := range endpoints {
@@ -39,17 +38,15 @@ func TestRoutes_PublicEndpoints_NoAuthRequired(t *testing.T) {
 func TestRoutes_APIEndpoints_RequireAuth(t *testing.T) {
 	t.Parallel()
 
-	e := NewServer(&Handlers{}, testAdminKey, testDistFS(), nil)
+	e := NewServer(newTestHandlers(t), testAdminKey, testDistFS(), nil)
 	endpoints := []struct {
 		method string
 		path   string
 	}{
-		{http.MethodPost, "/api/v1/token"},
 		{http.MethodPost, "/npan.v1.AuthService/CreateToken"},
-		{http.MethodGet, "/api/v1/search/remote?q=test"},
-		{http.MethodGet, "/api/v1/search/local?q=test"},
-		{http.MethodGet, "/api/v1/download-url?file_id=1"},
+		{http.MethodPost, "/npan.v1.SearchService/RemoteSearch"},
 		{http.MethodPost, "/npan.v1.SearchService/LocalSearch"},
+		{http.MethodPost, "/npan.v1.SearchService/DownloadURL"},
 	}
 
 	for _, ep := range endpoints {
@@ -67,7 +64,7 @@ func TestRoutes_APIEndpoints_RequireAuth(t *testing.T) {
 func TestRoutes_AdminEndpoints_RequireAuth(t *testing.T) {
 	t.Parallel()
 
-	e := NewServer(&Handlers{}, testAdminKey, testDistFS(), nil)
+	e := NewServer(newTestHandlers(t), testAdminKey, testDistFS(), nil)
 	endpoints := []struct {
 		method string
 		path   string
@@ -95,18 +92,17 @@ func TestRoutes_AdminEndpoints_RequireAuth(t *testing.T) {
 func TestRoutes_APIEndpoints_WithKey_Pass(t *testing.T) {
 	t.Parallel()
 
-	e := NewServer(&Handlers{}, testAdminKey, testDistFS(), nil)
+	e := NewServer(newTestHandlers(t), testAdminKey, testDistFS(), nil)
 	endpoints := []struct {
 		method string
 		path   string
 	}{
-		{http.MethodPost, "/api/v1/token"},
 		{http.MethodPost, "/npan.v1.AuthService/CreateToken"},
-		{http.MethodGet, "/api/v1/search/remote?q=test"},
-		{http.MethodGet, "/api/v1/search/local?q=test"},
-		{http.MethodGet, "/api/v1/download-url?file_id=1"},
+		{http.MethodPost, "/npan.v1.SearchService/RemoteSearch"},
 		{http.MethodPost, "/npan.v1.SearchService/LocalSearch"},
+		{http.MethodPost, "/npan.v1.SearchService/DownloadURL"},
 		{http.MethodPost, "/npan.v1.AppService/AppSearch"},
+		{http.MethodPost, "/npan.v1.AppService/AppDownloadURL"},
 		{http.MethodPost, "/npan.v1.HealthService/Health"},
 		{http.MethodPost, "/npan.v1.AdminService/GetSyncProgress"},
 		{http.MethodPost, "/npan.v1.AdminService/GetIndexStats"},
