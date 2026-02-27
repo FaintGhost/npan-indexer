@@ -51,7 +51,6 @@ function isConnectSearchResponse(
 export class SearchPage {
   readonly page: Page
   readonly searchHeader: Locator
-  readonly searchCard: Locator
   readonly searchInput: Locator
   readonly searchButton: Locator
   readonly clearButton: Locator
@@ -64,7 +63,6 @@ export class SearchPage {
   constructor(page: Page) {
     this.page = page
     this.searchHeader = page.locator('header.search-stage')
-    this.searchCard = page.locator('.search-card').first()
     this.searchInput = page.getByRole('searchbox')
     this.searchButton = page.getByRole('button', { name: '搜索', exact: true })
     this.clearButton = page.getByRole('button', { name: '清空搜索' })
@@ -122,13 +120,5 @@ export class SearchPage {
 
   async scrollToLoadMore(): Promise<void> {
     await this.sentinel.scrollIntoViewIfNeeded()
-  }
-
-  async getSearchCardX(): Promise<number> {
-    const box = await this.searchCard.boundingBox()
-    if (!box) {
-      throw new Error('Search card is not visible')
-    }
-    return box.x
   }
 }

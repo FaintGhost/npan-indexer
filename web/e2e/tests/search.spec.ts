@@ -169,50 +169,6 @@ test.describe('搜索流程', () => {
     expect(resultBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1)
   })
 
-  test('docked 模式搜索内容变动时搜索框不应发生水平偏移', async ({ page }) => {
-    await page.route('**/npan.v1.AppService/AppSearch**', async (route) => {
-      const payload: unknown = route.request().postDataJSON()
-      if (!isRecord(payload)) {
-        await route.continue()
-        return
-      }
-
-      const query = getStringField(payload, 'query')
-      if (query === 'shift-check-loading') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            result: {
-              items: [],
-              total: 0,
-            },
-          }),
-        })
-        return
-      }
-
-      await route.continue()
-    })
-
-    await searchPage.search('test-file')
-    await searchPage.waitForResults()
-    await expect(searchPage.dockedMode).toBeVisible()
-
-    const baseX = await searchPage.getSearchCardX()
-
-    await searchPage.searchImmediate('shift-check-loading')
-    await expect(searchPage.page.getByRole('heading', { name: '未找到相关文件' })).toBeVisible()
-    const emptyX = await searchPage.getSearchCardX()
-
-    await searchPage.searchImmediate('test-file')
-    await searchPage.waitForResults()
-    const resultsX = await searchPage.getSearchCardX()
-
-    expect(Math.abs(emptyX - baseX)).toBeLessThanOrEqual(1)
-    expect(Math.abs(resultsX - baseX)).toBeLessThanOrEqual(1)
-  })
-
   // Test 10: 扩展名筛选与 URL 参数同步
   test('扩展名筛选与 URL 参数同步', async ({ page }) => {
     await searchPage.search('test-file')

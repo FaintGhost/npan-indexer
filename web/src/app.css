@@ -8,10 +8,6 @@
   --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-html {
-  scrollbar-gutter: stable both-edges;
-}
-
 body {
   font-family: var(--font-body);
   background:
