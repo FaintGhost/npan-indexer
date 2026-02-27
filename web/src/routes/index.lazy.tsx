@@ -22,6 +22,8 @@ import {
 
 const DEBOUNCE_MS = 280
 const PAGE_SIZE = 30n
+const FOREGROUND_REFETCH_MIN_INTERVAL_MS = 1500
+const STALLED_LOADING_MS = 15000
 const FILTER_OPTIONS: Array<{ value: SearchFilter; label: string }> = [
   { value: 'all', label: '全部' },
   { value: 'doc', label: '文档' },
@@ -90,6 +92,8 @@ export function SearchPage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadingSinceRef = useRef<number | null>(null)
+  const lastForegroundRefetchAtRef = useRef(0)
 
   const [query, setQuery] = useState('')
   const [activeQuery, setActiveQuery] = useState('')
@@ -110,6 +114,7 @@ export function SearchPage() {
     {
       enabled: activeQuery.trim().length > 0,
       retry: false,
+      refetchOnReconnect: true,
       pageParamKey: 'page',
       getNextPageParam: (lastPage, allPages) => {
         const result = lastPage.result
@@ -237,11 +242,41 @@ export function SearchPage() {
     void searchQuery.fetchNextPage()
   }, [activeQuery, hasMore, searchQuery])
 
+  const maybeRefetchOnForeground = useCallback(() => {
+    if (!activeQuery.trim()) {
+      return
+    }
+
+    const now = Date.now()
+    if (now - lastForegroundRefetchAtRef.current < FOREGROUND_REFETCH_MIN_INTERVAL_MS) {
+      return
+    }
+
+    const loadingSince = loadingSinceRef.current
+    const stalledLoading = loadingSince !== null && now - loadingSince >= STALLED_LOADING_MS
+    if ((searchQuery.isPending || searchQuery.isFetching || searchQuery.isFetchingNextPage) && !stalledLoading) {
+      return
+    }
+
+    lastForegroundRefetchAtRef.current = now
+    void searchQuery.refetch()
+  }, [activeQuery, searchQuery])
+
   useEffect(() => {
     return () => {
       clearDebounce()
     }
   }, [clearDebounce])
+
+  useEffect(() => {
+    if (loading) {
+      if (loadingSinceRef.current === null) {
+        loadingSinceRef.current = Date.now()
+      }
+      return
+    }
+    loadingSinceRef.current = null
+  }, [loading])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -253,6 +288,27 @@ export function SearchPage() {
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return
+    }
+
+    const onForeground = () => {
+      if (document.visibilityState === 'hidden') {
+        return
+      }
+      maybeRefetchOnForeground()
+    }
+
+    document.addEventListener('visibilitychange', onForeground)
+    window.addEventListener('focus', onForeground)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onForeground)
+      window.removeEventListener('focus', onForeground)
+    }
+  }, [maybeRefetchOnForeground])
 
   // Infinite scroll observer
   useEffect(() => {

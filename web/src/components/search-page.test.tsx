@@ -131,6 +131,34 @@ describe('SearchPage', () => {
     })
   })
 
+  it('refetches on foreground and avoids duplicate foreground refetch bursts', async () => {
+    setTestURL('/')
+    let requestCount = 0
+    server.use(
+      http.post('/npan.v1.AppService/AppSearch', () => {
+        requestCount += 1
+        const response = makeSearchResponse(2, 2)
+        return HttpResponse.json(toConnectSearchResponse(response.items, response.total))
+      }),
+    )
+
+    render(<SearchPage />, { wrapper })
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('searchbox'), 'test{Enter}')
+
+    await waitFor(() => {
+      expect(screen.getByText('file1.pdf')).toBeInTheDocument()
+      expect(requestCount).toBe(1)
+    })
+
+    document.dispatchEvent(new Event('visibilitychange'))
+    window.dispatchEvent(new Event('focus'))
+
+    await waitFor(() => {
+      expect(requestCount).toBe(2)
+    })
+  })
+
   it('shows no results state', async () => {
     setTestURL('/')
     server.use(
