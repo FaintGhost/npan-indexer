@@ -143,6 +143,32 @@ test.describe('搜索流程', () => {
     await expect(searchPage.heroMode).toBeVisible()
   })
 
+  test('docked 吸顶头部使用不透明背景并遮挡结果内容', async () => {
+    await searchPage.search('test-file')
+    await searchPage.waitForResults()
+    await expect(searchPage.dockedMode).toBeVisible()
+    await expect(searchPage.searchHeader).toHaveClass(/search-stage-opaque/)
+
+    const backgroundColor = await searchPage.searchHeader.evaluate((element) =>
+      window.getComputedStyle(element).backgroundColor,
+    )
+    expect(backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
+
+    const topResult = searchPage.resultArticles.first()
+    const [headerBox, resultBox] = await Promise.all([
+      searchPage.searchHeader.boundingBox(),
+      topResult.boundingBox(),
+    ])
+
+    expect(headerBox).not.toBeNull()
+    expect(resultBox).not.toBeNull()
+    if (!headerBox || !resultBox) {
+      return
+    }
+
+    expect(resultBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1)
+  })
+
   // Test 10: 扩展名筛选与 URL 参数同步
   test('扩展名筛选与 URL 参数同步', async ({ page }) => {
     await searchPage.search('test-file')

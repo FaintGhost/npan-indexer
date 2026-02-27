@@ -26,7 +26,9 @@ function isFullSyncMode(value: unknown): boolean {
   );
 }
 
-function buildMockFullProgress(status: "SYNC_STATUS_IDLE" | "SYNC_STATUS_INTERRUPTED") {
+function buildMockFullProgress(
+  status: "SYNC_STATUS_IDLE" | "SYNC_STATUS_INTERRUPTED" | "SYNC_STATUS_RUNNING",
+) {
   const rootProgressItem = {
     rootFolderId: "1001",
     status: "done",
@@ -490,6 +492,30 @@ test.describe("Admin 同步控制", () => {
   });
 
   test("启动同步后 UI 自动显示 running 状态", async ({ authenticatedPage }) => {
+    await authenticatedPage.route("**/npan.v1.AdminService/WatchSyncProgress", async (route) => {
+      await route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        body: JSON.stringify({ code: "unimplemented" }),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/GetSyncProgress", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(buildMockFullProgress("SYNC_STATUS_RUNNING")),
+      });
+    });
+
+    await authenticatedPage.route("**/npan.v1.AdminService/StartSync", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "ok" }),
+      });
+    });
+
     // Monitor POST request and response
     const syncResponse = authenticatedPage.waitForResponse(
       (r) =>

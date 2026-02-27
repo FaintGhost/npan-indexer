@@ -50,6 +50,7 @@ function isConnectSearchResponse(
 
 export class SearchPage {
   readonly page: Page
+  readonly searchHeader: Locator
   readonly searchInput: Locator
   readonly searchButton: Locator
   readonly clearButton: Locator
@@ -61,6 +62,7 @@ export class SearchPage {
 
   constructor(page: Page) {
     this.page = page
+    this.searchHeader = page.locator('header.search-stage')
     this.searchInput = page.getByRole('searchbox')
     this.searchButton = page.getByRole('button', { name: '搜索', exact: true })
     this.clearButton = page.getByRole('button', { name: '清空搜索' })
@@ -72,7 +74,21 @@ export class SearchPage {
   }
 
   async goto(): Promise<void> {
-    await this.page.goto('/')
+    let lastError: unknown
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await this.page.goto('/', { waitUntil: 'domcontentloaded', timeout: 12_000 })
+        await this.searchInput.waitFor({ state: 'visible', timeout: 5_000 })
+        return
+      } catch (error) {
+        lastError = error
+        if (attempt === 1) {
+          break
+        }
+        await this.page.waitForTimeout(400)
+      }
+    }
+    throw lastError
   }
 
   waitForSearchResponse(match?: SearchRequestMatch, timeout = 5_000): Promise<Response> {

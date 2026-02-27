@@ -297,7 +297,7 @@ export function SearchPage() {
   return (
     <div className={isDocked ? 'mode-docked' : 'mode-hero'}>
       {/* Search header */}
-      <header className="search-stage">
+      <header className={`search-stage${isDocked ? ' search-stage-opaque' : ''}`}>
         <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8">
           <div className="search-card w-full rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-6">
             {/* Title row */}

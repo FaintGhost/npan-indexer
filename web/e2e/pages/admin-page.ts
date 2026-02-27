@@ -43,7 +43,29 @@ export class AdminPage {
   }
 
   async goto(): Promise<void> {
-    await this.page.goto("/admin/");
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await this.page.goto("/admin/", {
+          waitUntil: "domcontentloaded",
+          timeout: 12_000,
+        });
+        await Promise.any([
+          this.page
+            .getByRole("heading", { name: "同步管理" })
+            .waitFor({ state: "visible", timeout: 5_000 }),
+          this.apiKeyInput.waitFor({ state: "visible", timeout: 5_000 }),
+        ]);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt === 1) {
+          break;
+        }
+        await this.page.waitForTimeout(400);
+      }
+    }
+    throw lastError;
   }
 
   async submitApiKey(key: string): Promise<void> {

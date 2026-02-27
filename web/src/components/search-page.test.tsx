@@ -5,6 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { server } from '../tests/mocks/server'
 import { createTestProvider } from '../tests/test-providers'
 import { SearchPage } from '../routes/index.lazy'
+import '../app.css'
 
 // Helper to create search response
 function makeSearchResponse(count: number, total: number) {
@@ -80,6 +81,33 @@ describe('SearchPage', () => {
     setTestURL('/')
     render(<SearchPage />, { wrapper })
     expect(screen.getByText('等待探索')).toBeInTheDocument()
+  })
+
+  it('keeps hero mode at viewport height without vertical scrolling', () => {
+    setTestURL('/')
+    const { container } = render(<SearchPage />, { wrapper })
+    const root = container.firstElementChild as HTMLElement | null
+
+    expect(root).not.toBeNull()
+    expect(root).toHaveClass('mode-hero')
+  })
+
+  it('uses an opaque background for sticky header in docked mode', async () => {
+    setTestURL('/')
+    const { container } = render(<SearchPage />, { wrapper })
+    const user = userEvent.setup()
+
+    await user.type(screen.getByRole('searchbox'), 'test')
+
+    await waitFor(() => {
+      const root = container.firstElementChild as HTMLElement | null
+      expect(root).not.toBeNull()
+      expect(root).toHaveClass('mode-docked')
+    })
+
+    const header = container.querySelector('.search-stage') as HTMLElement | null
+    expect(header).not.toBeNull()
+    expect(header).toHaveClass('search-stage-opaque')
   })
 
   it('shows results after search', async () => {
