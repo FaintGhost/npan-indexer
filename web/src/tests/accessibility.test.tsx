@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { SearchPage } from '../routes/index.lazy'
 import { SkeletonCard } from '../components/skeleton-card'
 import { DownloadButton } from '../components/download-button'
@@ -54,5 +55,51 @@ describe('Accessibility', () => {
     render(<SearchPage />, { wrapper })
     // Initial state should render without errors
     expect(screen.getByText('等待探索')).toBeInTheDocument()
+  })
+
+  it('filter controls have accessible radio semantics', async () => {
+    server.use(
+      http.post('/npan.v1.AppService/AppSearch', () => {
+        return HttpResponse.json({
+          result: {
+            items: [
+              {
+                docId: 'f1',
+                sourceId: '1',
+                type: 'ITEM_TYPE_FILE',
+                name: 'a.pdf',
+                pathText: '/a.pdf',
+                parentId: '0',
+                modifiedAt: '1700000000',
+                createdAt: '1700000000',
+                size: '1',
+                sha1: 'x',
+                inTrash: false,
+                isDeleted: false,
+                highlightedName: '',
+              },
+            ],
+            total: '1',
+          },
+        })
+      }),
+    )
+
+    render(<SearchPage />, { wrapper })
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('searchbox'), 'test{Enter}')
+
+    const group = await screen.findByRole('radiogroup', { name: '结果筛选' })
+    expect(group).toBeInTheDocument()
+
+    const all = screen.getByRole('radio', { name: '全部' })
+    const image = screen.getByRole('radio', { name: '图片' })
+
+    expect(all).toHaveAttribute('aria-checked', 'true')
+    expect(image).toHaveAttribute('aria-checked', 'false')
+
+    await user.click(image)
+    expect(image).toHaveAttribute('aria-checked', 'true')
+    expect(all).toHaveAttribute('aria-checked', 'false')
   })
 })

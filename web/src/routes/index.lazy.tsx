@@ -13,9 +13,42 @@ import { InitialState, NoResultsState, ErrorState } from '@/components/empty-sta
 import { SkeletonCard } from '@/components/skeleton-card'
 import { fromProtoAppSearchResponse } from '@/lib/connect-app-adapter'
 import type { IndexDocument } from '@/lib/schemas'
+import {
+  DEFAULT_FILTER,
+  type SearchFilter,
+  matchesSearchFilter,
+  normalizeSearchFilter,
+} from '@/lib/file-category'
 
 const DEBOUNCE_MS = 280
 const PAGE_SIZE = 30n
+const FILTER_OPTIONS: Array<{ value: SearchFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'doc', label: '文档' },
+  { value: 'image', label: '图片' },
+  { value: 'video', label: '视频' },
+  { value: 'archive', label: '压缩包' },
+  { value: 'other', label: '其他' },
+]
+
+function readFilterFromURL(): SearchFilter {
+  if (typeof window === 'undefined') {
+    return DEFAULT_FILTER
+  }
+  const params = new URLSearchParams(window.location.search)
+  return normalizeSearchFilter(params.get('ext'))
+}
+
+function replaceURLParams(updater: (params: URLSearchParams) => void): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const params = new URLSearchParams(window.location.search)
+  updater(params)
+  const search = params.toString()
+  const nextURL = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`
+  window.history.replaceState({}, '', nextURL)
+}
 
 export const Route = createLazyFileRoute('/')({
   component: SearchPage,
@@ -60,6 +93,7 @@ export function SearchPage() {
 
   const [query, setQuery] = useState('')
   const [activeQuery, setActiveQuery] = useState('')
+  const [activeFilter, setActiveFilter] = useState<SearchFilter>(() => readFilterFromURL())
 
   const download = useDownload()
   const { isDocked, setDocked } = useViewMode()
@@ -102,6 +136,10 @@ export function SearchPage() {
     [searchQuery.data?.pages],
   )
   const items = searchState.items
+  const filteredItems = useMemo(
+    () => items.filter((item) => matchesSearchFilter(item.name, activeFilter)),
+    [activeFilter, items],
+  )
   const total = searchState.total
   const error = searchQuery.error ? toErrorMessage(searchQuery.error) : null
   const searchEnabled = activeQuery.trim().length > 0
@@ -154,8 +192,43 @@ export function SearchPage() {
     setQuery('')
     setActiveQuery('')
     setDocked(false)
+    setActiveFilter(DEFAULT_FILTER)
+    replaceURLParams((params) => {
+      params.delete('q')
+      params.delete('ext')
+    })
     inputRef.current?.focus()
   }, [clearDebounce, setDocked])
+
+  const handleFilterChange = useCallback((filter: SearchFilter) => {
+    setActiveFilter(filter)
+    replaceURLParams((params) => {
+      if (filter === DEFAULT_FILTER) {
+        params.delete('ext')
+      } else {
+        params.set('ext', filter)
+      }
+    })
+  }, [])
+
+  const handleFilterKeyDown = useCallback((event: React.KeyboardEvent, current: SearchFilter) => {
+    if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) {
+      return
+    }
+    event.preventDefault()
+    const currentIndex = FILTER_OPTIONS.findIndex((option) => option.value === current)
+    if (currentIndex < 0) {
+      return
+    }
+    const isForward = event.key === 'ArrowRight' || event.key === 'ArrowDown'
+    const nextIndex = isForward
+      ? (currentIndex + 1) % FILTER_OPTIONS.length
+      : (currentIndex - 1 + FILTER_OPTIONS.length) % FILTER_OPTIONS.length
+    const nextFilter = FILTER_OPTIONS[nextIndex]?.value
+    if (nextFilter) {
+      handleFilterChange(nextFilter)
+    }
+  }, [handleFilterChange])
 
   const loadMore = useCallback(() => {
     if (!hasMore || searchQuery.isFetchingNextPage || !activeQuery.trim()) {
@@ -169,6 +242,17 @@ export function SearchPage() {
       clearDebounce()
     }
   }, [clearDebounce])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const onPopState = () => {
+      setActiveFilter(readFilterFromURL())
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   // Infinite scroll observer
   useEffect(() => {
@@ -188,21 +272,21 @@ export function SearchPage() {
     return () => observer.disconnect()
   }, [loadMore])
 
-  const showInitial = !query && items.length === 0 && !loading
-  const showNoResults = !!activeQuery && !loading && items.length === 0 && !error
+  const showInitial = !query && filteredItems.length === 0 && !loading
+  const showNoResults = !!activeQuery && !loading && filteredItems.length === 0 && !error
   const showError = !!error
-  const showResults = items.length > 0
-  const showSkeleton = loading && items.length === 0
+  const showResults = filteredItems.length > 0
+  const showSkeleton = loading && filteredItems.length === 0
 
   // Status text
   let statusText = '随时准备为您检索文件'
   let statusError = false
-  if (loading && items.length === 0) {
+  if (loading && filteredItems.length === 0) {
     statusText = '检索中...'
-  } else if (searchQuery.isFetchingNextPage && items.length > 0) {
+  } else if (searchQuery.isFetchingNextPage && filteredItems.length > 0) {
     statusText = '正在加载更多...'
   } else if (showResults) {
-    statusText = `已加载 ${items.length} / ${total} 个文件`
+    statusText = `已加载 ${filteredItems.length} / ${total} 个文件`
   } else if (showNoResults) {
     statusText = '未找到相关文件'
   } else if (showError) {
@@ -253,6 +337,30 @@ export function SearchPage() {
             <p className={`mt-3 min-h-5 text-xs transition-colors duration-300 ${statusError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>
               {statusText}
             </p>
+
+            <div className="mt-4" role="radiogroup" aria-label="结果筛选">
+              <div className="flex flex-wrap gap-2">
+                {FILTER_OPTIONS.map((option) => {
+                  const checked = activeFilter === option.value
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={checked}
+                      tabIndex={checked ? 0 : -1}
+                      onClick={() => handleFilterChange(option.value)}
+                      onKeyDown={(event) => handleFilterKeyDown(event, option.value)}
+                      className={checked
+                        ? 'rounded-full border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700'
+                        : 'rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300'}
+                    >
+                      {option.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -264,7 +372,7 @@ export function SearchPage() {
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm text-slate-500">结果列表</p>
             <p className="text-sm font-medium text-slate-600">
-              {items.length} / {total}
+              {filteredItems.length} / {total}
             </p>
           </div>
 
@@ -282,7 +390,7 @@ export function SearchPage() {
               </>
             )}
 
-            {showResults && items.map((doc) => (
+            {showResults && filteredItems.map((doc) => (
               <FileCard
                 key={doc.source_id}
                 doc={doc}
@@ -291,7 +399,7 @@ export function SearchPage() {
               />
             ))}
 
-            {searchQuery.isFetchingNextPage && items.length > 0 && (
+            {searchQuery.isFetchingNextPage && filteredItems.length > 0 && (
               <>
                 {Array.from({ length: 3 }, (_, i) => (
                   <SkeletonCard key={`more-${i}`} delay={i * 120} />
