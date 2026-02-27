@@ -142,6 +142,25 @@ test.describe('搜索流程', () => {
     await searchPage.clearButton.click()
     await expect(searchPage.heroMode).toBeVisible()
   })
+
+  // Test 10: 扩展名筛选与 URL 参数同步
+  test('扩展名筛选与 URL 参数同步', async ({ page }) => {
+    await searchPage.search('test-file')
+    await searchPage.waitForResults()
+    await expect(searchPage.resultArticles).toHaveCount(30, { timeout: 10_000 })
+
+    const imageFilter = page.getByRole('radio', { name: '图片' })
+    const allFilter = page.getByRole('radio', { name: '全部' })
+
+    await imageFilter.click()
+    await expect(page).toHaveURL(/ext=image/)
+    await expect(page.getByRole('heading', { name: '未找到相关文件' })).toBeVisible()
+    await expect(searchPage.resultArticles).toHaveCount(0)
+
+    await allFilter.click()
+    await expect(page).not.toHaveURL(/ext=/)
+    await expect(searchPage.resultArticles).toHaveCount(35, { timeout: 10_000 })
+  })
 })
 
 test.describe('下载流程', () => {
