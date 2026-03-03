@@ -13,7 +13,7 @@ export function getFileIcon(filename: string): FileIconInfo {
     return { category: 'archive', bg: 'bg-amber-100', text: 'text-amber-600' }
   }
   if (['apk', 'ipa', 'exe', 'dmg'].includes(ext) || nameLower.includes('安装包')) {
-    return { category: 'installer', bg: 'bg-emerald-100', text: 'text-emerald-600' }
+    return { category: 'installer', bg: 'bg-sky-100', text: 'text-sky-600' }
   }
   if (['bin', 'iso', 'img', 'rom'].includes(ext) || nameLower.includes('固件')) {
     return { category: 'firmware', bg: 'bg-purple-100', text: 'text-purple-600' }

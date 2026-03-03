@@ -1,3 +1,94 @@
+# 任务计划（2026-03-04）
+
+## 新任务：Web 前端浅蓝主题收口
+
+## 目标
+
+- 在不改动业务逻辑的前提下，将搜索页与 Admin 页从偏青绿色主题收口为“浅蓝、不偏深”的统一视觉。
+
+## 计划清单
+
+- [x] 1. 审计当前 accent 颜色落点（全局变量、搜索页、Admin 页、状态组件）
+- [x] 2. 将全局背景、按钮、玻璃面板和滚动条统一到浅蓝主题变量
+- [x] 3. 替换组件内绿色强调色为蓝色系，保留红色错误态与琥珀警告态
+- [x] 4. 执行 `cd web && bun run typecheck && bun run test` 验证前端回归
+
+## Review（Web 前端浅蓝主题收口）
+
+- 改动文件：
+  - `web/src/app.css`
+  - `web/src/routes/index.lazy.tsx`
+  - `web/src/components/search-input.tsx`
+  - `web/src/components/empty-state.tsx`
+  - `web/src/components/download-button.tsx`
+  - `web/src/components/admin-sync-page.tsx`
+  - `web/src/components/sync-progress-display.tsx`
+  - `web/src/lib/file-icon.ts`
+  - `web/src/lib/file-icon.test.ts`
+- 结果：
+  - 主视觉从青绿色切换为浅蓝色系，按钮和重点状态更轻、更通透。
+  - 错误态继续保留红色，避免状态语义被弱化。
+  - `cd web && bun run typecheck` 通过。
+  - `cd web && bun run test` 通过（20 files / 180 tests）。
+
+## 修复：主页 Hero 初始态滚动条回归
+
+- 问题：
+  - 首页初始（`mode-hero`）出现滚动条，不符合“Google 搜索式首屏”设计目标。
+- 修复：
+  - 在 `mode-hero` 下让结果区塌陷并脱离可滚动高度贡献：
+    - `margin-top: 0`
+    - `max-height: 0`
+    - `overflow: hidden`
+  - 同时移除 `mode-hero main` 的底部留白（`padding-bottom: 0`）。
+- 文件：
+  - `web/src/app.css`
+- 验证：
+  - `cd web && bun run test` 通过（20 files / 180 tests）。
+
+# 任务计划（2026-03-03）
+
+## 新任务：Web 前端视觉重设计（existing project）
+
+## 目标
+
+- 在不改动业务逻辑与 API 契约前提下，提升搜索页与管理页的视觉质感、层次和交互反馈，避免通用模板化观感。
+
+## 计划清单
+
+- [x] 1. 完成现有 UI 审计（字体、配色、布局、组件、状态反馈）并锁定低风险改造范围
+- [x] 2. 升级全局视觉基础（字体层级、背景肌理、焦点态、过渡节奏、元信息）
+- [x] 3. 改造搜索页主舞台（Hero/Header、筛选器、结果卡片、空/错/加载态）并保持现有可访问语义
+- [x] 4. 改造 Admin 同步页（控制区、状态提示、统计区、根目录详情）并保留现有交互行为
+- [x] 5. 执行前端验证（`bun run test` 全量 Vitest）并记录结果
+- [x] 6. 回填 Review：列出改动文件、设计收益、风险与后续建议
+
+## Review（Web 前端视觉重设计）
+
+- 改动文件：
+  - `web/src/app.css`
+  - `web/index.html`
+  - `web/src/routes/index.lazy.tsx`
+  - `web/src/lib/sync-schemas.ts`
+  - `web/scripts/generate-route-tree.mjs`
+  - `web/package.json`
+  - `web/src/components/search-input.tsx`
+  - `web/src/components/file-card.tsx`
+  - `web/src/components/empty-state.tsx`
+  - `web/src/components/skeleton-card.tsx`
+  - `web/src/components/download-button.tsx`
+  - `web/src/components/admin-sync-page.tsx`
+  - `web/src/components/sync-progress-display.tsx`
+  - `web/src/components/sync-progress-display.test.tsx`
+- 设计收益：
+  - 搜索页与 Admin 页统一为同一视觉系统（背景肌理、玻璃卡片、按钮层级、焦点态）。
+  - 提升标题与正文层级，减少“默认 Tailwind 卡片堆叠”观感。
+  - 保持业务文案与可访问语义稳定，避免破坏现有交互与自动化用例。
+- 验证结果：
+  - `cd web && bun run test` 通过（20 files / 180 tests）。
+  - `cd web && bun run typecheck` 通过（已串联 routegen + tsc）。
+  - 命令中存在 `starship session log permission denied` 环境告警，但不影响 Vitest 执行与结果。
+
 # 任务计划（2026-02-24）
 
 ## 目标

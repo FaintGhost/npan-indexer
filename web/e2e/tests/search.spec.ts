@@ -103,14 +103,14 @@ test.describe('搜索流程', () => {
 
   // Test 7: 无限滚动加载更多
   test('无限滚动加载更多', async () => {
-    // Search for "test-file" should match 35 bulk docs
-    await searchPage.search('test-file')
+    // Search for "test" should match 35 bulk docs
+    await searchPage.search('test')
     await searchPage.waitForResults()
     // First page should load 30 results
     await expect(searchPage.resultArticles).toHaveCount(30, { timeout: 10_000 })
     // Scroll to sentinel to trigger infinite scroll
     const secondPageResponse = searchPage.waitForSearchResponse({
-      query: 'test-file',
+      query: 'test',
       page: 2,
     })
     await searchPage.scrollToLoadMore()
@@ -144,7 +144,7 @@ test.describe('搜索流程', () => {
   })
 
   test('docked 吸顶头部使用不透明背景并遮挡结果内容', async () => {
-    await searchPage.search('test-file')
+    await searchPage.search('test')
     await searchPage.waitForResults()
     await expect(searchPage.dockedMode).toBeVisible()
     await expect(searchPage.searchHeader).toHaveClass(/search-stage-opaque/)
@@ -171,7 +171,7 @@ test.describe('搜索流程', () => {
 
   // Test 10: 扩展名筛选与 URL 参数同步
   test('扩展名筛选与 URL 参数同步', async ({ page }) => {
-    await searchPage.search('test-file')
+    await searchPage.search('test')
     await searchPage.waitForResults()
     await expect(searchPage.resultArticles).toHaveCount(30, { timeout: 10_000 })
 
@@ -229,7 +229,7 @@ test.describe('下载流程', () => {
 
     await searchPage.goto()
     // Search and get results first
-    await searchPage.search('test-file')
+    await searchPage.search('test')
     await searchPage.waitForResults()
   })
 
@@ -393,7 +393,7 @@ test.describe('边界场景', () => {
     await searchPage.searchButton.click()
 
     // Should show error state
-    await expect(page.locator('.border-rose-200')).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('heading', { name: '加载出错了' })).toBeVisible({ timeout: 5_000 })
   })
 
   test('搜索框纯空格不触发搜索', async ({ page }) => {

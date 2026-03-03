@@ -13,7 +13,7 @@ export function DownloadButton({ status, onClick }: DownloadButtonProps) {
       type="button"
       onClick={onClick}
       disabled={isDisabled}
-      className="relative flex h-10 w-full sm:w-auto min-w-[96px] shrink-0 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:opacity-90"
+      className="relative flex h-10 min-w-[96px] w-full shrink-0 items-center justify-center rounded-xl border border-blue-900/20 bg-blue-600 px-4 text-sm font-medium text-white shadow-[0_12px_22px_-16px_rgba(37,99,235,0.62)] transition-all hover:-translate-y-0.5 hover:bg-blue-500 active:translate-y-0.5 disabled:cursor-not-allowed disabled:bg-blue-400 disabled:opacity-90 sm:w-auto"
     >
       {status === 'idle' && (
         <span className="flex items-center gap-1.5">
@@ -34,7 +34,7 @@ export function DownloadButton({ status, onClick }: DownloadButtonProps) {
         </span>
       )}
       {status === 'success' && (
-        <span className="flex items-center gap-1.5 text-emerald-400">
+        <span className="flex items-center gap-1.5 text-blue-100">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
@@ -42,7 +42,7 @@ export function DownloadButton({ status, onClick }: DownloadButtonProps) {
         </span>
       )}
       {status === 'error' && (
-        <span className="flex items-center gap-1.5 text-rose-400">重试</span>
+        <span className="flex items-center gap-1.5 text-rose-300">重试</span>
       )}
     </button>
   )

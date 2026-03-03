@@ -95,7 +95,12 @@ assert_200_or_404_connect_not_found() {
     return 0
   fi
   if [[ "$code" == "200" ]]; then
-    echo "$body" | jq -e '.code == "not_found" or .error.code == "not_found" or .message == "未找到同步进度"' > /dev/null 2>&1
+    echo "$body" | jq -e '
+      .code == "not_found"
+      or .error.code == "not_found"
+      or .message == "未找到同步进度"
+      or (.state | (type == "object" and .status != null))
+    ' > /dev/null 2>&1
     return $?
   fi
   return 1

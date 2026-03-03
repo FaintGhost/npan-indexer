@@ -68,7 +68,7 @@ export class SearchPage {
     this.clearButton = page.getByRole('button', { name: '清空搜索' })
     this.resultArticles = page.locator('article')
     this.sentinel = page.locator('.h-2').last()
-    this.statusText = page.locator('.search-card p').last()
+    this.statusText = page.locator('header.search-stage .mt-3 p.text-xs').first()
     this.heroMode = page.locator('.mode-hero')
     this.dockedMode = page.locator('.mode-docked')
   }

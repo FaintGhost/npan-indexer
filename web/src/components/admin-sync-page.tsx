@@ -625,19 +625,26 @@ export function AdminSyncPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">同步管理</h1>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.16em] text-slate-500">
+            ADMIN CONSOLE
+          </p>
+          <h1 className="mt-1 font-display text-3xl font-semibold tracking-[-0.02em] text-slate-900">
+            同步管理
+          </h1>
+        </div>
         <a
           href="/"
-          className="text-sm text-slate-500 transition-colors hover:text-slate-700"
+          className="action-btn-secondary inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700"
         >
           ← 返回搜索
         </a>
       </div>
 
-      <div className="mb-6 space-y-3">
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      <div className="frost-panel mb-6 space-y-4 rounded-3xl p-5 sm:p-6">
+        <div className="flex gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-1">
           {SYNC_MODES.map((m) => (
             <button
               key={m.value}
@@ -646,9 +653,9 @@ export function AdminSyncPage() {
               disabled={
                 !canSwitchMode || (m.value === 'incremental' && indexState !== 'ready')
               }
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 mode === m.value
-                  ? 'bg-white text-slate-900 shadow-sm'
+                  ? 'bg-white text-slate-900 shadow-sm shadow-slate-300/60'
                   : 'text-slate-500 hover:text-slate-700'
               } disabled:cursor-not-allowed disabled:opacity-60`}
               title={m.description}
@@ -658,8 +665,8 @@ export function AdminSyncPage() {
           ))}
         </div>
 
-        <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-4">
-          <p className="block text-sm font-medium text-slate-700">
+        <div className="space-y-2 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_16px_24px_-24px_rgba(15,23,42,0.8)]">
+          <p className="block text-sm font-semibold text-slate-700">
             根目录详情
           </p>
           <div className="flex gap-2">
@@ -667,7 +674,7 @@ export function AdminSyncPage() {
               type="button"
               onClick={handleInspectRoots}
               disabled={!canInspectRoots}
-              className="shrink-0 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="action-btn-secondary shrink-0 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {inspectLoading ? '拉取中...' : '刷新目录详情'}
             </button>
@@ -694,7 +701,7 @@ export function AdminSyncPage() {
             aria-checked={forceRebuild}
             onClick={() => setForceRebuild(!forceRebuild)}
             disabled={isRunning || loading}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 text-left shadow-[0_14px_20px_-24px_rgba(15,23,42,0.8)] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span
               className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
@@ -718,12 +725,12 @@ export function AdminSyncPage() {
           </button>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={handleStartSync}
             disabled={!canStartSync}
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="action-btn-primary inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading && (
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -743,7 +750,7 @@ export function AdminSyncPage() {
           )}
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="rounded-xl border border-slate-200/80 bg-slate-50/90 px-3 py-2">
           <p
             className={`text-xs ${
               indexState === 'ready' ? 'text-slate-600' : 'text-amber-700'
@@ -755,8 +762,8 @@ export function AdminSyncPage() {
       </div>
 
       {message && (
-        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-          <p className="text-sm text-emerald-700">{message}</p>
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/85 p-3">
+          <p className="text-sm text-blue-700">{message}</p>
         </div>
       )}
 
@@ -805,7 +812,7 @@ export function AdminSyncPage() {
       )}
 
       {!initialLoading && !progress && !loading && !error && (
-        <div className="py-12 text-center">
+        <div className="frost-panel rounded-2xl py-12 text-center">
           <p className="text-sm text-slate-400">暂无同步记录</p>
         </div>
       )}

@@ -172,11 +172,22 @@ export function SearchPage() {
 
   const handleChange = useCallback((value: string) => {
     setQuery(value)
-    if (value.trim()) {
-      setDocked(true)
+
+    if (!value.trim()) {
+      clearDebounce()
+      setActiveQuery('')
+      setDocked(false)
+      setActiveFilter(DEFAULT_FILTER)
+      replaceURLParams((params) => {
+        params.delete('q')
+        params.delete('ext')
+      })
+      return
     }
+
+    setDocked(true)
     queueDebouncedSearch(value)
-  }, [queueDebouncedSearch, setDocked])
+  }, [clearDebounce, queueDebouncedSearch, setDocked])
 
   const handleSubmit = useCallback(() => {
     if (!query.trim()) {
@@ -351,27 +362,27 @@ export function SearchPage() {
   }
 
   return (
-    <div className={isDocked ? 'mode-docked' : 'mode-hero'}>
-      {/* Search header */}
+    <div className={`${isDocked ? 'mode-docked' : 'mode-hero'} relative`}>
+      <a href="#search-results" className="skip-link">
+        跳到结果
+      </a>
       <header className={`search-stage${isDocked ? ' search-stage-opaque' : ''}`}>
-        <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8">
-          <div className="search-card w-full rounded-3xl border border-slate-200/90 bg-white p-4 sm:p-6">
-            {/* Title row */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="search-card frost-panel w-full rounded-[2rem] p-5 sm:p-7">
+            <div className="flex flex-col gap-4 border-b border-slate-200/70 pb-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h1 className="font-display text-4xl font-semibold leading-tight tracking-tight text-slate-900">
+                <h1 className="font-display text-4xl font-semibold leading-[0.95] tracking-[-0.03em] text-slate-900 sm:text-[3.3rem]">
                   Npan Search
                 </h1>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-2 max-w-[44ch] text-sm leading-6 text-slate-600">
                   像搜索引擎一样查找文件，命中后直接下载。
                 </p>
               </div>
-              <div className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+              <div className="inline-flex items-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800">
                 Powered by Meilisearch
               </div>
             </div>
 
-            {/* Search input + button */}
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
               <SearchInput
                 ref={inputRef}
@@ -383,19 +394,20 @@ export function SearchPage() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="h-12 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-md shadow-blue-200 transition hover:bg-blue-500 active:scale-[0.99]"
+                className="action-btn-primary h-12 px-6 text-sm font-semibold"
               >
                 搜索
               </button>
             </div>
 
-            {/* Status text */}
-            <p className={`mt-3 min-h-5 text-xs transition-colors duration-300 ${statusError ? 'font-medium text-rose-600' : 'text-slate-500'}`}>
-              {statusText}
-            </p>
+            <div className="mt-3 flex min-h-5 flex-wrap items-center justify-between gap-2">
+              <p className={`text-xs transition-colors duration-300 ${statusError ? 'font-medium text-rose-600' : 'text-slate-600'}`}>
+                {statusText}
+              </p>
+            </div>
 
             <div className="mt-4" role="radiogroup" aria-label="结果筛选">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2.5">
                 {FILTER_OPTIONS.map((option) => {
                   const checked = activeFilter === option.value
                   return (
@@ -408,8 +420,8 @@ export function SearchPage() {
                       onClick={() => handleFilterChange(option.value)}
                       onKeyDown={(event) => handleFilterKeyDown(event, option.value)}
                       className={checked
-                        ? 'rounded-full border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700'
-                        : 'rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300'}
+                        ? 'rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 shadow-sm'
+                        : 'rounded-xl border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300'}
                     >
                       {option.label}
                     </button>
@@ -421,18 +433,20 @@ export function SearchPage() {
         </div>
       </header>
 
-      {/* Results */}
-      <main className="mx-auto max-w-3xl px-4 pb-16 sm:px-6 lg:px-8">
-        <section className="results-wrap mt-2" aria-live="polite" aria-busy={loading}>
-          {/* Counter bar */}
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm text-slate-500">结果列表</p>
-            <p className="text-sm font-medium text-slate-600">
+      <main className="mx-auto w-full max-w-5xl px-4 pb-20 sm:px-6 lg:px-8">
+        <section
+          id="search-results"
+          className="results-wrap mt-3"
+          aria-live="polite"
+          aria-busy={loading}
+        >
+          <div className="frost-panel mb-4 flex items-center justify-between rounded-2xl px-4 py-3">
+            <p className="text-sm font-medium text-slate-700">结果列表</p>
+            <p className="font-mono text-sm font-semibold text-slate-700">
               {filteredItems.length} / {total}
             </p>
           </div>
 
-          {/* List */}
           <div className="thin-scrollbar space-y-3" style={{ viewTransitionName: 'results-list' }}>
             {showInitial && <InitialState />}
             {showNoResults && <NoResultsState />}
@@ -464,7 +478,6 @@ export function SearchPage() {
             )}
           </div>
 
-          {/* Infinite scroll sentinel */}
           <div ref={sentinelRef} className="h-2" />
         </section>
       </main>

@@ -19,7 +19,7 @@ export function SearchInput({ value, onChange, onSubmit, onClear, ref }: SearchI
   return (
     <div className="relative flex w-full items-center">
       {/* Search icon */}
-      <div className="pointer-events-none absolute left-4 text-slate-400">
+      <div className="pointer-events-none absolute left-4 text-slate-500">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="20"
@@ -45,7 +45,7 @@ export function SearchInput({ value, onChange, onSubmit, onClear, ref }: SearchI
         onKeyDown={handleKeyDown}
         placeholder="输入文件名关键词，例如：MX40、固件、安装包"
         autoComplete="off"
-        className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-12 pr-16 text-[15px] text-slate-800 outline-none ring-blue-100 transition focus:border-blue-300 focus:ring-4"
+        className="h-12 w-full rounded-xl border border-slate-300/80 bg-white/95 pl-12 pr-16 text-[15px] text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] outline-none ring-blue-100/80 transition focus:border-blue-300 focus:ring-4"
       />
 
       <div className="absolute right-3 flex items-center gap-2">
@@ -54,7 +54,7 @@ export function SearchInput({ value, onChange, onSubmit, onClear, ref }: SearchI
             type="button"
             onClick={onClear}
             aria-label="清空搜索"
-            className="rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none"
+            className="rounded-full border border-transparent p-1.5 text-slate-400 transition hover:border-slate-200 hover:bg-white hover:text-slate-700 focus:outline-none"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -72,7 +72,7 @@ export function SearchInput({ value, onChange, onSubmit, onClear, ref }: SearchI
             </svg>
           </button>
         ) : (
-          <kbd className="hidden items-center justify-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 sm:inline-flex">
+          <kbd className="hidden items-center justify-center rounded-md border border-slate-300/80 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-slate-500 sm:inline-flex">
             {isMac() ? '⌘K' : 'Ctrl K'}
           </kbd>
         )}

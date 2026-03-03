@@ -13,7 +13,7 @@ interface SyncProgressDisplayProps {
 const statusConfig: Record<string, { label: string; color: string; badgeBg: string }> = {
   idle: { label: '空闲', color: 'text-slate-600', badgeBg: 'bg-slate-100' },
   running: { label: '运行中', color: 'text-blue-600', badgeBg: 'bg-blue-100' },
-  done: { label: '已完成', color: 'text-emerald-600', badgeBg: 'bg-emerald-100' },
+  done: { label: '已完成', color: 'text-sky-700', badgeBg: 'bg-sky-100' },
   error: { label: '出错', color: 'text-rose-600', badgeBg: 'bg-rose-100' },
   interrupted: { label: '已中断', color: 'text-amber-600', badgeBg: 'bg-amber-100' },
   cancelled: { label: '已取消', color: 'text-slate-500', badgeBg: 'bg-slate-100' },
@@ -37,9 +37,9 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
   return (
     <div className="space-y-4">
       {/* Header: status + elapsed time */}
-      <div className="flex items-center justify-between">
+      <div className="frost-panel flex items-center justify-between rounded-2xl px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-sm font-medium ${config.badgeBg} ${config.color}`}>
+          <span className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1 text-sm font-semibold ${config.badgeBg} ${config.color}`}>
             {isRunning && (
               <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
             )}
@@ -57,18 +57,18 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
 
       {/* Root progress bar */}
       {rootsTotal > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="frost-panel rounded-2xl p-4">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-medium text-slate-700">根目录进度</span>
+            <span className="font-semibold text-slate-700">根目录进度</span>
             <span className="tabular-nums text-slate-500">
               {rootsDone} / {rootsTotal}
               <span className="ml-1 text-slate-400">({rootPercent}%)</span>
             </span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100/90">
             <div
               className={`h-full rounded-full transition-all duration-500 ease-out ${
-                isRunning ? 'bg-blue-500' : progress.status === 'done' ? 'bg-emerald-500' : 'bg-slate-400'
+                isRunning ? 'bg-blue-500' : progress.status === 'done' ? 'bg-sky-500' : 'bg-slate-400'
               }`}
               style={{ width: `${rootPercent}%` }}
             />
@@ -83,7 +83,7 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
 
       {/* Stats grid */}
       {progress.mode === 'incremental' && progress.incrementalStats ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatCard label="变更" value={progress.incrementalStats.changesFetched} />
           <StatCard label="写入" value={progress.incrementalStats.upserted} />
           <StatCard label="删除" value={progress.incrementalStats.deleted} />
@@ -95,7 +95,7 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatCard label="已索引文件" value={stats.filesIndexed} />
           <StatCard label="已抓取页" value={stats.pagesFetched} />
           <StatCard label="已访问文件夹" value={stats.foldersVisited} />
@@ -114,14 +114,14 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
       {/* Verification result */}
       {progress.verification != null && (
         progress.verification.warnings == null || progress.verification.warnings.length === 0 ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-            <p className="text-sm font-medium text-emerald-700">验证通过</p>
-            <p className="mt-1 text-xs text-emerald-600">
+          <div className="rounded-xl border border-blue-200 bg-blue-50/85 p-3">
+            <p className="text-sm font-medium text-blue-700">验证通过</p>
+            <p className="mt-1 text-xs text-blue-600">
               MeiliSearch 文档数: {progress.verification.meiliDocCount.toLocaleString()}
             </p>
           </div>
         ) : (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50/85 p-3">
             <p className="text-sm font-medium text-amber-800">验证警告</p>
             <ul className="mt-1 list-disc pl-4">
               {progress.verification.warnings.map((w, i) => (
@@ -143,7 +143,7 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
 
       {/* Error */}
       {progress.lastError && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+        <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-3">
           <p className="text-sm text-rose-600">{progress.lastError}</p>
         </div>
       )}
@@ -184,7 +184,7 @@ function ElapsedTime({
   parts.push(`${seconds}s`)
 
   return (
-    <span className="tabular-nums text-sm text-slate-400">
+    <span className="font-mono text-sm tabular-nums text-slate-500">
       {isRunning ? '已耗时 ' : '用时 '}{parts.join(' ')}
     </span>
   )
@@ -208,20 +208,20 @@ function RootDetails({
   if (entries.length === 0) return null
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    <div className="frost-panel rounded-2xl">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between p-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        className="flex w-full items-center justify-between p-4 text-sm font-semibold text-slate-700 hover:bg-white/70"
       >
         <span>根目录详情 ({entries.length})</span>
         <span className="text-slate-400">{expanded ? '收起' : '展开'}</span>
       </button>
       {expanded && (
-        <div className="border-t border-slate-100 divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 border-t border-slate-100">
           {entries.map(([key, root]) => {
             const rootStatus = root.status === 'done'
-              ? 'text-emerald-600'
+              ? 'text-sky-600'
               : root.status === 'running'
                 ? 'text-blue-600'
                 : root.status === 'error'
@@ -258,14 +258,14 @@ function RootDetails({
                       </button>
                     )}
                     {rootName ? (
-                      <><span className="font-medium">{rootName}</span> <span className="font-mono text-xs text-slate-400">({root.rootFolderId})</span></>
+                      <><span className="font-medium">{rootName}</span> <span className="font-mono text-xs text-slate-500">({root.rootFolderId})</span></>
                     ) : (
                       <span className="font-mono">{root.rootFolderId}</span>
                     )}
                   </span>
                   <span className={`text-xs font-medium ${rootStatus}`}>{root.status}</span>
                 </div>
-                <div className="mt-1 flex gap-4 text-xs text-slate-400">
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                   <span>{root.stats.filesIndexed.toLocaleString()} 文件</span>
                   <span>{root.stats.foldersVisited.toLocaleString()} 文件夹</span>
                   <span>{root.stats.pagesFetched.toLocaleString()} 页</span>
@@ -274,7 +274,7 @@ function RootDetails({
                   )}
                 </div>
                 {estimated != null && (
-                  <div className="mt-1 flex gap-4 text-xs text-slate-500">
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
                     <span>估计 {estimated.toLocaleString()}</span>
                     <span>实际 {actualDocs.toLocaleString()}</span>
                   </div>
@@ -299,12 +299,12 @@ function StatCard({
   error?: boolean
   skipped?: boolean
 }) {
-  const bgClass = skipped ? 'bg-rose-50' : 'bg-white'
+  const bgClass = skipped ? 'bg-rose-50/88' : 'bg-white/92'
   const valueClass = error || skipped ? 'text-rose-600' : 'text-slate-900'
   return (
-    <div className={`rounded-xl border border-slate-200 ${bgClass} p-3`}>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-semibold tabular-nums ${valueClass}`}>
+    <div className={`rounded-xl border border-slate-200/85 ${bgClass} p-3 shadow-[0_10px_20px_-18px_rgba(15,23,42,0.85)]`}>
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className={`mt-1 font-mono text-xl font-semibold tabular-nums ${valueClass}`}>
         {value.toLocaleString()}
       </p>
     </div>

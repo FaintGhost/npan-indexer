@@ -28,7 +28,7 @@ describe('getFileIcon', () => {
   it('returns installer category for .apk', () => {
     const icon = getFileIcon('app.apk')
     expect(icon.category).toBe('installer')
-    expect(icon.bg).toBe('bg-emerald-100')
+    expect(icon.bg).toBe('bg-sky-100')
   })
 
   it('returns installer category for .exe', () => {

@@ -43,7 +43,9 @@ describe("SyncProgressDisplay", () => {
     expect(screen.getByText("已索引文件").closest("div")).toHaveTextContent(
       "300",
     ); // filesIndexed
-    expect(screen.getByText(/60/)).toBeInTheDocument(); // pagesFetched
+    expect(screen.getByText("已抓取页").closest("div")).toHaveTextContent(
+      "60",
+    ); // pagesFetched
   });
 
   it("shows done status", () => {

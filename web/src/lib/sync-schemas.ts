@@ -62,6 +62,8 @@ export const SyncProgressSchema = z.object({
   updatedAt: z.number().int(),
   roots: z.array(z.number().int()),
   rootNames: z.record(z.string()).optional(),
+  catalogRoots: z.array(z.number().int()).optional(),
+  catalogRootNames: z.record(z.string()).optional(),
   completedRoots: z.array(z.number().int()),
   activeRoot: z.number().int().nullable().optional(),
   lastError: z.string().optional(),
