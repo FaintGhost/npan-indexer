@@ -24,6 +24,9 @@ func (c Config) Validate() error {
 	if c.BaseURL == "" {
 		errs = append(errs, "NPA_BASE_URL 不能为空")
 	}
+	if strings.TrimSpace(c.StateDBFile) == "" {
+		errs = append(errs, "NPA_STATE_DB_FILE 不能为空")
+	}
 
 	publicSearchHost := strings.TrimSpace(c.PublicSearchHost)
 	publicSearchIndexName := strings.TrimSpace(c.PublicSearchIndexName)

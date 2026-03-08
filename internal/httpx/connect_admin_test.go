@@ -251,8 +251,9 @@ func TestConnectAdminGetIndexStats_Success(t *testing.T) {
 		stats: &meilisearch.StatsIndex{NumberOfDocuments: 12},
 	})
 	syncManager := service.NewSyncManager(service.SyncManagerArgs{
-		Index:         stubIndex,
-		ProgressStore: progressStore,
+		Index:            stubIndex,
+		ProgressStore:    progressStore,
+		CheckpointStores: storage.NewJSONCheckpointStoreFactory(),
 	})
 
 	handlers := &Handlers{
@@ -285,8 +286,9 @@ func TestConnectAdminGetIndexStats_ZeroDocument(t *testing.T) {
 		stats: &meilisearch.StatsIndex{NumberOfDocuments: 0},
 	})
 	syncManager := service.NewSyncManager(service.SyncManagerArgs{
-		Index:         stubIndex,
-		ProgressStore: progressStore,
+		Index:            stubIndex,
+		ProgressStore:    progressStore,
+		CheckpointStores: storage.NewJSONCheckpointStoreFactory(),
 	})
 
 	handlers := &Handlers{

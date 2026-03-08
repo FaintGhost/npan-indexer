@@ -39,6 +39,7 @@ type Config struct {
 	PublicSearchAPIKey          string
 	PublicSearchInstantsearchOn bool
 
+	StateDBFile         string
 	CheckpointTemplate  string
 	ProgressFile        string
 	SyncStateFile       string
@@ -172,6 +173,7 @@ func Load() Config {
 		PublicSearchAPIKey:          readString("MEILI_PUBLIC_SEARCH_API_KEY", ""),
 		PublicSearchInstantsearchOn: readBool("MEILI_PUBLIC_INSTANTSEARCH_ENABLED", false),
 
+		StateDBFile:         readString("NPA_STATE_DB_FILE", "./data/state/sync-state.sqlite"),
 		CheckpointTemplate:  readString("NPA_CHECKPOINT_FILE", "./data/checkpoints/full-crawl.json"),
 		ProgressFile:        readString("NPA_PROGRESS_FILE", "./data/progress/full-sync-progress.json"),
 		SyncStateFile:       readString("NPA_SYNC_STATE_FILE", "./data/progress/incremental-sync-state.json"),

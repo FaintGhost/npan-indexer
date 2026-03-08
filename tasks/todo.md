@@ -1,3 +1,48 @@
+# 任务计划（2026-03-08）
+
+## 新任务：同步状态迁移到 SQLite
+
+## 目标
+
+- 将当前全量进度、增量游标与 crawl checkpoint 的持久化从多份 JSON 文件迁移到单一 SQLite 状态库，提升任务状态恢复可靠性，同时保持 Admin Connect API、CLI 与现有进度模型语义不变。
+
+## 计划清单
+
+- [x] 1. 审计当前同步状态持久化链路（progress / sync_state / checkpoint）与不可靠边界
+- [x] 2. 产出 SQLite 迁移设计文档与 BDD 规格：`docs/plans/2026-03-08-sync-state-sqlite-design/`
+- [x] 3. 产出可执行实施计划：`docs/plans/2026-03-08-sync-state-sqlite-plan/`
+- [x] 4. 待确认后按 BDD 顺序执行：state store -> SyncManager 抽象 -> checkpoint 生命周期 -> Admin/CLI wiring
+- [x] 5. 完成全量验证链与运行文档收口
+
+## 评审记录（SQLite 状态迁移实施结果）
+
+- 结论：SQLite 已成为 progress / sync_state / checkpoint 的主状态源；Admin Connect API 与 CLI `sync-progress` 已切换到统一状态库读取路径。
+- 驱动选择：继续使用 `modernc.org/sqlite`，保持 `CGO_ENABLED=0` 构建兼容，不切换到 `ncruces/go-sqlite3`。
+- 迁移策略：保留 `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 作为非破坏式 legacy JSON 导入来源；本轮不自动删除旧文件。
+- 代码落点：
+  - `internal/storage/sqlite_store.go`：SQLite state store + namespace/key + JSON payload + 惰性导入
+  - `internal/service/sync_manager.go`：切换为注入式 progress/sync-state/checkpoint store 抽象
+  - `cmd/server/main.go`：服务端运行时切到 SQLite state stores
+  - `internal/cli/root.go`：CLI runtime 与 `sync-progress` 切到 SQLite
+- 验证结果：
+  - `GOCACHE=/tmp/go-build go test ./... -count=1` 通过（全量 Go 测试）
+  - `cd web && bun run test` 通过（27 files / 224 tests）
+  - `docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120` 通过
+  - `./tests/smoke/smoke_test.sh` 通过（34/34）
+  - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright` 通过（42 passed / 2 skipped）
+- 文档收口：
+  - `README.md` 已补充 `NPA_STATE_DB_FILE`、legacy JSON 角色与 CLI `--state-db-file` 说明
+  - `docs/runbooks/index-sync-operations.md` 已补充 SQLite 主状态源与排障路径
+  - `CLAUDE.md` 已补充默认 SQLite 状态库入口与兼容边界
+- 额外记录：
+  - 本轮前端验证失败的根因不是业务回归，而是 `web` 目录未安装依赖，导致 `vitest: command not found`；执行 `cd web && bun install --frozen-lockfile` 后恢复。
+- 关键设计产物：
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/_index.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/architecture.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/bdd-specs.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/best-practices.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-plan/_index.md`
+
 # 任务计划（2026-03-04）
 
 ## 新任务：Web 前端浅蓝主题收口
