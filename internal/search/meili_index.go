@@ -71,9 +71,9 @@ func (m *MeiliIndex) EnsureSettings(ctx context.Context) error {
 	taskInfo, err := m.index.UpdateSettingsWithContext(ctx, &meilisearch.Settings{
 		RankingRules:         []string{"words", "typo", "exactness", "proximity", "attribute", "modified_at:desc"},
 		SearchableAttributes: []string{"name_base", "name_ext", "name", "path_text"},
-		FilterableAttributes: []string{"type", "parent_id", "modified_at", "in_trash", "is_deleted"},
+		FilterableAttributes: []string{"type", "file_category", "parent_id", "modified_at", "in_trash", "is_deleted"},
 		SortableAttributes:   []string{"modified_at", "size", "created_at"},
-		DisplayedAttributes:  []string{"doc_id", "source_id", "type", "name", "name_base", "name_ext", "path_text", "parent_id", "modified_at", "created_at", "size"},
+		DisplayedAttributes:  []string{"doc_id", "source_id", "type", "name", "name_base", "name_ext", "file_category", "path_text", "parent_id", "modified_at", "created_at", "size"},
 		StopWords:            []string{"的", "了", "在", "是", "和", "就", "都", "而", "及", "与"},
 		NonSeparatorTokens:   []string{"."},
 		TypoTolerance: &meilisearch.TypoTolerance{

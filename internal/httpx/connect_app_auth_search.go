@@ -91,6 +91,26 @@ func (h *Handlers) resolveTokenForConnect(ctx context.Context, header http.Heade
 	return token, authOptions, nil
 }
 
+func (s *appConnectServer) GetSearchConfig(_ context.Context, _ *connect.Request[npanv1.GetSearchConfigRequest]) (*connect.Response[npanv1.GetSearchConfigResponse], error) {
+	cfg := s.handlers.cfg
+	searchAPIKey := strings.TrimSpace(cfg.PublicSearchAPIKey)
+	instantsearchEnabled := cfg.PublicSearchInstantsearchOn &&
+		strings.TrimSpace(cfg.PublicSearchHost) != "" &&
+		strings.TrimSpace(cfg.PublicSearchIndexName) != "" &&
+		searchAPIKey != ""
+
+	response := &npanv1.GetSearchConfigResponse{
+		InstantsearchEnabled: instantsearchEnabled,
+	}
+	if instantsearchEnabled {
+		response.Host = strings.TrimSpace(cfg.PublicSearchHost)
+		response.IndexName = strings.TrimSpace(cfg.PublicSearchIndexName)
+		response.SearchApiKey = searchAPIKey
+	}
+
+	return connect.NewResponse(response), nil
+}
+
 func (s *appConnectServer) AppSearch(_ context.Context, req *connect.Request[npanv1.AppSearchRequest]) (*connect.Response[npanv1.AppSearchResponse], error) {
 	query := strings.TrimSpace(req.Msg.GetQuery())
 	if query == "" {

@@ -112,7 +112,7 @@ assert_200_or_409_connect_abort() {
     return 0
   fi
   if [[ "$code" == "200" ]]; then
-    echo "$body" | jq -e '.code == "aborted" or .error.code == "aborted" or .message == "当前没有运行中的同步任务"' > /dev/null 2>&1
+    echo "$body" | jq -e '.code == "aborted" or .error.code == "aborted" or .message == "当前没有运行中的同步任务" or .message == "同步取消信号已发送"' > /dev/null 2>&1
     return $?
   fi
   return 1

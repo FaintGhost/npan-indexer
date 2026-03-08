@@ -5,6 +5,15 @@ type SearchRequestMatch = {
   page?: number
 }
 
+type PublicSearchRequestMatch = {
+  query?: string
+  filterContains?: string
+}
+
+type DownloadRequestMatch = {
+  fileId?: string | number
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -48,6 +57,82 @@ function isConnectSearchResponse(
   return true
 }
 
+function isPublicSearchResponse(
+  response: Response,
+  match?: PublicSearchRequestMatch,
+): boolean {
+  if (
+    !response.url().includes('/multi-search') ||
+    response.request().method() !== 'POST' ||
+    response.status() !== 200
+  ) {
+    return false
+  }
+  if (!match) {
+    return true
+  }
+
+  const body = getRequestBody(response.request())
+  if (!body || !Array.isArray(body.queries) || !isRecord(body.queries[0])) {
+    return false
+  }
+
+  const firstQuery = body.queries[0]
+  if (match.query !== undefined && firstQuery.q !== match.query) {
+    return false
+  }
+  if (
+    match.filterContains !== undefined
+    && typeof firstQuery.filter === 'string'
+    && !firstQuery.filter.includes(match.filterContains)
+  ) {
+    return false
+  }
+  if (
+    match.filterContains !== undefined
+    && Array.isArray(firstQuery.filter)
+    && !JSON.stringify(firstQuery.filter).includes(match.filterContains)
+  ) {
+    return false
+  }
+  if (
+    match.filterContains !== undefined
+    && typeof firstQuery.filter !== 'string'
+    && !Array.isArray(firstQuery.filter)
+  ) {
+    return false
+  }
+
+  return true
+}
+
+function isDownloadResponse(
+  response: Response,
+  match?: DownloadRequestMatch,
+): boolean {
+  if (
+    !response.url().includes('/npan.v1.AppService/AppDownloadURL') ||
+    response.request().method() !== 'POST' ||
+    response.status() !== 200
+  ) {
+    return false
+  }
+  if (!match) {
+    return true
+  }
+
+  const body = getRequestBody(response.request())
+  if (!body) {
+    return false
+  }
+
+  if (match.fileId !== undefined && String(body.fileId) !== String(match.fileId)) {
+    return false
+  }
+
+  return true
+}
+
 export class SearchPage {
   readonly page: Page
   readonly searchHeader: Locator
@@ -73,11 +158,11 @@ export class SearchPage {
     this.dockedMode = page.locator('.mode-docked')
   }
 
-  async goto(): Promise<void> {
+  async goto(path = '/'): Promise<void> {
     let lastError: unknown
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        await this.page.goto('/', { waitUntil: 'domcontentloaded', timeout: 12_000 })
+        await this.page.goto(path, { waitUntil: 'domcontentloaded', timeout: 12_000 })
         await this.searchInput.waitFor({ state: 'visible', timeout: 5_000 })
         return
       } catch (error) {
@@ -97,6 +182,24 @@ export class SearchPage {
     })
   }
 
+  waitForPublicSearchResponse(
+    match?: PublicSearchRequestMatch,
+    timeout = 5_000,
+  ): Promise<Response> {
+    return this.page.waitForResponse((r) => isPublicSearchResponse(r, match), {
+      timeout,
+    })
+  }
+
+  waitForDownloadResponse(
+    match?: DownloadRequestMatch,
+    timeout = 5_000,
+  ): Promise<Response> {
+    return this.page.waitForResponse((r) => isDownloadResponse(r, match), {
+      timeout,
+    })
+  }
+
   async search(query: string): Promise<Response> {
     const responsePromise = this.waitForSearchResponse({ query })
     await this.searchInput.fill(query)
@@ -105,6 +208,13 @@ export class SearchPage {
 
   async searchImmediate(query: string): Promise<Response> {
     const responsePromise = this.waitForSearchResponse({ query })
+    await this.searchInput.fill(query)
+    await this.searchButton.click()
+    return responsePromise
+  }
+
+  async searchPublicImmediate(query: string): Promise<Response> {
+    const responsePromise = this.waitForPublicSearchResponse({ query })
     await this.searchInput.fill(query)
     await this.searchButton.click()
     return responsePromise

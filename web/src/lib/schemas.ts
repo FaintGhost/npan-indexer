@@ -1,4 +1,8 @@
 import { z } from 'zod'
+
+export const FileCategorySchema = z.enum(['doc', 'image', 'video', 'archive', 'other'])
+export type FileCategory = z.infer<typeof FileCategorySchema>
+
 export const IndexDocumentSchema = z.object({
   doc_id: z.string(),
   source_id: z.number().int(),
@@ -12,6 +16,7 @@ export const IndexDocumentSchema = z.object({
   sha1: z.string(),
   in_trash: z.boolean(),
   is_deleted: z.boolean(),
+  file_category: FileCategorySchema.optional(),
   highlighted_name: z.string().optional(),
 })
 export type IndexDocument = z.infer<typeof IndexDocumentSchema>

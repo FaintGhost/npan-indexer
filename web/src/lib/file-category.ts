@@ -1,6 +1,14 @@
 export type SearchFilter = 'all' | 'doc' | 'image' | 'video' | 'archive' | 'other'
 
 export const DEFAULT_FILTER: SearchFilter = 'all'
+export const SEARCH_FILTER_OPTIONS: Array<{ value: SearchFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'doc', label: '文档' },
+  { value: 'image', label: '图片' },
+  { value: 'video', label: '视频' },
+  { value: 'archive', label: '压缩包' },
+  { value: 'other', label: '其他' },
+]
 
 const FILTER_SET = new Set<SearchFilter>(['all', 'doc', 'image', 'video', 'archive', 'other'])
 
@@ -35,6 +43,16 @@ export function normalizeSearchFilter(value: string | null | undefined): SearchF
     return value as SearchFilter
   }
   return DEFAULT_FILTER
+}
+
+export function getSearchFilterFromRefinement(
+  value: Array<string> | string | null | undefined,
+): SearchFilter {
+  if (Array.isArray(value)) {
+    return normalizeSearchFilter(value[0])
+  }
+
+  return normalizeSearchFilter(value)
 }
 
 function getNormalizedExtension(fileName: string): string {

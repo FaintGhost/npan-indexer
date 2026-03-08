@@ -38,6 +38,17 @@ describe('IndexDocumentSchema', () => {
     }
   })
 
+  it('parses with optional file_category', () => {
+    const result = IndexDocumentSchema.safeParse({
+      ...validDoc,
+      file_category: 'doc',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.file_category).toBe('doc')
+    }
+  })
+
   it('highlighted_name is undefined when missing', () => {
     const result = IndexDocumentSchema.safeParse(validDoc)
     expect(result.success).toBe(true)

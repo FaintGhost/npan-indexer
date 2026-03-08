@@ -2,9 +2,19 @@ package models
 
 type ItemType string
 
+type FileCategory string
+
 const (
 	ItemTypeFile   ItemType = "file"
 	ItemTypeFolder ItemType = "folder"
+)
+
+const (
+	FileCategoryDoc     FileCategory = "doc"
+	FileCategoryImage   FileCategory = "image"
+	FileCategoryVideo   FileCategory = "video"
+	FileCategoryArchive FileCategory = "archive"
+	FileCategoryOther   FileCategory = "other"
 )
 
 type NpanFolder struct {
@@ -39,21 +49,22 @@ type FolderChildrenPage struct {
 }
 
 type IndexDocument struct {
-	DocID           string   `json:"doc_id"`
-	SourceID        int64    `json:"source_id"`
-	Type            ItemType `json:"type"`
-	Name            string   `json:"name"`
-	NameBase        string   `json:"name_base"`
-	NameExt         string   `json:"name_ext"`
-	PathText        string   `json:"path_text"`
-	ParentID        int64    `json:"parent_id"`
-	ModifiedAt      int64    `json:"modified_at"`
-	CreatedAt       int64    `json:"created_at"`
-	Size            int64    `json:"size"`
-	SHA1            string   `json:"sha1"`
-	InTrash         bool     `json:"in_trash"`
-	IsDeleted       bool     `json:"is_deleted"`
-	HighlightedName string   `json:"highlighted_name,omitempty"`
+	DocID           string       `json:"doc_id"`
+	SourceID        int64        `json:"source_id"`
+	Type            ItemType     `json:"type"`
+	Name            string       `json:"name"`
+	NameBase        string       `json:"name_base"`
+	NameExt         string       `json:"name_ext"`
+	FileCategory    FileCategory `json:"file_category,omitempty"`
+	PathText        string       `json:"path_text"`
+	ParentID        int64        `json:"parent_id"`
+	ModifiedAt      int64        `json:"modified_at"`
+	CreatedAt       int64        `json:"created_at"`
+	Size            int64        `json:"size"`
+	SHA1            string       `json:"sha1"`
+	InTrash         bool         `json:"in_trash"`
+	IsDeleted       bool         `json:"is_deleted"`
+	HighlightedName string       `json:"highlighted_name,omitempty"`
 }
 
 type CrawlStats struct {

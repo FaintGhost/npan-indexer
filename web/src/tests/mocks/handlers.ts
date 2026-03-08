@@ -1,6 +1,15 @@
 import { http, HttpResponse } from 'msw'
 
 export const handlers = [
+  http.post('/npan.v1.AppService/GetSearchConfig', () => {
+    return HttpResponse.json({
+      host: '',
+      indexName: '',
+      searchApiKey: '',
+      instantsearchEnabled: false,
+    })
+  }),
+
   http.post('/npan.v1.AppService/AppSearch', () => {
     return HttpResponse.json({
       result: {
