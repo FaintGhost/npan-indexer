@@ -1110,3 +1110,26 @@
   - 已在 `web/src/lib/public-search-request-adapter.ts` 的 public search wrapper 层增加空查询短路：当本轮请求全部为空 query 时，直接返回空结果而不触发真实 Meilisearch 搜索。
   - 已新增并跑通对应回归测试，覆盖“初始空查询不发请求”与“clear 后不发请求”；同时复跑 `src/components/search-page.test.tsx` 与前端全量 Vitest 均通过（27 files / 223 tests）。
   - 修复后再次做 focused review，未发现新的高置信度重要问题；search-as-you-type、Enter/按钮提交、`file_category` refinement、legacy fallback 与空结果兼容性均保持成立。
+
+## 新任务：修复 public 文件类别筛选失效（Writing Plans）
+
+- [x] 1. 完成根因调查，确认问题位于 `SearchFilters` 的 refinement token 使用方式，而非索引侧 `file_category` 数据
+- [x] 2. 基于 `docs/plans/2026-03-08-react-instantsearch-alignment-design/` 产出针对本次回归的最小修复计划目录
+- [x] 3. 将任务拆分为 BDD 驱动的 Red/Green 粒度，覆盖 token 语义测试、实现修复与回归验证
+- [ ] 4. 经用户确认后进入计划执行，修复 public 搜索中“文档/图片/视频”等筛选返回空结果的问题
+
+## Review（public 文件类别筛选失效 / 计划）
+
+- 根因结论：
+  - `web/src/components/search-filters.tsx` 当前把固定 UI 值 `doc/image/video/...` 直接传给 `useRefinementList().refine()`。
+  - React InstantSearch 的正确契约是使用 `useRefinementList().items` 提供的真实 `item.value` token 驱动 refinement。
+  - 因此“全部”正常，而切换到其他文件类别时会出现 refinement token 与 InstantSearch 内部状态不一致，最终导致结果为 0。
+- 计划目录：
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/_index.md`
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/task-001-file-category-refinement-token-test.md`
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/task-001-file-category-refinement-token-impl.md`
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/task-002-public-filter-regression-verification.md`
+- 执行边界：
+  - 仅修复 public InstantSearch `file_category` refinement token 驱动，不改 legacy 本地筛选分支。
+  - 默认过滤基线仍保留在 public request adapter 层，不新增结果层本地裁剪。
+  - 验证优先使用 `cd web && bun vitest run ...`，必要时补跑搜索相关 Playwright。
