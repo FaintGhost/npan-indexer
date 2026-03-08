@@ -170,21 +170,28 @@ bun run dev
 
 ## 5. 常用命令
 
+长驻开发命令请使用上面的“本地开发”章节；下面统一列出仓库验证入口。
+
 ```bash
-# 后端测试
-GOCACHE=/tmp/go-build go test ./...
+# 查看公开任务
+task --list
 
-# 前端测试
-cd web && bun vitest run
+# 快速验证（guard:rest + Go + 前端单测）
+task verify:quick
 
-# 防回退检查（禁止在运行时代码引入 /api/v1 路径）
-make rest-guard
+# 单独执行某一类验证
+task guard:rest
+task test:go
+task test:web
 
 # CI 冒烟测试（34 项）
-make smoke-test
+task verify:smoke
 
-# 冒烟 + E2E（32 项）
-make e2e-test
+# 完整链路回归（smoke + Playwright E2E）
+task verify:e2e
+
+# 全量回归（verify:quick -> verify:e2e）
+task verify:all
 ```
 
 ## 6. API 入口总览
