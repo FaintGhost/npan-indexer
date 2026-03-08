@@ -104,7 +104,7 @@ jobs:
         run: docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
 
       - name: Run E2E tests
-        run: docker compose -f docker-compose.ci.yml run --rm --profile e2e playwright
+        run: docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright
 
       - name: Upload test artifacts
         if: ${{ !cancelled() }}
