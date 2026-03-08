@@ -14,7 +14,7 @@ on:
       - 'go.sum'
       - 'Dockerfile'
       - 'docker-compose*.yml'
-      - 'Makefile'
+      - 'Taskfile.yml'
   pull_request:
     branches:
       - main
@@ -28,7 +28,7 @@ on:
       - 'go.sum'
       - 'Dockerfile'
       - 'docker-compose*.yml'
-      - 'Makefile'
+      - 'Taskfile.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,12 +45,15 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
       - name: Prepare embedded web dist placeholder
         run: |
           mkdir -p web/dist
           touch web/dist/.gitkeep
 
-      - run: go test ./... -short -count=1 -race
+      - run: task test:go
 
   unit-test-frontend:
     runs-on: ubuntu-latest
@@ -59,16 +62,25 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
       - run: cd web && bun install --frozen-lockfile
 
-      - run: cd web && bun run test
+      - run: task test:web
 
   rest-guard:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - run: make rest-guard
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
+      - run: task guard:rest
 
   smoke-test:
     needs: [unit-test-go, unit-test-frontend, rest-guard]
@@ -78,19 +90,22 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
       - name: Start services
-        run: docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
+        run: task stack:ci:up
 
       - name: Run smoke tests
-        run: BASE_URL=http://localhost:11323 METRICS_URL=http://localhost:19091 ./tests/smoke/smoke_test.sh
+        run: task smoke:run
 
       - name: Export logs on failure
         if: failure()
-        run: docker compose -f docker-compose.ci.yml logs
+        run: task stack:ci:logs
 
       - name: Cleanup
         if: always()
-        run: docker compose -f docker-compose.ci.yml down --volumes
+        run: task stack:ci:down
 
   e2e-test:
     needs: [smoke-test]
@@ -100,11 +115,14 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
       - name: Start app services
-        run: docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
+        run: task stack:ci:up
 
       - name: Run E2E tests
-        run: docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright
+        run: task e2e:run
 
       - name: Upload test artifacts
         if: ${{ !cancelled() }}
@@ -118,8 +136,8 @@ jobs:
 
       - name: Export logs on failure
         if: failure()
-        run: docker compose -f docker-compose.ci.yml logs
+        run: task stack:ci:logs
 
       - name: Cleanup
         if: always()
-        run: docker compose -f docker-compose.ci.yml down --volumes
+        run: task stack:ci:down
