@@ -13,6 +13,7 @@ func validConfig() Config {
 	return Config{
 		AdminAPIKey:       "a-valid-admin-api-key", // >= 16 chars
 		BaseURL:           "https://npan.example.com/openapi",
+		StateDBFile:       "./data/state/sync-state.sqlite",
 		MeiliHost:         "http://127.0.0.1:7700",
 		MeiliIndex:        "npan_items",
 		SyncMaxConcurrent: 5,
@@ -91,6 +92,20 @@ func TestValidate_MissingBaseURL_ReturnsError(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected error for empty BaseURL, got nil")
+	}
+}
+
+func TestValidate_MissingStateDBFile_ReturnsError(t *testing.T) {
+	cfg := validConfig()
+	cfg.StateDBFile = ""
+
+	err := cfg.Validate()
+
+	if err == nil {
+		t.Fatal("expected error for empty StateDBFile, got nil")
+	}
+	if !strings.Contains(err.Error(), "NPA_STATE_DB_FILE") {
+		t.Fatalf("expected validation error to mention NPA_STATE_DB_FILE, got: %s", err.Error())
 	}
 }
 
