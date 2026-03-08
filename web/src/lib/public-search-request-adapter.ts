@@ -74,20 +74,24 @@ function normalizeNonNegativeNumber(value: unknown, fallback: number): number {
 
 function createEmptySearchResponse(requests: PublicSearchRequest[]) {
   return {
-    results: requests.map((request) => ({
-      index: typeof request.indexName === 'string' ? request.indexName : '',
-      hitsPerPage: normalizePositiveNumber(request.params?.hitsPerPage, 20),
-      page: normalizeNonNegativeNumber(request.params?.page, 0),
-      facets: {},
-      nbPages: 1,
-      nbHits: 0,
-      processingTimeMS: 0,
-      query: typeof getRawQuery(request) === 'string' ? getRawQuery(request)?.trim() ?? '' : '',
-      hits: [],
-      params: '',
-      exhaustiveNbHits: true,
-      facets_stats: {},
-    })),
+    results: requests.map((request) => {
+      const rawQuery = getRawQuery(request)
+
+      return {
+        index: typeof request.indexName === 'string' ? request.indexName : '',
+        hitsPerPage: normalizePositiveNumber(request.params?.hitsPerPage, 20),
+        page: normalizeNonNegativeNumber(request.params?.page, 0),
+        facets: {},
+        nbPages: 1,
+        nbHits: 0,
+        processingTimeMS: 0,
+        query: typeof rawQuery === 'string' ? rawQuery.trim() : '',
+        hits: [],
+        params: '',
+        exhaustiveNbHits: true,
+        facets_stats: {},
+      }
+    }),
   }
 }
 
@@ -116,13 +120,11 @@ export function wrapPublicSearchClient<T extends InstantMeiliSearchObject>(clien
     searchClient: {
       ...client.searchClient,
       search(requests) {
-        const adaptedRequests = requests.map((request) => adaptPublicSearchRequest(request))
-
-        if (!adaptedRequests.some((request) => hasNonEmptyQuery(request))) {
-          return Promise.resolve(createEmptySearchResponse(adaptedRequests))
+        if (!requests.some((request) => hasNonEmptyQuery(request))) {
+          return Promise.resolve(createEmptySearchResponse(requests))
         }
 
-        return search(adaptedRequests)
+        return search(requests.map((request) => adaptPublicSearchRequest(request)))
       },
     },
   }

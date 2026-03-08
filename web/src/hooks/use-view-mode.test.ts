@@ -47,6 +47,22 @@ describe('useViewMode', () => {
     expect(result.current.isDocked).toBe(true)
   })
 
+  it('does not call startViewTransition again when docked state is unchanged', () => {
+    const mockTransition = vi.fn((cb: () => void) => cb())
+    ;(document as any).startViewTransition = mockTransition
+
+    const { result } = renderHook(() => useViewMode())
+    act(() => {
+      result.current.setDocked(true)
+    })
+    act(() => {
+      result.current.setDocked(true)
+    })
+
+    expect(mockTransition).toHaveBeenCalledOnce()
+    expect(result.current.isDocked).toBe(true)
+  })
+
   it('works without startViewTransition (graceful fallback)', () => {
     // jsdom doesn't have startViewTransition by default
     const { result } = renderHook(() => useViewMode())
