@@ -1116,7 +1116,25 @@
 - [x] 1. 完成根因调查，确认问题位于 `SearchFilters` 的 refinement token 使用方式，而非索引侧 `file_category` 数据
 - [x] 2. 基于 `docs/plans/2026-03-08-react-instantsearch-alignment-design/` 产出针对本次回归的最小修复计划目录
 - [x] 3. 将任务拆分为 BDD 驱动的 Red/Green 粒度，覆盖 token 语义测试、实现修复与回归验证
-- [ ] 4. 经用户确认后进入计划执行，修复 public 搜索中“文档/图片/视频”等筛选返回空结果的问题
+- [x] 4. 经用户确认后进入计划执行，修复 public 搜索中“文档/图片/视频”等筛选返回空结果的问题
+
+## Review（public 文件类别筛选失效 / 执行结果）
+
+- 根因：
+  - `web/src/components/search-filters.tsx` 原实现把固定 UI 分类值 `doc/image/video/...` 直接传给 `useRefinementList().refine()`。
+  - 在 React InstantSearch 中，筛选切换应优先使用 `useRefinementList().items` 提供的真实 refinement token；否则 token 与内部状态可能不一致，导致“全部”正常但其他类别结果为 0。
+- 改动文件：
+  - `web/src/components/search-filters.tsx`
+  - `web/src/components/search-filters.test.tsx`
+- 修复结果：
+  - `SearchFilters` 改为优先使用 `useRefinementList().items` 中的真实 token 进行切换与取消。
+  - 为保证 URL 首次恢复和轻量测试客户端场景不回归，当前实现对“token 暂不可用”保留了受控 fallback：回退到原始 `doc/image/...` filter 值。
+  - 按钮选中态继续兼容 `useCurrentRefinements()` 的首屏恢复语义，因此 URL、选中态与请求 refinement 保持一致。
+- 验证：
+  - `cd /var/tmp/vibe-kanban/worktrees/caa8-meilisearch-inst/npan-indexer/web && bun x vitest run src/components/search-filters.test.tsx src/components/search-page.test.tsx` 通过（32 passed）。
+  - `cd /var/tmp/vibe-kanban/worktrees/caa8-meilisearch-inst/npan-indexer/web && bun x vitest run` 通过（27 files / 224 tests）。
+- 阻塞级差异：
+  - 本轮未发现默认过滤基线、URL 恢复、clear 语义、legacy fallback 的新增阻塞级回归。
 
 ## Review（public 文件类别筛选失效 / 计划）
 

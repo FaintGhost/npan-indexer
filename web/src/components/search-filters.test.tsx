@@ -3,21 +3,27 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SearchFilters } from './search-filters'
 
-const { refineSpy, useCurrentRefinementsMock } = vi.hoisted(() => ({
+const { refineSpy, useCurrentRefinementsMock, useRefinementListMock } = vi.hoisted(() => ({
   refineSpy: vi.fn(),
   useCurrentRefinementsMock: vi.fn(),
+  useRefinementListMock: vi.fn(),
 }))
 
 vi.mock('react-instantsearch', () => ({
-  useRefinementList: vi.fn(() => ({
-    refine: refineSpy,
-  })),
+  useRefinementList: useRefinementListMock,
   useCurrentRefinements: useCurrentRefinementsMock,
 }))
 
 describe('SearchFilters', () => {
   beforeEach(() => {
     refineSpy.mockReset()
+    useRefinementListMock.mockReturnValue({
+      refine: refineSpy,
+      items: [
+        { label: 'doc', value: 'file_category:doc-token', isRefined: false },
+        { label: 'image', value: 'file_category:image-token', isRefined: false },
+      ],
+    })
     useCurrentRefinementsMock.mockReturnValue({
       items: [],
     })
@@ -31,7 +37,7 @@ describe('SearchFilters', () => {
     expect(screen.getByRole('radio', { name: '文档' })).not.toBeChecked()
   })
 
-  it('keeps file_category refinement additive so public baseline filters can stay in the request layer', async () => {
+  it('uses the real refinement token from refinementList items when selecting a category', async () => {
     useCurrentRefinementsMock.mockReturnValue({
       items: [],
     })
@@ -40,11 +46,18 @@ describe('SearchFilters', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('radio', { name: '文档' }))
 
-    expect(refineSpy).toHaveBeenCalledWith('doc')
+    expect(refineSpy).toHaveBeenCalledWith('file_category:doc-token')
     expect(refineSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('only swaps file_category refinement values instead of resetting unrelated request filters', async () => {
+  it('swaps categories by clearing the previous token before applying the next token', async () => {
+    useRefinementListMock.mockReturnValue({
+      refine: refineSpy,
+      items: [
+        { label: 'doc', value: 'file_category:doc-token', isRefined: false },
+        { label: 'image', value: 'file_category:image-token', isRefined: true },
+      ],
+    })
     useCurrentRefinementsMock.mockReturnValue({
       items: [
         {
@@ -58,8 +71,8 @@ describe('SearchFilters', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('radio', { name: '文档' }))
 
-    expect(refineSpy).toHaveBeenNthCalledWith(1, 'image')
-    expect(refineSpy).toHaveBeenNthCalledWith(2, 'doc')
+    expect(refineSpy).toHaveBeenNthCalledWith(1, 'file_category:image-token')
+    expect(refineSpy).toHaveBeenNthCalledWith(2, 'file_category:doc-token')
     expect(refineSpy).toHaveBeenCalledTimes(2)
   })
 })
