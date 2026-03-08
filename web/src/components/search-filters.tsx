@@ -7,37 +7,84 @@ import {
   type SearchFilter,
 } from '@/lib/file-category'
 
-function getSelectedFilter(items: ReturnType<typeof useCurrentRefinements>['items']): SearchFilter {
-  const fileCategoryGroup = items.find((item) => item.attribute === 'file_category')
+type FileCategoryRefinementItem = ReturnType<typeof useRefinementList>['items'][number]
+type FileCategoryItemMap = Partial<Record<Exclude<SearchFilter, 'all'>, FileCategoryRefinementItem>>
+type CurrentRefinementItems = ReturnType<typeof useCurrentRefinements>['items']
+
+function getFilterFromItem(item: FileCategoryRefinementItem | undefined): SearchFilter {
+  return getSearchFilterFromRefinement(typeof item?.label === 'string' ? item.label : undefined)
+}
+
+function getSelectedFilter(
+  currentRefinementItems: CurrentRefinementItems,
+  refinementItems: Array<FileCategoryRefinementItem>,
+): SearchFilter {
+  const activeItem = refinementItems.find((item) => item.isRefined && getFilterFromItem(item) !== DEFAULT_FILTER)
+  if (activeItem) {
+    return getFilterFromItem(activeItem)
+  }
+
+  const fileCategoryGroup = currentRefinementItems.find((item) => item.attribute === 'file_category')
   const refinement = fileCategoryGroup?.refinements[0]
   return getSearchFilterFromRefinement(
     typeof refinement?.value === 'string' ? refinement.value : undefined,
   )
 }
 
+function getFilterItemMap(items: Array<FileCategoryRefinementItem>): FileCategoryItemMap {
+  return items.reduce<FileCategoryItemMap>((result, item) => {
+    const filter = getFilterFromItem(item)
+    if (filter !== DEFAULT_FILTER) {
+      result[filter] = item
+    }
+    return result
+  }, {})
+}
+
+function getRefinementToken(
+  filter: Exclude<SearchFilter, 'all'>,
+  filterItems: FileCategoryItemMap,
+): string {
+  const token = filterItems[filter]?.value
+  return typeof token === 'string' && token.length > 0 ? token : filter
+}
+
 export function SearchFilters() {
-  const { refine } = useRefinementList({
+  const { items: refinementItems, refine } = useRefinementList({
     attribute: 'file_category',
     operator: 'or',
     limit: SEARCH_FILTER_OPTIONS.length - 1,
   })
-  const { items } = useCurrentRefinements({
+  const { items: currentRefinementItems } = useCurrentRefinements({
     includedAttributes: ['file_category'],
   })
 
-  const activeFilter = useMemo(() => getSelectedFilter(items), [items])
+  const activeFilter = useMemo(
+    () => getSelectedFilter(currentRefinementItems, refinementItems),
+    [currentRefinementItems, refinementItems],
+  )
+  const filterItems = useMemo(() => getFilterItemMap(refinementItems), [refinementItems])
 
   const handleFilterChange = (nextFilter: SearchFilter) => {
     if (nextFilter === activeFilter) {
       return
     }
 
-    if (activeFilter !== DEFAULT_FILTER) {
-      refine(activeFilter)
+    const activeToken = activeFilter === DEFAULT_FILTER
+      ? undefined
+      : getRefinementToken(activeFilter, filterItems)
+    if (nextFilter === DEFAULT_FILTER) {
+      if (activeToken) {
+        refine(activeToken)
+      }
+      return
     }
-    if (nextFilter !== DEFAULT_FILTER) {
-      refine(nextFilter)
+
+    const nextToken = getRefinementToken(nextFilter, filterItems)
+    if (activeToken) {
+      refine(activeToken)
     }
+    refine(nextToken)
   }
 
   const handleFilterKeyDown = (
