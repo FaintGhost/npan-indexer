@@ -1,3 +1,31 @@
+# 任务计划（2026-03-08）
+
+## 新任务：同步状态迁移到 SQLite
+
+## 目标
+
+- 将当前全量进度、增量游标与 crawl checkpoint 的持久化从多份 JSON 文件迁移到单一 SQLite 状态库，提升任务状态恢复可靠性，同时保持 Admin Connect API、CLI 与现有进度模型语义不变。
+
+## 计划清单
+
+- [x] 1. 审计当前同步状态持久化链路（progress / sync_state / checkpoint）与不可靠边界
+- [x] 2. 产出 SQLite 迁移设计文档与 BDD 规格：`docs/plans/2026-03-08-sync-state-sqlite-design/`
+- [x] 3. 产出可执行实施计划：`docs/plans/2026-03-08-sync-state-sqlite-plan/`
+- [ ] 4. 待确认后按 BDD 顺序执行：state store -> SyncManager 抽象 -> checkpoint 生命周期 -> Admin/CLI wiring
+- [ ] 5. 完成全量验证链与运行文档收口
+
+## 评审记录（待确认后更新）
+
+- 推荐方案：采用单 SQLite 文件 + `namespace/key + JSON payload` 的状态模型，SQLite 成为 progress / sync_state / checkpoint 的主状态源。
+- 驱动建议：使用 `modernc.org/sqlite`，原因是当前构建链路要求 `CGO_ENABLED=0`；`mattn/go-sqlite3` 依赖 CGO，不适合当前 Dockerfile。
+- 迁移策略：保留 legacy JSON 作为非破坏式惰性导入来源，本轮不自动删除旧文件。
+- 关键设计产物：
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/_index.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/architecture.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/bdd-specs.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/best-practices.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-plan/_index.md`
+
 # 任务计划（2026-03-04）
 
 ## 新任务：Web 前端浅蓝主题收口
