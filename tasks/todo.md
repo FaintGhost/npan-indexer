@@ -1045,3 +1045,68 @@
 - 结论：
   - 当前实现已满足把 `instantsearchEnabled` 作为发布闸门进行灰度的条件。
   - 在未补齐针对 `preprocessQuery()` / `All -> Last` 的业务结果对比前，不建议移除 legacy fallback。
+
+## 新任务：React InstantSearch 纠偏实施计划（Writing Plans）
+
+- [x] 1. 基于 `docs/plans/2026-03-08-react-instantsearch-alignment-design/` 产出新的纠偏计划目录
+- [x] 2. 将任务拆分为 BDD 驱动的 Red/Green 粒度，覆盖输入语义、query adapter 与默认过滤
+- [x] 3. 补齐结果对比、灰度与回滚闸门任务，明确验证与阻塞级差异
+- [x] 4. 回填执行移交说明，明确旧 2026-03-07 范围约束失效，以 alignment design 为准
+
+## Review（React InstantSearch 纠偏 / 实施计划）
+
+- 计划目录：
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/_index.md`
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/task-001-public-search-as-you-type-test.md`
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/task-001-public-search-as-you-type-impl.md`
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/task-002-query-normalizer-test.md`
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/task-002-query-normalizer-impl.md`
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/task-003-public-default-filters-test.md`
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/task-003-public-default-filters-impl.md`
+  - `docs/plans/2026-03-08-react-instantsearch-alignment-plan/task-004-alignment-verification-and-rollout-gate.md`
+- 关键范围调整：
+  - 目标已从旧计划的“官方默认直连模式”收敛为“官方行为 + 关键对齐”。
+  - 新计划显式纳入 search-as-you-type、legacy `preprocessQuery()` 最小 adapter、以及 `type=file` / `is_deleted=false` / `in_trash=false` 默认过滤基线。
+  - 仍保留 legacy `AppSearch` fallback 作为灰度与回滚兜底；本轮不承诺复刻完整 `All -> Last` fallback。
+- 提交边界：
+  - Boundary A：`task-001`
+  - Boundary B：`task-002` ~ `task-003`
+  - Boundary C：`task-004`
+- 后续移交：
+  - 下一步应在用户审批后使用 `superpowers:executing-plans` 基于该计划执行实现与验证。
+
+## Review（React InstantSearch 纠偏 / 执行结果）
+
+- 改动文件：
+  - `web/src/routes/index.lazy.tsx`
+  - `web/src/components/search-page.test.tsx`
+  - `web/src/components/search-filters.test.tsx`
+  - `web/src/lib/meili-search-client.ts`
+  - `web/src/lib/meili-search-client.test.ts`
+  - `web/src/lib/public-search-request-adapter.ts`
+  - `web/src/lib/search-query-normalizer.ts`
+  - `web/src/lib/search-query-normalizer.test.ts`
+- 对齐结果：
+  - public 搜索已恢复 search-as-you-type；输入停顿后会自动触发 `/multi-search`，同时保留 Enter 与搜索按钮立即提交能力。
+  - public 请求层已补齐 legacy `preprocessQuery()` 的最小语义：仅改写 outbound query，不改写输入框展示或 URL 中的原始 query。
+  - public 请求层已建立默认过滤基线：`type = "file" AND is_deleted = false AND in_trash = false`，并确认 `file_category` refinement 只会在该基线上叠加。
+  - legacy `AppSearch` fallback 继续保留；`instantsearchEnabled` 关闭时，前端仍回退到 legacy 搜索与下载链路。
+- 自动化验证：
+  - `cd web && bun vitest run src/components/search-page.test.tsx src/components/search-filters.test.tsx src/components/search-input.test.tsx src/lib/meili-search-client.test.ts src/lib/search-query-normalizer.test.ts` 通过（49 passed）。
+  - `cd web && bun vitest run` 通过（27 files / 222 tests）。
+  - `docker compose -f /root/workspace/npan-indexer/docker-compose.ci.yml up --build -d --wait --wait-timeout 120` + `/root/workspace/npan-indexer/tests/smoke/smoke_test.sh` 通过（34 passed / 0 failed）。
+  - `docker compose -f /root/workspace/npan-indexer/docker-compose.ci.yml --profile e2e run --rm playwright sh -c "npm install 2>/dev/null; npx playwright test --grep search"` 通过（24 passed）。
+  - `docker compose -f /root/workspace/npan-indexer/docker-compose.ci.yml --profile e2e down --volumes` 已完成清理。
+  - `git diff --check` 通过。
+- 结果对比与发布闸门结论：
+  - 当前自动化证据已覆盖 search-as-you-type、立即提交、默认过滤、`file_category` refinement、public 下载仍经 `AppService.AppDownloadURL`、以及 `instantsearchEnabled=false` 时的 legacy fallback。
+  - 本轮未发现 folder / deleted / trash 泄漏，也未发现 public 输入链路再次退化为 submit-only 的阻塞级差异。
+  - `instantsearchEnabled` 可以继续作为灰度与快速回滚闸门；关闭该开关即可回退到 legacy `AppSearch`，无需变更用户访问入口。
+- 发布建议：
+  - 可以继续按闸门灰度 public 搜索。
+  - 在补完更系统的代表性查询集人工对比前，仍不建议将 public 搜索默认全量开启，也不建议移除 legacy fallback。
+- reviewer 追补修复：
+  - 根据 code review 补充锁定了一个高置信度回归：public 模式在初始渲染与 clear 回到初始态后，仍会发送空查询检索请求，和页面“等待探索”的语义不一致。
+  - 已在 `web/src/lib/public-search-request-adapter.ts` 的 public search wrapper 层增加空查询短路：当本轮请求全部为空 query 时，直接返回空结果而不触发真实 Meilisearch 搜索。
+  - 已新增并跑通对应回归测试，覆盖“初始空查询不发请求”与“clear 后不发请求”；同时复跑 `src/components/search-page.test.tsx` 与前端全量 Vitest 均通过（27 files / 223 tests）。
+  - 修复后再次做 focused review，未发现新的高置信度重要问题；search-as-you-type、Enter/按钮提交、`file_category` refinement、legacy fallback 与空结果兼容性均保持成立。

@@ -33,6 +33,7 @@ import {
   type SearchUiState,
 } from '@/lib/instantsearch-routing'
 import { createPublicSearchClient, type PublicSearchClientConfig } from '@/lib/meili-search-client'
+import { wrapPublicSearchClient } from '@/lib/public-search-request-adapter'
 import { loadSearchConfig, resolveSearchBootstrapMode } from '@/lib/search-config'
 import type { IndexDocument } from '@/lib/schemas'
 import { useDownload } from '@/hooks/use-download'
@@ -640,55 +641,86 @@ function PublicSearchBody({
   const { query, refine } = useSearchBox()
   const { status, error, setUiState } = useInstantSearch<SearchUiState>({ catchError: true })
   const [inputValue, setInputValue] = useState(query)
-  const syncFromQueryRef = useRef(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const previousQueryRef = useRef(query)
 
   useEffect(() => {
-    if (syncFromQueryRef.current) {
-      syncFromQueryRef.current = false
+    if (query.trim()) {
+      setDocked(true)
+    }
+  }, [query, setDocked])
+
+  useEffect(() => {
+    if (query === previousQueryRef.current) {
       return
     }
 
+    previousQueryRef.current = query
     setInputValue(query)
     setDocked(query.trim().length > 0)
   }, [query, setDocked])
+
+  const clearDebounce = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+  }, [])
 
   const resetSearchState = useCallback(() => {
     setUiState(() => ({}))
   }, [setUiState])
 
-  const handleChange = useCallback((value: string) => {
-    setInputValue(value)
-
-    if (!value.trim()) {
-      resetSearchState()
-      setDocked(false)
-      return
-    }
-
-    setDocked(true)
-  }, [resetSearchState, setDocked])
-
-  const handleSubmit = useCallback(() => {
-    const nextQuery = (inputRef.current?.value ?? inputValue).trim()
-    if (!nextQuery) {
+  const commitQuery = useCallback((nextQuery: string) => {
+    const trimmedQuery = nextQuery.trim()
+    if (!trimmedQuery) {
       setInputValue('')
       resetSearchState()
       setDocked(false)
       return
     }
 
-    syncFromQueryRef.current = true
-    setInputValue(nextQuery)
+    setInputValue(trimmedQuery)
     setDocked(true)
-    refine(nextQuery)
-  }, [inputRef, inputValue, refine, resetSearchState, setDocked])
+    refine(trimmedQuery)
+  }, [refine, resetSearchState, setDocked])
+
+  const handleChange = useCallback((value: string) => {
+    setInputValue(value)
+
+    if (!value.trim()) {
+      clearDebounce()
+      resetSearchState()
+      setDocked(false)
+      return
+    }
+
+    setDocked(true)
+    clearDebounce()
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null
+      commitQuery(value)
+    }, DEBOUNCE_MS)
+  }, [clearDebounce, commitQuery, resetSearchState, setDocked])
+
+  const handleSubmit = useCallback(() => {
+    clearDebounce()
+    commitQuery(inputRef.current?.value ?? inputValue)
+  }, [clearDebounce, commitQuery, inputRef, inputValue])
 
   const handleClear = useCallback(() => {
+    clearDebounce()
     setInputValue('')
     resetSearchState()
     setDocked(false)
     inputRef.current?.focus()
-  }, [inputRef, resetSearchState, setDocked])
+  }, [clearDebounce, inputRef, resetSearchState, setDocked])
+
+  useEffect(() => {
+    return () => {
+      clearDebounce()
+    }
+  }, [clearDebounce])
 
   let statusText = '随时准备为您检索文件'
   let statusError = false
@@ -797,7 +829,7 @@ export function SearchPage() {
       return null
     }
 
-    return createPublicSearchClient(publicSearchConfig)
+    return wrapPublicSearchClient(createPublicSearchClient(publicSearchConfig))
   }, [publicSearchConfig])
 
   if (bootstrapMode === 'public' && publicSearch && publicSearchConfig) {

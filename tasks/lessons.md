@@ -7,6 +7,11 @@
   - 涉及 Meilisearch + InstantSearch 集成时，先查 `meilisearch.com` 官方文档。
   - 只有在 Meilisearch 官方文档缺少底层实现细节时，才下钻到上游 InstantSearch/Algolia 文档，并明确标注它只是兼容层参考，不是当前项目的一手来源。
   - 若用户已指定官方文档入口，后续检索必须以该入口为主，不要自行切换到其他厂商文档。
+- 用户纠正：当前 InstantSearch 的目标不是“严格保持首批官方默认直连模式”，而是“官方行为 + 关键对齐”——既要恢复 search-as-you-type，也要补齐最关键的 legacy 搜索语义差异。
+- 规则：
+  - 当线上反馈已证明“官方默认模式”产生明显业务回退时，必须及时收敛目标为“官方交互行为 + 关键业务语义对齐”，不能继续拿旧设计中的范围约束当成不修的理由。
+  - 搜索体验纠偏时，要先区分“交互行为偏差”（如 submit-only vs search-as-you-type）与“结果语义偏差”（如 query preprocess、默认过滤），分别定位并建模到设计/计划中。
+  - 若现有 design 文档已与用户新确认的目标冲突，必须先补新的 design，再进入 writing-plans；不要直接复用过时 design 继续拆计划。
 
 ## 2026-03-04
 
