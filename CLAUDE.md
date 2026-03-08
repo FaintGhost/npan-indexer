@@ -22,6 +22,7 @@
 - 后端：Go 1.25+, Echo v5, Meilisearch, Prometheus
 - 前端：React 19, Vite, TanStack Router, Bun, Vitest, Playwright
 - RPC：Buf + Protobuf + Connect-RPC（Connect/gRPC/gRPC-Web handler 由 connect-go 生成）
+- 状态持久化：SQLite（`modernc.org/sqlite`，默认文件 `./data/state/sync-state.sqlite`）
 - 契约：
   - Protobuf（Connect 路径）：`proto/npan/v1/api.proto`
 
@@ -157,6 +158,19 @@ docker compose -f docker-compose.ci.yml --profile e2e down --volumes
 后端会嵌入前端构建产物（`web/dist`）。
 - 本地 `go run ./cmd/server` 前若无 `web/dist`，需要先构建前端或使用仓库已有产物
 - Dockerfile 会自动构建前端并复制到镜像
+
+### 6.4 SQLite 状态库与 legacy JSON
+
+当前同步状态默认已切到 SQLite：
+- 默认路径：`NPA_STATE_DB_FILE=./data/state/sync-state.sqlite`
+- `cmd/server/main.go` 与 `internal/cli/root.go` 都通过 `storage.NewSQLiteStateStores(...)` 初始化状态存储
+- `progress` / `sync_state` / `checkpoint` 统一写入 SQLite
+
+兼容边界：
+- `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留，但角色仅是 legacy 导入来源
+- 不要把 legacy JSON 当作运行时主状态源
+- 排障时优先检查 SQLite 文件，再决定是否对照旧 JSON
+- CLI `sync-progress` 默认读 SQLite，可通过 `--state-db-file` 指定路径
 
 ## 7. 改动建议（给接手 agent）
 

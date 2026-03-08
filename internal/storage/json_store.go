@@ -36,6 +36,8 @@ type JSONCheckpointStore struct {
 	mu       sync.Mutex
 }
 
+type JSONCheckpointStoreFactory struct{}
+
 func writeFileAtomic(filePath string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -124,6 +126,14 @@ func normalizeSyncProgressState(state *models.SyncProgressState) *models.SyncPro
 		state.RootProgress = map[string]*models.RootSyncProgress{}
 	}
 	return state
+}
+
+func NewJSONCheckpointStoreFactory() *JSONCheckpointStoreFactory {
+	return &JSONCheckpointStoreFactory{}
+}
+
+func (f *JSONCheckpointStoreFactory) ForKey(key string) CheckpointStore {
+	return NewJSONCheckpointStore(key)
 }
 
 func NewJSONCheckpointStore(filePath string) *JSONCheckpointStore {

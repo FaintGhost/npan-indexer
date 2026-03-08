@@ -99,10 +99,12 @@ func newTestSyncManager(t *testing.T, idx *search.MeiliIndex) (*SyncManager, str
 	syncStateFile := filepath.Join(tmpDir, "sync_state.json")
 
 	mgr := NewSyncManager(SyncManagerArgs{
-		Index:              idx,
-		ProgressStore:      storage.NewJSONProgressStore(progressFile),
-		MeiliHost:          "http://127.0.0.1:7700",
-		MeiliIndex:         "test_items",
+		Index:            idx,
+		ProgressStore:    storage.NewJSONProgressStore(progressFile),
+		SyncStateStore:   storage.NewJSONSyncStateStore(syncStateFile),
+		CheckpointStores: storage.NewJSONCheckpointStoreFactory(),
+		MeiliHost:        "http://127.0.0.1:7700",
+		MeiliIndex:       "test_items",
 		CheckpointTemplate: filepath.Join(tmpDir, "checkpoint.json"),
 		RootWorkers:        1,
 		ProgressEvery:      1,
@@ -114,7 +116,6 @@ func newTestSyncManager(t *testing.T, idx *search.MeiliIndex) (*SyncManager, str
 		},
 		MaxConcurrent:    2,
 		MinTimeMS:        0,
-		SyncStateFile:    syncStateFile,
 		IncrementalQuery: "*",
 		WindowOverlapMS:  5000,
 	})

@@ -5,6 +5,19 @@
 - Meilisearch 已启动（推荐 `docker compose up -d`）。
 - 已配置云盘认证参数（`NPA_TOKEN` 或 `NPA_CLIENT_ID/NPA_CLIENT_SECRET/NPA_SUB_ID`）。
 - 已配置索引参数（`MEILI_HOST`、`MEILI_API_KEY`、`MEILI_INDEX`）。
+- 已确认同步状态库路径（默认 `NPA_STATE_DB_FILE=./data/state/sync-state.sqlite`）。
+
+## 1.1 状态持久化说明
+
+当前运行时以 SQLite 作为同步状态主存储，统一保存：
+- `progress`：全量/当前同步进度
+- `sync_state`：增量游标（`lastSyncTime` 等）
+- `checkpoint`：全量 crawl 断点
+
+兼容策略：
+- `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留，用于首次读取时从 legacy JSON 惰性导入 SQLite。
+- 导入后，运行时主读写路径仍是 `NPA_STATE_DB_FILE` 指向的 SQLite 文件。
+- 本轮迁移不会自动删除旧 JSON；如需排障，可保留旧文件做人工对照。
 
 ## 2. 首次全量同步
 
@@ -52,5 +65,13 @@
 
 1. 检查 Meili 健康：`curl $MEILI_HOST/health`
 2. 检查云盘 token 是否过期。
-3. 若增量游标损坏：回退到最近有效游标后重跑增量。
-4. 若索引污染严重：清空目标索引后重跑全量。
+3. 检查 SQLite 状态库是否存在且可更新：
+  - 路径默认是 `./data/state/sync-state.sqlite`
+  - 也可通过 `NPA_STATE_DB_FILE` 覆盖
+4. 若需要人工确认当前进度，执行：
+  - `go run ./cmd/cli sync-progress --state-db-file ./data/state/sync-state.sqlite`
+5. 若增量游标异常：优先检查 SQLite 中的 `sync_state` 是否符合预期；必要时可用保留的 legacy JSON 做对照。
+6. 若索引污染严重：清空目标索引后重跑全量。
+7. 若怀疑是迁移问题：
+  - 确认 `NPA_PROGRESS_FILE` / `NPA_SYNC_STATE_FILE` 仍指向原 JSON 文件。
+  - 保留旧 JSON，不要先删除；程序会在 SQLite 缺失对应记录时惰性导入。

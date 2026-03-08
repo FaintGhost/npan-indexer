@@ -629,18 +629,29 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 				return err
 			}
 
+			stateStores, err := storage.NewSQLiteStateStores(storage.SQLiteStateStoresConfig{
+				StateDBFile:         cfg.StateDBFile,
+				LegacyProgressFile:  cfg.ProgressFile,
+				LegacySyncStateFile: syncStateFile,
+			})
+			if err != nil {
+				return err
+			}
+			defer stateStores.DB.Close()
+
 			syncManager := service.NewSyncManager(service.SyncManagerArgs{
-				Index:              meiliIndex,
-				ProgressStore:      storage.NewJSONProgressStore(cfg.ProgressFile),
-				MeiliHost:          meiliHost,
-				MeiliIndex:         meiliIndexName,
+				Index:            meiliIndex,
+				ProgressStore:    stateStores.ProgressStore,
+				SyncStateStore:   stateStores.SyncStateStore,
+				CheckpointStores: stateStores.CheckpointStoreFactory,
+				MeiliHost:        meiliHost,
+				MeiliIndex:       meiliIndexName,
 				CheckpointTemplate: checkpointTemplate,
 				RootWorkers:        rootWorkers,
 				ProgressEvery:      progressEvery,
 				Retry:              cfg.Retry,
 				MaxConcurrent:      cfg.SyncMaxConcurrent,
 				MinTimeMS:          cfg.SyncMinTimeMS,
-				SyncStateFile:      syncStateFile,
 				IncrementalQuery:   incrementalQueryWords,
 				WindowOverlapMS:    windowOverlapMS,
 			})
@@ -753,18 +764,27 @@ func waitSyncManagerStopped(syncManager *service.SyncManager, timeout time.Durat
 
 func newSyncProgressCommand(cfg config.Config) *cobra.Command {
 	var progressFile string
+	var stateDBFile string
 
 	cmd := &cobra.Command{
 		Use:   "sync-progress",
 		Short: "查看全量同步进度",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			store := storage.NewJSONProgressStore(progressFile)
-			progress, err := store.Load()
+			stateStores, err := storage.NewSQLiteStateStores(storage.SQLiteStateStoresConfig{
+				StateDBFile:        stateDBFile,
+				LegacyProgressFile: progressFile,
+			})
+			if err != nil {
+				return err
+			}
+			defer stateStores.DB.Close()
+
+			progress, err := stateStores.ProgressStore.Load()
 			if err != nil {
 				return err
 			}
 			if progress == nil {
-				return fmt.Errorf("未找到进度文件: %s", progressFile)
+				return fmt.Errorf("未找到同步进度: sqlite=%s legacy=%s", stateDBFile, progressFile)
 			}
 
 			return printJSON(progress)
@@ -772,5 +792,6 @@ func newSyncProgressCommand(cfg config.Config) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&progressFile, "progress-file", cfg.ProgressFile, "进度文件路径")
+	cmd.Flags().StringVar(&stateDBFile, "state-db-file", cfg.StateDBFile, "SQLite 状态库路径")
 	return cmd
 }

@@ -34,11 +34,15 @@ NPA_ADMIN_API_KEY=your-admin-key-minimum-16-chars
 NPA_CLIENT_ID=...
 NPA_CLIENT_SECRET=...
 NPA_SUB_ID=...
+# 可选：覆盖默认 SQLite 状态库位置
+# NPA_STATE_DB_FILE=./data/state/sync-state.sqlite
 ```
 
 说明：
-- `NPA_ADMIN_API_KEY` 必填，且长度必须 >= 16
-- 若只做最小功能联调，也可先提供 `NPA_TOKEN`，跳过 OAuth 三元组
+- `NPA_ADMIN_API_KEY` 必填，且长度必须 >= 16。
+- 若只做最小功能联调，也可先提供 `NPA_TOKEN`，跳过 OAuth 三元组。
+- `NPA_STATE_DB_FILE` 是同步状态的主存储，默认路径为 `./data/state/sync-state.sqlite`。
+- `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留为 legacy JSON 导入来源，用于首次惰性迁移与人工对照，不再是运行时主状态源。
 
 ### 2.3 启动
 
@@ -69,6 +73,25 @@ curl -sS http://localhost:1323/readyz
 
 - 搜索页：`http://localhost:1323/`
 - 管理页：`http://localhost:1323/admin/`
+
+### 2.6 SQLite 状态库说明
+
+当前同步状态默认写入单一 SQLite 文件：
+
+- 默认路径：`./data/state/sync-state.sqlite`
+- 配置项：`NPA_STATE_DB_FILE`
+
+状态库中统一保存：
+- 全量同步进度（progress）
+- 增量游标（sync state）
+- crawl checkpoint
+
+排障建议：
+- 先看 `NPA_STATE_DB_FILE` 指向的 SQLite 文件是否存在、是否持续更新。
+- 若需要对照迁移前状态，可同时保留 `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 指向的 JSON 文件；它们仅作为 legacy 导入来源，不再是默认读路径。
+- CLI `sync-progress` 默认也会优先读取 SQLite，可用 `--state-db-file` 显式指定状态库。
+
+### 2.7 本地 Docker + 真实凭据跑 admin live E2E
 
 ### 2.6 本地 Docker + 真实凭据跑 admin live E2E
 
