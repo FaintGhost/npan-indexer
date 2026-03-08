@@ -8,6 +8,7 @@ interface TestDocument {
   size: number
   modified_at: number
   type: string
+  file_category: 'doc' | 'image' | 'video' | 'archive' | 'other'
   is_deleted: boolean
   in_trash: boolean
 }
@@ -19,6 +20,7 @@ const namedDocs: TestDocument[] = [
     size: 1048576,
     modified_at: 1718444400, // 2024-06-15T10:30:00Z
     type: 'file',
+    file_category: 'doc',
     is_deleted: false,
     in_trash: false,
   },
@@ -28,6 +30,7 @@ const namedDocs: TestDocument[] = [
     size: 524288,
     modified_at: 1721484000, // 2024-07-20T14:00:00Z
     type: 'file',
+    file_category: 'doc',
     is_deleted: false,
     in_trash: false,
   },
@@ -37,6 +40,27 @@ const namedDocs: TestDocument[] = [
     size: 2097152,
     modified_at: 1722502800, // 2024-08-01T09:00:00Z
     type: 'file',
+    file_category: 'image',
+    is_deleted: false,
+    in_trash: false,
+  },
+  {
+    source_id: 9004,
+    name: 'launch-demo.mp4',
+    size: 3145728,
+    modified_at: 1725170400, // 2024-09-01T10:00:00Z
+    type: 'file',
+    file_category: 'video',
+    is_deleted: false,
+    in_trash: false,
+  },
+  {
+    source_id: 9005,
+    name: 'release-bundle.tar.gz',
+    size: 4194304,
+    modified_at: 1727852400, // 2024-10-02T11:00:00Z
+    type: 'file',
+    file_category: 'archive',
     is_deleted: false,
     in_trash: false,
   },
@@ -48,13 +72,14 @@ const bulkDocs: TestDocument[] = Array.from({ length: 35 }, (_, i) => ({
   size: 1024 * (i + 1),
   modified_at: 1704067200, // 2024-01-01T00:00:00Z
   type: 'file',
+  file_category: 'doc',
   is_deleted: false,
   in_trash: false,
 }))
 
 export const TEST_DOCUMENTS: TestDocument[] = [...namedDocs, ...bulkDocs]
 
-const FILTERABLE_ATTRS = ['source_id', 'type', 'is_deleted', 'in_trash']
+const FILTERABLE_ATTRS = ['source_id', 'type', 'file_category', 'is_deleted', 'in_trash']
 
 function headers(): Record<string, string> {
   return {

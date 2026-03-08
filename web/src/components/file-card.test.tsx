@@ -34,6 +34,13 @@ describe('FileCard', () => {
     expect(mark?.textContent).toBe('report')
   })
 
+  it('falls back to raw file name when highlighted_name is missing', () => {
+    const doc = { ...baseDoc, highlighted_name: undefined }
+    render(<FileCard doc={doc} downloadStatus="idle" onDownload={() => {}} />)
+    expect(screen.getByText('report.pdf')).toBeInTheDocument()
+    expect(document.querySelector('mark')).toBeNull()
+  })
+
   it('renders formatted size', () => {
     render(<FileCard doc={baseDoc} downloadStatus="idle" onDownload={() => {}} />)
     expect(screen.getByText(/1 MB/)).toBeInTheDocument()

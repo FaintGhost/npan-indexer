@@ -45,6 +45,9 @@ const (
 	HealthServiceHealthProcedure = "/npan.v1.HealthService/Health"
 	// HealthServiceReadyzProcedure is the fully-qualified name of the HealthService's Readyz RPC.
 	HealthServiceReadyzProcedure = "/npan.v1.HealthService/Readyz"
+	// AppServiceGetSearchConfigProcedure is the fully-qualified name of the AppService's
+	// GetSearchConfig RPC.
+	AppServiceGetSearchConfigProcedure = "/npan.v1.AppService/GetSearchConfig"
 	// AppServiceAppSearchProcedure is the fully-qualified name of the AppService's AppSearch RPC.
 	AppServiceAppSearchProcedure = "/npan.v1.AppService/AppSearch"
 	// AppServiceAppDownloadURLProcedure is the fully-qualified name of the AppService's AppDownloadURL
@@ -177,6 +180,7 @@ func (UnimplementedHealthServiceHandler) Readyz(context.Context, *connect.Reques
 
 // AppServiceClient is a client for the npan.v1.AppService service.
 type AppServiceClient interface {
+	GetSearchConfig(context.Context, *connect.Request[v1.GetSearchConfigRequest]) (*connect.Response[v1.GetSearchConfigResponse], error)
 	AppSearch(context.Context, *connect.Request[v1.AppSearchRequest]) (*connect.Response[v1.AppSearchResponse], error)
 	AppDownloadURL(context.Context, *connect.Request[v1.AppDownloadURLRequest]) (*connect.Response[v1.AppDownloadURLResponse], error)
 }
@@ -192,6 +196,12 @@ func NewAppServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 	baseURL = strings.TrimRight(baseURL, "/")
 	appServiceMethods := v1.File_npan_v1_api_proto.Services().ByName("AppService").Methods()
 	return &appServiceClient{
+		getSearchConfig: connect.NewClient[v1.GetSearchConfigRequest, v1.GetSearchConfigResponse](
+			httpClient,
+			baseURL+AppServiceGetSearchConfigProcedure,
+			connect.WithSchema(appServiceMethods.ByName("GetSearchConfig")),
+			connect.WithClientOptions(opts...),
+		),
 		appSearch: connect.NewClient[v1.AppSearchRequest, v1.AppSearchResponse](
 			httpClient,
 			baseURL+AppServiceAppSearchProcedure,
@@ -209,8 +219,14 @@ func NewAppServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 
 // appServiceClient implements AppServiceClient.
 type appServiceClient struct {
-	appSearch      *connect.Client[v1.AppSearchRequest, v1.AppSearchResponse]
-	appDownloadURL *connect.Client[v1.AppDownloadURLRequest, v1.AppDownloadURLResponse]
+	getSearchConfig *connect.Client[v1.GetSearchConfigRequest, v1.GetSearchConfigResponse]
+	appSearch       *connect.Client[v1.AppSearchRequest, v1.AppSearchResponse]
+	appDownloadURL  *connect.Client[v1.AppDownloadURLRequest, v1.AppDownloadURLResponse]
+}
+
+// GetSearchConfig calls npan.v1.AppService.GetSearchConfig.
+func (c *appServiceClient) GetSearchConfig(ctx context.Context, req *connect.Request[v1.GetSearchConfigRequest]) (*connect.Response[v1.GetSearchConfigResponse], error) {
+	return c.getSearchConfig.CallUnary(ctx, req)
 }
 
 // AppSearch calls npan.v1.AppService.AppSearch.
@@ -225,6 +241,7 @@ func (c *appServiceClient) AppDownloadURL(ctx context.Context, req *connect.Requ
 
 // AppServiceHandler is an implementation of the npan.v1.AppService service.
 type AppServiceHandler interface {
+	GetSearchConfig(context.Context, *connect.Request[v1.GetSearchConfigRequest]) (*connect.Response[v1.GetSearchConfigResponse], error)
 	AppSearch(context.Context, *connect.Request[v1.AppSearchRequest]) (*connect.Response[v1.AppSearchResponse], error)
 	AppDownloadURL(context.Context, *connect.Request[v1.AppDownloadURLRequest]) (*connect.Response[v1.AppDownloadURLResponse], error)
 }
@@ -236,6 +253,12 @@ type AppServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewAppServiceHandler(svc AppServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	appServiceMethods := v1.File_npan_v1_api_proto.Services().ByName("AppService").Methods()
+	appServiceGetSearchConfigHandler := connect.NewUnaryHandler(
+		AppServiceGetSearchConfigProcedure,
+		svc.GetSearchConfig,
+		connect.WithSchema(appServiceMethods.ByName("GetSearchConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	appServiceAppSearchHandler := connect.NewUnaryHandler(
 		AppServiceAppSearchProcedure,
 		svc.AppSearch,
@@ -250,6 +273,8 @@ func NewAppServiceHandler(svc AppServiceHandler, opts ...connect.HandlerOption) 
 	)
 	return "/npan.v1.AppService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case AppServiceGetSearchConfigProcedure:
+			appServiceGetSearchConfigHandler.ServeHTTP(w, r)
 		case AppServiceAppSearchProcedure:
 			appServiceAppSearchHandler.ServeHTTP(w, r)
 		case AppServiceAppDownloadURLProcedure:
@@ -262,6 +287,10 @@ func NewAppServiceHandler(svc AppServiceHandler, opts ...connect.HandlerOption) 
 
 // UnimplementedAppServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedAppServiceHandler struct{}
+
+func (UnimplementedAppServiceHandler) GetSearchConfig(context.Context, *connect.Request[v1.GetSearchConfigRequest]) (*connect.Response[v1.GetSearchConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("npan.v1.AppService.GetSearchConfig is not implemented"))
+}
 
 func (UnimplementedAppServiceHandler) AppSearch(context.Context, *connect.Request[v1.AppSearchRequest]) (*connect.Response[v1.AppSearchResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("npan.v1.AppService.AppSearch is not implemented"))

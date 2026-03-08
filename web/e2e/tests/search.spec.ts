@@ -1,6 +1,35 @@
+import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures/auth'
 import { SearchPage } from '../pages/search-page'
 import { seedMeilisearch, clearMeilisearch } from '../fixtures/seed'
+
+const PUBLIC_MEILI_HOST = process.env.MEILI_PUBLIC_SEARCH_HOST ?? process.env.MEILI_HOST ?? 'http://localhost:7700'
+const PUBLIC_MEILI_INDEX = process.env.MEILI_PUBLIC_SEARCH_INDEX ?? process.env.MEILI_INDEX ?? 'npan_items'
+const PUBLIC_MEILI_SEARCH_API_KEY = process.env.MEILI_PUBLIC_SEARCH_API_KEY ?? 'ci-test-public-search-key-5678'
+
+interface PublicSearchDoc {
+  source_id: number
+  name: string
+  file_category: 'doc' | 'image' | 'video' | 'archive' | 'other'
+}
+
+const PUBLIC_SEARCH_DOCS: PublicSearchDoc[] = [
+  {
+    source_id: 9001,
+    name: 'quarterly-report-2024.pdf',
+    file_category: 'doc',
+  },
+  {
+    source_id: 9002,
+    name: 'project-design-spec.docx',
+    file_category: 'doc',
+  },
+  {
+    source_id: 9003,
+    name: 'architecture-diagram.png',
+    file_category: 'image',
+  },
+]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -15,6 +44,82 @@ function getStringField(record: Record<string, unknown>, key: string): string | 
     return String(value)
   }
   return null
+}
+
+async function enablePublicSearchBootstrap(page: Page): Promise<void> {
+  await page.route('**/npan.v1.AppService/GetSearchConfig**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        host: PUBLIC_MEILI_HOST,
+        indexName: PUBLIC_MEILI_INDEX,
+        searchApiKey: PUBLIC_MEILI_SEARCH_API_KEY,
+        instantsearchEnabled: true,
+      }),
+    }),
+  )
+
+  await page.route('**/multi-search**', async (route) => {
+    const payload: unknown = route.request().postDataJSON()
+    const postData = isRecord(payload) ? payload : {}
+    const queries = Array.isArray(postData.queries) ? postData.queries : []
+    const queryPayload = isRecord(queries[0]) ? queries[0] : {}
+    const rawQuery = typeof queryPayload.q === 'string' ? queryPayload.q : ''
+    const query = rawQuery.trim().toLowerCase()
+
+    const rawFilter = queryPayload.filter
+    const filterText = typeof rawFilter === 'string'
+      ? rawFilter
+      : Array.isArray(rawFilter)
+        ? JSON.stringify(rawFilter)
+        : ''
+
+    const matchedDocs = PUBLIC_SEARCH_DOCS.filter((doc) => doc.name.toLowerCase().includes(query))
+    const docs = filterText.includes('file_category')
+      ? matchedDocs.filter((doc) => filterText.includes(doc.file_category))
+      : matchedDocs
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [
+          {
+            indexUid: PUBLIC_MEILI_INDEX,
+            hits: docs.map((doc) => ({
+              id: String(doc.source_id),
+              doc_id: `file_${doc.source_id}`,
+              source_id: doc.source_id,
+              type: 'file',
+              name: doc.name,
+              path_text: `/${doc.name}`,
+              parent_id: 0,
+              modified_at: 1700000000,
+              created_at: 1700000000,
+              size: 1024,
+              sha1: `sha1-${doc.source_id}`,
+              in_trash: false,
+              is_deleted: false,
+              file_category: doc.file_category,
+              downloadUrl: 'https://example.com/hit-download.pdf',
+            })),
+            query: rawQuery,
+            processingTimeMs: 1,
+            limit: 20,
+            offset: 0,
+            estimatedTotalHits: docs.length,
+            facetDistribution: {
+              file_category: docs.reduce<Record<string, number>>((acc, doc) => {
+                acc[doc.file_category] = (acc[doc.file_category] ?? 0) + 1
+                return acc
+              }, {}),
+            },
+          },
+        ],
+      }),
+    })
+  })
 }
 
 test.describe('搜索流程', () => {
@@ -55,8 +160,6 @@ test.describe('搜索流程', () => {
     await searchPage.waitForResults()
     const count = await searchPage.getResultCount()
     expect(count).toBeGreaterThanOrEqual(1)
-    // Status text should show loaded count
-    await expect(searchPage.statusText).toContainText('已加载')
   })
 
   // Test 3: 点击搜索按钮立即搜索
@@ -169,8 +272,8 @@ test.describe('搜索流程', () => {
     expect(resultBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1)
   })
 
-  // Test 10: 扩展名筛选与 URL 参数同步
-  test('扩展名筛选与 URL 参数同步', async ({ page }) => {
+  // Test 10: 分类筛选与 URL 参数同步
+  test('分类筛选与 URL 参数同步', async ({ page }) => {
     await searchPage.search('test')
     await searchPage.waitForResults()
     await expect(searchPage.resultArticles).toHaveCount(30, { timeout: 10_000 })
@@ -179,13 +282,69 @@ test.describe('搜索流程', () => {
     const allFilter = page.getByRole('radio', { name: '全部' })
 
     await imageFilter.click()
-    await expect(page).toHaveURL(/ext=image/)
+    await expect(page).toHaveURL(/file_category=image/)
     await expect(page.getByRole('heading', { name: '未找到相关文件' })).toBeVisible()
     await expect(searchPage.resultArticles).toHaveCount(0)
 
     await allFilter.click()
-    await expect(page).not.toHaveURL(/ext=/)
+    await expect(page).not.toHaveURL(/file_category=/)
     await expect(searchPage.resultArticles).toHaveCount(35, { timeout: 10_000 })
+  })
+
+  test('URL 可恢复 public query 与 file_category refinement', async ({ page }) => {
+    await enablePublicSearchBootstrap(page)
+    searchPage = new SearchPage(page)
+
+    const responsePromise = searchPage.waitForPublicSearchResponse({
+      query: 't',
+      filterContains: 'file_category',
+    }, 10_000)
+    await searchPage.goto('/?query=t&file_category=doc')
+    const response = await responsePromise
+
+    expect(response.status()).toBe(200)
+    await expect(searchPage.searchInput).toHaveValue('t')
+    await expect(page.getByRole('radio', { name: '文档' })).toBeChecked()
+    await expect(page.getByTitle('quarterly-report-2024.pdf')).toBeVisible()
+    await expect(page.getByTitle('project-design-spec.docx')).toBeVisible()
+    await expect(page.getByTitle('architecture-diagram.png')).toHaveCount(0)
+  })
+
+  test('浏览器后退/前进可恢复 public search 视图', async ({ page }) => {
+    await enablePublicSearchBootstrap(page)
+    searchPage = new SearchPage(page)
+    await searchPage.goto()
+
+    const initialSearch = await searchPage.searchPublicImmediate('t')
+    expect(initialSearch.status()).toBe(200)
+    await expect(searchPage.searchInput).toHaveValue('t')
+    await expect(page.getByTitle('quarterly-report-2024.pdf')).toBeVisible()
+
+    const imageFilterResponse = searchPage.waitForPublicSearchResponse({
+      query: 't',
+      filterContains: 'file_category',
+    }, 10_000)
+    await page.getByRole('radio', { name: '图片' }).click()
+    await imageFilterResponse
+
+    await expect(page).toHaveURL(/file_category=image/)
+    await expect(page.getByRole('radio', { name: '图片' })).toBeChecked()
+    await expect(page.getByTitle('architecture-diagram.png')).toBeVisible()
+    await expect(page.getByTitle('quarterly-report-2024.pdf')).toHaveCount(0)
+
+    await page.goBack()
+
+    await expect(page).not.toHaveURL(/file_category=image/)
+    await expect(searchPage.searchInput).toHaveValue('t')
+    await expect(page.getByRole('radio', { name: '全部' })).toBeChecked()
+    await expect(page.getByTitle('quarterly-report-2024.pdf')).toBeVisible()
+
+    await page.goForward()
+
+    await expect(page).toHaveURL(/file_category=image/)
+    await expect(page.getByRole('radio', { name: '图片' })).toBeChecked()
+    await expect(page.getByTitle('architecture-diagram.png')).toBeVisible()
+    await expect(page.getByTitle('quarterly-report-2024.pdf')).toHaveCount(0)
   })
 })
 
@@ -206,7 +365,7 @@ test.describe('下载流程', () => {
     // Intercept window.open
     await page.addInitScript(() => {
       const calls: string[] = []
-      ;(window as any).__openCalls = calls
+      Reflect.set(window, '__openCalls', calls)
       window.open = (url?: string | URL) => {
         if (url) calls.push(String(url))
         return null
@@ -251,7 +410,12 @@ test.describe('下载流程', () => {
     await expect(downloadButton).toContainText('成功', { timeout: 5_000 })
 
     // window.open should have been called
-    const urls = await page.evaluate(() => (window as any).__openCalls as string[])
+    const urls = await page.evaluate(() => {
+      const openCalls = Reflect.get(window, '__openCalls')
+      return Array.isArray(openCalls)
+        ? openCalls.filter((value): value is string => typeof value === 'string')
+        : []
+    })
     expect(urls.length).toBeGreaterThanOrEqual(1)
     expect(urls[0]).toContain('example.com')
 
@@ -277,6 +441,53 @@ test.describe('下载流程', () => {
     await expect(downloadButton).toContainText('重试', { timeout: 5_000 })
     // Button should still be clickable (enabled)
     await expect(downloadButton).toBeEnabled()
+  })
+
+  test('public InstantSearch 下载仍调用 AppDownloadURL 而不是依赖 hit 内地址', async ({ page }) => {
+    await enablePublicSearchBootstrap(page)
+    searchPage = new SearchPage(page)
+
+    const downloadRequests: Array<Record<string, unknown>> = []
+    await page.route('**/npan.v1.AppService/AppDownloadURL**', async (route) => {
+      const payload: unknown = route.request().postDataJSON()
+      if (isRecord(payload)) {
+        downloadRequests.push(payload)
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          result: {
+            fileId: '9001',
+            downloadUrl: 'https://example.com/public-rpc-download.pdf',
+          },
+        }),
+      })
+    })
+
+    await searchPage.goto()
+    const publicSearchResponse = searchPage.waitForPublicSearchResponse({ query: 'quarterly' }, 10_000)
+    await searchPage.searchInput.fill('quarterly')
+    await searchPage.searchButton.click()
+    await publicSearchResponse
+
+    const resultCard = page.locator('article').filter({ has: page.getByTitle('quarterly-report-2024.pdf') }).first()
+    await expect(resultCard).toBeVisible()
+
+    const downloadResponse = searchPage.waitForDownloadResponse({ fileId: 9001 }, 5_000)
+    await resultCard.getByRole('button', { name: '下载' }).click()
+    await downloadResponse
+
+    expect(downloadRequests).toEqual([{ fileId: '9001' }])
+
+    const urls = await page.evaluate(() => {
+      const openCalls = Reflect.get(window, '__openCalls')
+      return Array.isArray(openCalls)
+        ? openCalls.filter((value): value is string => typeof value === 'string')
+        : []
+    })
+    expect(urls).toContain('https://example.com/public-rpc-download.pdf')
+    expect(urls).not.toContain('https://example.com/hit-download.pdf')
   })
 
   test('多个文件可同时下载', async ({ page }) => {

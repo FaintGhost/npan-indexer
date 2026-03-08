@@ -1592,6 +1592,110 @@ func (x *ReadyzResponse) GetMeili() string {
 	return ""
 }
 
+type GetSearchConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSearchConfigRequest) Reset() {
+	*x = GetSearchConfigRequest{}
+	mi := &file_npan_v1_api_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSearchConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSearchConfigRequest) ProtoMessage() {}
+
+func (x *GetSearchConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_npan_v1_api_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSearchConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetSearchConfigRequest) Descriptor() ([]byte, []int) {
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{17}
+}
+
+type GetSearchConfigResponse struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Host                 string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	IndexName            string                 `protobuf:"bytes,2,opt,name=index_name,json=indexName,proto3" json:"index_name,omitempty"`
+	SearchApiKey         string                 `protobuf:"bytes,3,opt,name=search_api_key,json=searchApiKey,proto3" json:"search_api_key,omitempty"`
+	InstantsearchEnabled bool                   `protobuf:"varint,4,opt,name=instantsearch_enabled,json=instantsearchEnabled,proto3" json:"instantsearch_enabled,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *GetSearchConfigResponse) Reset() {
+	*x = GetSearchConfigResponse{}
+	mi := &file_npan_v1_api_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSearchConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSearchConfigResponse) ProtoMessage() {}
+
+func (x *GetSearchConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_npan_v1_api_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSearchConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetSearchConfigResponse) Descriptor() ([]byte, []int) {
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetSearchConfigResponse) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *GetSearchConfigResponse) GetIndexName() string {
+	if x != nil {
+		return x.IndexName
+	}
+	return ""
+}
+
+func (x *GetSearchConfigResponse) GetSearchApiKey() string {
+	if x != nil {
+		return x.SearchApiKey
+	}
+	return ""
+}
+
+func (x *GetSearchConfigResponse) GetInstantsearchEnabled() bool {
+	if x != nil {
+		return x.InstantsearchEnabled
+	}
+	return false
+}
+
 type AppSearchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Query         string                 `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
@@ -1603,7 +1707,7 @@ type AppSearchRequest struct {
 
 func (x *AppSearchRequest) Reset() {
 	*x = AppSearchRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[17]
+	mi := &file_npan_v1_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1615,7 +1719,7 @@ func (x *AppSearchRequest) String() string {
 func (*AppSearchRequest) ProtoMessage() {}
 
 func (x *AppSearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[17]
+	mi := &file_npan_v1_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1628,7 +1732,7 @@ func (x *AppSearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppSearchRequest.ProtoReflect.Descriptor instead.
 func (*AppSearchRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{17}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AppSearchRequest) GetQuery() string {
@@ -1661,7 +1765,7 @@ type AppSearchResponse struct {
 
 func (x *AppSearchResponse) Reset() {
 	*x = AppSearchResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[18]
+	mi := &file_npan_v1_api_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1673,7 +1777,7 @@ func (x *AppSearchResponse) String() string {
 func (*AppSearchResponse) ProtoMessage() {}
 
 func (x *AppSearchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[18]
+	mi := &file_npan_v1_api_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1686,7 +1790,7 @@ func (x *AppSearchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppSearchResponse.ProtoReflect.Descriptor instead.
 func (*AppSearchResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{18}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AppSearchResponse) GetResult() *QueryResult {
@@ -1706,7 +1810,7 @@ type AppDownloadURLRequest struct {
 
 func (x *AppDownloadURLRequest) Reset() {
 	*x = AppDownloadURLRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[19]
+	mi := &file_npan_v1_api_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1718,7 +1822,7 @@ func (x *AppDownloadURLRequest) String() string {
 func (*AppDownloadURLRequest) ProtoMessage() {}
 
 func (x *AppDownloadURLRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[19]
+	mi := &file_npan_v1_api_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1731,7 +1835,7 @@ func (x *AppDownloadURLRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppDownloadURLRequest.ProtoReflect.Descriptor instead.
 func (*AppDownloadURLRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{19}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AppDownloadURLRequest) GetFileId() int64 {
@@ -1757,7 +1861,7 @@ type AppDownloadURLResponse struct {
 
 func (x *AppDownloadURLResponse) Reset() {
 	*x = AppDownloadURLResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[20]
+	mi := &file_npan_v1_api_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1769,7 +1873,7 @@ func (x *AppDownloadURLResponse) String() string {
 func (*AppDownloadURLResponse) ProtoMessage() {}
 
 func (x *AppDownloadURLResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[20]
+	mi := &file_npan_v1_api_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1782,7 +1886,7 @@ func (x *AppDownloadURLResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppDownloadURLResponse.ProtoReflect.Descriptor instead.
 func (*AppDownloadURLResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{20}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *AppDownloadURLResponse) GetResult() *DownloadURLResult {
@@ -1806,7 +1910,7 @@ type CreateTokenRequest struct {
 
 func (x *CreateTokenRequest) Reset() {
 	*x = CreateTokenRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[21]
+	mi := &file_npan_v1_api_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1818,7 +1922,7 @@ func (x *CreateTokenRequest) String() string {
 func (*CreateTokenRequest) ProtoMessage() {}
 
 func (x *CreateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[21]
+	mi := &file_npan_v1_api_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1831,7 +1935,7 @@ func (x *CreateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTokenRequest.ProtoReflect.Descriptor instead.
 func (*CreateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{21}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CreateTokenRequest) GetToken() string {
@@ -1885,7 +1989,7 @@ type CreateTokenResponse struct {
 
 func (x *CreateTokenResponse) Reset() {
 	*x = CreateTokenResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[22]
+	mi := &file_npan_v1_api_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1897,7 +2001,7 @@ func (x *CreateTokenResponse) String() string {
 func (*CreateTokenResponse) ProtoMessage() {}
 
 func (x *CreateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[22]
+	mi := &file_npan_v1_api_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1910,7 +2014,7 @@ func (x *CreateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTokenResponse.ProtoReflect.Descriptor instead.
 func (*CreateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{22}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CreateTokenResponse) GetToken() string {
@@ -1934,7 +2038,7 @@ type RemoteSearchRequest struct {
 
 func (x *RemoteSearchRequest) Reset() {
 	*x = RemoteSearchRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[23]
+	mi := &file_npan_v1_api_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1946,7 +2050,7 @@ func (x *RemoteSearchRequest) String() string {
 func (*RemoteSearchRequest) ProtoMessage() {}
 
 func (x *RemoteSearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[23]
+	mi := &file_npan_v1_api_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1959,7 +2063,7 @@ func (x *RemoteSearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteSearchRequest.ProtoReflect.Descriptor instead.
 func (*RemoteSearchRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{23}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RemoteSearchRequest) GetQuery() string {
@@ -2020,7 +2124,7 @@ type LocalSearchRequest struct {
 
 func (x *LocalSearchRequest) Reset() {
 	*x = LocalSearchRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[24]
+	mi := &file_npan_v1_api_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2032,7 +2136,7 @@ func (x *LocalSearchRequest) String() string {
 func (*LocalSearchRequest) ProtoMessage() {}
 
 func (x *LocalSearchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[24]
+	mi := &file_npan_v1_api_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2045,7 +2149,7 @@ func (x *LocalSearchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LocalSearchRequest.ProtoReflect.Descriptor instead.
 func (*LocalSearchRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{24}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *LocalSearchRequest) GetQuery() string {
@@ -2113,7 +2217,7 @@ type LocalSearchResponse struct {
 
 func (x *LocalSearchResponse) Reset() {
 	*x = LocalSearchResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[25]
+	mi := &file_npan_v1_api_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2125,7 +2229,7 @@ func (x *LocalSearchResponse) String() string {
 func (*LocalSearchResponse) ProtoMessage() {}
 
 func (x *LocalSearchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[25]
+	mi := &file_npan_v1_api_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2138,7 +2242,7 @@ func (x *LocalSearchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LocalSearchResponse.ProtoReflect.Descriptor instead.
 func (*LocalSearchResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{25}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *LocalSearchResponse) GetResult() *QueryResult {
@@ -2158,7 +2262,7 @@ type DownloadURLRequest struct {
 
 func (x *DownloadURLRequest) Reset() {
 	*x = DownloadURLRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[26]
+	mi := &file_npan_v1_api_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2170,7 +2274,7 @@ func (x *DownloadURLRequest) String() string {
 func (*DownloadURLRequest) ProtoMessage() {}
 
 func (x *DownloadURLRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[26]
+	mi := &file_npan_v1_api_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2183,7 +2287,7 @@ func (x *DownloadURLRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadURLRequest.ProtoReflect.Descriptor instead.
 func (*DownloadURLRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{26}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DownloadURLRequest) GetFileId() int64 {
@@ -2209,7 +2313,7 @@ type DownloadURLResponse struct {
 
 func (x *DownloadURLResponse) Reset() {
 	*x = DownloadURLResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[27]
+	mi := &file_npan_v1_api_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2221,7 +2325,7 @@ func (x *DownloadURLResponse) String() string {
 func (*DownloadURLResponse) ProtoMessage() {}
 
 func (x *DownloadURLResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[27]
+	mi := &file_npan_v1_api_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2234,7 +2338,7 @@ func (x *DownloadURLResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadURLResponse.ProtoReflect.Descriptor instead.
 func (*DownloadURLResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{27}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *DownloadURLResponse) GetResult() *DownloadURLResult {
@@ -2264,7 +2368,7 @@ type StartSyncRequest struct {
 
 func (x *StartSyncRequest) Reset() {
 	*x = StartSyncRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[28]
+	mi := &file_npan_v1_api_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2276,7 +2380,7 @@ func (x *StartSyncRequest) String() string {
 func (*StartSyncRequest) ProtoMessage() {}
 
 func (x *StartSyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[28]
+	mi := &file_npan_v1_api_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2289,7 +2393,7 @@ func (x *StartSyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartSyncRequest.ProtoReflect.Descriptor instead.
 func (*StartSyncRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{28}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *StartSyncRequest) GetMode() SyncMode {
@@ -2385,7 +2489,7 @@ type StartSyncResponse struct {
 
 func (x *StartSyncResponse) Reset() {
 	*x = StartSyncResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[29]
+	mi := &file_npan_v1_api_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2397,7 +2501,7 @@ func (x *StartSyncResponse) String() string {
 func (*StartSyncResponse) ProtoMessage() {}
 
 func (x *StartSyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[29]
+	mi := &file_npan_v1_api_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2410,7 +2514,7 @@ func (x *StartSyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartSyncResponse.ProtoReflect.Descriptor instead.
 func (*StartSyncResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{29}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *StartSyncResponse) GetMessage() string {
@@ -2429,7 +2533,7 @@ type InspectRootsRequest struct {
 
 func (x *InspectRootsRequest) Reset() {
 	*x = InspectRootsRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[30]
+	mi := &file_npan_v1_api_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2441,7 +2545,7 @@ func (x *InspectRootsRequest) String() string {
 func (*InspectRootsRequest) ProtoMessage() {}
 
 func (x *InspectRootsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[30]
+	mi := &file_npan_v1_api_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2454,7 +2558,7 @@ func (x *InspectRootsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InspectRootsRequest.ProtoReflect.Descriptor instead.
 func (*InspectRootsRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{30}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *InspectRootsRequest) GetFolderIds() []int64 {
@@ -2474,7 +2578,7 @@ type InspectRootsResponse struct {
 
 func (x *InspectRootsResponse) Reset() {
 	*x = InspectRootsResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[31]
+	mi := &file_npan_v1_api_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2486,7 +2590,7 @@ func (x *InspectRootsResponse) String() string {
 func (*InspectRootsResponse) ProtoMessage() {}
 
 func (x *InspectRootsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[31]
+	mi := &file_npan_v1_api_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2499,7 +2603,7 @@ func (x *InspectRootsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InspectRootsResponse.ProtoReflect.Descriptor instead.
 func (*InspectRootsResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{31}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *InspectRootsResponse) GetItems() []*InspectRootItem {
@@ -2524,7 +2628,7 @@ type GetIndexStatsRequest struct {
 
 func (x *GetIndexStatsRequest) Reset() {
 	*x = GetIndexStatsRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[32]
+	mi := &file_npan_v1_api_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2536,7 +2640,7 @@ func (x *GetIndexStatsRequest) String() string {
 func (*GetIndexStatsRequest) ProtoMessage() {}
 
 func (x *GetIndexStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[32]
+	mi := &file_npan_v1_api_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2549,7 +2653,7 @@ func (x *GetIndexStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIndexStatsRequest.ProtoReflect.Descriptor instead.
 func (*GetIndexStatsRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{32}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{34}
 }
 
 type GetIndexStatsResponse struct {
@@ -2561,7 +2665,7 @@ type GetIndexStatsResponse struct {
 
 func (x *GetIndexStatsResponse) Reset() {
 	*x = GetIndexStatsResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[33]
+	mi := &file_npan_v1_api_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2573,7 +2677,7 @@ func (x *GetIndexStatsResponse) String() string {
 func (*GetIndexStatsResponse) ProtoMessage() {}
 
 func (x *GetIndexStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[33]
+	mi := &file_npan_v1_api_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2586,7 +2690,7 @@ func (x *GetIndexStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIndexStatsResponse.ProtoReflect.Descriptor instead.
 func (*GetIndexStatsResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{33}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *GetIndexStatsResponse) GetDocumentCount() int64 {
@@ -2604,7 +2708,7 @@ type GetSyncProgressRequest struct {
 
 func (x *GetSyncProgressRequest) Reset() {
 	*x = GetSyncProgressRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[34]
+	mi := &file_npan_v1_api_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2616,7 +2720,7 @@ func (x *GetSyncProgressRequest) String() string {
 func (*GetSyncProgressRequest) ProtoMessage() {}
 
 func (x *GetSyncProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[34]
+	mi := &file_npan_v1_api_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2629,7 +2733,7 @@ func (x *GetSyncProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncProgressRequest.ProtoReflect.Descriptor instead.
 func (*GetSyncProgressRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{34}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{36}
 }
 
 type GetSyncProgressResponse struct {
@@ -2641,7 +2745,7 @@ type GetSyncProgressResponse struct {
 
 func (x *GetSyncProgressResponse) Reset() {
 	*x = GetSyncProgressResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[35]
+	mi := &file_npan_v1_api_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2653,7 +2757,7 @@ func (x *GetSyncProgressResponse) String() string {
 func (*GetSyncProgressResponse) ProtoMessage() {}
 
 func (x *GetSyncProgressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[35]
+	mi := &file_npan_v1_api_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2666,7 +2770,7 @@ func (x *GetSyncProgressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncProgressResponse.ProtoReflect.Descriptor instead.
 func (*GetSyncProgressResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{35}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetSyncProgressResponse) GetState() *SyncProgressState {
@@ -2684,7 +2788,7 @@ type WatchSyncProgressRequest struct {
 
 func (x *WatchSyncProgressRequest) Reset() {
 	*x = WatchSyncProgressRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[36]
+	mi := &file_npan_v1_api_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2696,7 +2800,7 @@ func (x *WatchSyncProgressRequest) String() string {
 func (*WatchSyncProgressRequest) ProtoMessage() {}
 
 func (x *WatchSyncProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[36]
+	mi := &file_npan_v1_api_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2709,7 +2813,7 @@ func (x *WatchSyncProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchSyncProgressRequest.ProtoReflect.Descriptor instead.
 func (*WatchSyncProgressRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{36}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{38}
 }
 
 type WatchSyncProgressResponse struct {
@@ -2721,7 +2825,7 @@ type WatchSyncProgressResponse struct {
 
 func (x *WatchSyncProgressResponse) Reset() {
 	*x = WatchSyncProgressResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[37]
+	mi := &file_npan_v1_api_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2733,7 +2837,7 @@ func (x *WatchSyncProgressResponse) String() string {
 func (*WatchSyncProgressResponse) ProtoMessage() {}
 
 func (x *WatchSyncProgressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[37]
+	mi := &file_npan_v1_api_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2746,7 +2850,7 @@ func (x *WatchSyncProgressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchSyncProgressResponse.ProtoReflect.Descriptor instead.
 func (*WatchSyncProgressResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{37}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *WatchSyncProgressResponse) GetState() *SyncProgressState {
@@ -2764,7 +2868,7 @@ type CancelSyncRequest struct {
 
 func (x *CancelSyncRequest) Reset() {
 	*x = CancelSyncRequest{}
-	mi := &file_npan_v1_api_proto_msgTypes[38]
+	mi := &file_npan_v1_api_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2776,7 +2880,7 @@ func (x *CancelSyncRequest) String() string {
 func (*CancelSyncRequest) ProtoMessage() {}
 
 func (x *CancelSyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[38]
+	mi := &file_npan_v1_api_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2789,7 +2893,7 @@ func (x *CancelSyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelSyncRequest.ProtoReflect.Descriptor instead.
 func (*CancelSyncRequest) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{38}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{40}
 }
 
 type CancelSyncResponse struct {
@@ -2801,7 +2905,7 @@ type CancelSyncResponse struct {
 
 func (x *CancelSyncResponse) Reset() {
 	*x = CancelSyncResponse{}
-	mi := &file_npan_v1_api_proto_msgTypes[39]
+	mi := &file_npan_v1_api_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2813,7 +2917,7 @@ func (x *CancelSyncResponse) String() string {
 func (*CancelSyncResponse) ProtoMessage() {}
 
 func (x *CancelSyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_npan_v1_api_proto_msgTypes[39]
+	mi := &file_npan_v1_api_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2826,7 +2930,7 @@ func (x *CancelSyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelSyncResponse.ProtoReflect.Descriptor instead.
 func (*CancelSyncResponse) Descriptor() ([]byte, []int) {
-	return file_npan_v1_api_proto_rawDescGZIP(), []int{39}
+	return file_npan_v1_api_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *CancelSyncResponse) GetMessage() string {
@@ -2982,7 +3086,14 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x0eReadyzResponse\x12,\n" +
 	"\x06status\x18\x01 \x01(\x0e2\x14.npan.v1.ReadyStatusR\x06status\x12\x19\n" +
 	"\x05meili\x18\x02 \x01(\tH\x00R\x05meili\x88\x01\x01B\b\n" +
-	"\x06_meili\"\x8e\x01\n" +
+	"\x06_meili\"\x18\n" +
+	"\x16GetSearchConfigRequest\"\xa7\x01\n" +
+	"\x17GetSearchConfigResponse\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x1d\n" +
+	"\n" +
+	"index_name\x18\x02 \x01(\tR\tindexName\x12$\n" +
+	"\x0esearch_api_key\x18\x03 \x01(\tR\fsearchApiKey\x123\n" +
+	"\x15instantsearch_enabled\x18\x04 \x01(\bR\x14instantsearchEnabled\"\x8e\x01\n" +
 	"\x10AppSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12 \n" +
 	"\x04page\x18\x02 \x01(\x03B\a\xbaH\x04\"\x02 \x00H\x00R\x04page\x88\x01\x01\x12+\n" +
@@ -3129,9 +3240,10 @@ const file_npan_v1_api_proto_rawDesc = "" +
 	"\x16READY_STATUS_NOT_READY\x10\x022\x85\x01\n" +
 	"\rHealthService\x129\n" +
 	"\x06Health\x12\x16.npan.v1.HealthRequest\x1a\x17.npan.v1.HealthResponse\x129\n" +
-	"\x06Readyz\x12\x16.npan.v1.ReadyzRequest\x1a\x17.npan.v1.ReadyzResponse2\xa3\x01\n" +
+	"\x06Readyz\x12\x16.npan.v1.ReadyzRequest\x1a\x17.npan.v1.ReadyzResponse2\xf9\x01\n" +
 	"\n" +
-	"AppService\x12B\n" +
+	"AppService\x12T\n" +
+	"\x0fGetSearchConfig\x12\x1f.npan.v1.GetSearchConfigRequest\x1a .npan.v1.GetSearchConfigResponse\x12B\n" +
 	"\tAppSearch\x12\x19.npan.v1.AppSearchRequest\x1a\x1a.npan.v1.AppSearchResponse\x12Q\n" +
 	"\x0eAppDownloadURL\x12\x1e.npan.v1.AppDownloadURLRequest\x1a\x1f.npan.v1.AppDownloadURLResponse2W\n" +
 	"\vAuthService\x12H\n" +
@@ -3162,7 +3274,7 @@ func file_npan_v1_api_proto_rawDescGZIP() []byte {
 }
 
 var file_npan_v1_api_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_npan_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_npan_v1_api_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
 var file_npan_v1_api_proto_goTypes = []any{
 	(ItemType)(0),                     // 0: npan.v1.ItemType
 	(SyncStatus)(0),                   // 1: npan.v1.SyncStatus
@@ -3186,53 +3298,55 @@ var file_npan_v1_api_proto_goTypes = []any{
 	(*HealthResponse)(nil),            // 19: npan.v1.HealthResponse
 	(*ReadyzRequest)(nil),             // 20: npan.v1.ReadyzRequest
 	(*ReadyzResponse)(nil),            // 21: npan.v1.ReadyzResponse
-	(*AppSearchRequest)(nil),          // 22: npan.v1.AppSearchRequest
-	(*AppSearchResponse)(nil),         // 23: npan.v1.AppSearchResponse
-	(*AppDownloadURLRequest)(nil),     // 24: npan.v1.AppDownloadURLRequest
-	(*AppDownloadURLResponse)(nil),    // 25: npan.v1.AppDownloadURLResponse
-	(*CreateTokenRequest)(nil),        // 26: npan.v1.CreateTokenRequest
-	(*CreateTokenResponse)(nil),       // 27: npan.v1.CreateTokenResponse
-	(*RemoteSearchRequest)(nil),       // 28: npan.v1.RemoteSearchRequest
-	(*LocalSearchRequest)(nil),        // 29: npan.v1.LocalSearchRequest
-	(*LocalSearchResponse)(nil),       // 30: npan.v1.LocalSearchResponse
-	(*DownloadURLRequest)(nil),        // 31: npan.v1.DownloadURLRequest
-	(*DownloadURLResponse)(nil),       // 32: npan.v1.DownloadURLResponse
-	(*StartSyncRequest)(nil),          // 33: npan.v1.StartSyncRequest
-	(*StartSyncResponse)(nil),         // 34: npan.v1.StartSyncResponse
-	(*InspectRootsRequest)(nil),       // 35: npan.v1.InspectRootsRequest
-	(*InspectRootsResponse)(nil),      // 36: npan.v1.InspectRootsResponse
-	(*GetIndexStatsRequest)(nil),      // 37: npan.v1.GetIndexStatsRequest
-	(*GetIndexStatsResponse)(nil),     // 38: npan.v1.GetIndexStatsResponse
-	(*GetSyncProgressRequest)(nil),    // 39: npan.v1.GetSyncProgressRequest
-	(*GetSyncProgressResponse)(nil),   // 40: npan.v1.GetSyncProgressResponse
-	(*WatchSyncProgressRequest)(nil),  // 41: npan.v1.WatchSyncProgressRequest
-	(*WatchSyncProgressResponse)(nil), // 42: npan.v1.WatchSyncProgressResponse
-	(*CancelSyncRequest)(nil),         // 43: npan.v1.CancelSyncRequest
-	(*CancelSyncResponse)(nil),        // 44: npan.v1.CancelSyncResponse
-	nil,                               // 45: npan.v1.SyncProgressState.RootNamesEntry
-	nil,                               // 46: npan.v1.SyncProgressState.RootProgressEntry
-	nil,                               // 47: npan.v1.SyncProgressState.CatalogRootNamesEntry
-	nil,                               // 48: npan.v1.SyncProgressState.CatalogRootProgressEntry
-	(*timestamppb.Timestamp)(nil),     // 49: google.protobuf.Timestamp
+	(*GetSearchConfigRequest)(nil),    // 22: npan.v1.GetSearchConfigRequest
+	(*GetSearchConfigResponse)(nil),   // 23: npan.v1.GetSearchConfigResponse
+	(*AppSearchRequest)(nil),          // 24: npan.v1.AppSearchRequest
+	(*AppSearchResponse)(nil),         // 25: npan.v1.AppSearchResponse
+	(*AppDownloadURLRequest)(nil),     // 26: npan.v1.AppDownloadURLRequest
+	(*AppDownloadURLResponse)(nil),    // 27: npan.v1.AppDownloadURLResponse
+	(*CreateTokenRequest)(nil),        // 28: npan.v1.CreateTokenRequest
+	(*CreateTokenResponse)(nil),       // 29: npan.v1.CreateTokenResponse
+	(*RemoteSearchRequest)(nil),       // 30: npan.v1.RemoteSearchRequest
+	(*LocalSearchRequest)(nil),        // 31: npan.v1.LocalSearchRequest
+	(*LocalSearchResponse)(nil),       // 32: npan.v1.LocalSearchResponse
+	(*DownloadURLRequest)(nil),        // 33: npan.v1.DownloadURLRequest
+	(*DownloadURLResponse)(nil),       // 34: npan.v1.DownloadURLResponse
+	(*StartSyncRequest)(nil),          // 35: npan.v1.StartSyncRequest
+	(*StartSyncResponse)(nil),         // 36: npan.v1.StartSyncResponse
+	(*InspectRootsRequest)(nil),       // 37: npan.v1.InspectRootsRequest
+	(*InspectRootsResponse)(nil),      // 38: npan.v1.InspectRootsResponse
+	(*GetIndexStatsRequest)(nil),      // 39: npan.v1.GetIndexStatsRequest
+	(*GetIndexStatsResponse)(nil),     // 40: npan.v1.GetIndexStatsResponse
+	(*GetSyncProgressRequest)(nil),    // 41: npan.v1.GetSyncProgressRequest
+	(*GetSyncProgressResponse)(nil),   // 42: npan.v1.GetSyncProgressResponse
+	(*WatchSyncProgressRequest)(nil),  // 43: npan.v1.WatchSyncProgressRequest
+	(*WatchSyncProgressResponse)(nil), // 44: npan.v1.WatchSyncProgressResponse
+	(*CancelSyncRequest)(nil),         // 45: npan.v1.CancelSyncRequest
+	(*CancelSyncResponse)(nil),        // 46: npan.v1.CancelSyncResponse
+	nil,                               // 47: npan.v1.SyncProgressState.RootNamesEntry
+	nil,                               // 48: npan.v1.SyncProgressState.RootProgressEntry
+	nil,                               // 49: npan.v1.SyncProgressState.CatalogRootNamesEntry
+	nil,                               // 50: npan.v1.SyncProgressState.CatalogRootProgressEntry
+	(*timestamppb.Timestamp)(nil),     // 51: google.protobuf.Timestamp
 }
 var file_npan_v1_api_proto_depIdxs = []int32{
 	0,  // 0: npan.v1.IndexDocument.type:type_name -> npan.v1.ItemType
 	5,  // 1: npan.v1.QueryResult.items:type_name -> npan.v1.IndexDocument
-	49, // 2: npan.v1.CrawlStats.started_at_ts:type_name -> google.protobuf.Timestamp
-	49, // 3: npan.v1.CrawlStats.ended_at_ts:type_name -> google.protobuf.Timestamp
+	51, // 2: npan.v1.CrawlStats.started_at_ts:type_name -> google.protobuf.Timestamp
+	51, // 3: npan.v1.CrawlStats.ended_at_ts:type_name -> google.protobuf.Timestamp
 	7,  // 4: npan.v1.RootSyncProgress.stats:type_name -> npan.v1.CrawlStats
-	49, // 5: npan.v1.RootSyncProgress.updated_at_ts:type_name -> google.protobuf.Timestamp
+	51, // 5: npan.v1.RootSyncProgress.updated_at_ts:type_name -> google.protobuf.Timestamp
 	1,  // 6: npan.v1.SyncProgressState.status:type_name -> npan.v1.SyncStatus
 	2,  // 7: npan.v1.SyncProgressState.mode:type_name -> npan.v1.SyncMode
-	45, // 8: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
+	47, // 8: npan.v1.SyncProgressState.root_names:type_name -> npan.v1.SyncProgressState.RootNamesEntry
 	7,  // 9: npan.v1.SyncProgressState.aggregate_stats:type_name -> npan.v1.CrawlStats
-	46, // 10: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
-	47, // 11: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
-	48, // 12: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
+	48, // 10: npan.v1.SyncProgressState.root_progress:type_name -> npan.v1.SyncProgressState.RootProgressEntry
+	49, // 11: npan.v1.SyncProgressState.catalog_root_names:type_name -> npan.v1.SyncProgressState.CatalogRootNamesEntry
+	50, // 12: npan.v1.SyncProgressState.catalog_root_progress:type_name -> npan.v1.SyncProgressState.CatalogRootProgressEntry
 	9,  // 13: npan.v1.SyncProgressState.incremental_stats:type_name -> npan.v1.IncrementalSyncStats
 	10, // 14: npan.v1.SyncProgressState.verification:type_name -> npan.v1.SyncVerification
-	49, // 15: npan.v1.SyncProgressState.started_at_ts:type_name -> google.protobuf.Timestamp
-	49, // 16: npan.v1.SyncProgressState.updated_at_ts:type_name -> google.protobuf.Timestamp
+	51, // 15: npan.v1.SyncProgressState.started_at_ts:type_name -> google.protobuf.Timestamp
+	51, // 16: npan.v1.SyncProgressState.updated_at_ts:type_name -> google.protobuf.Timestamp
 	3,  // 17: npan.v1.ErrorResponse.code:type_name -> npan.v1.ErrorCode
 	14, // 18: npan.v1.RemoteSearchResponse.files:type_name -> npan.v1.RemoteSearchItem
 	14, // 19: npan.v1.RemoteSearchResponse.folders:type_name -> npan.v1.RemoteSearchItem
@@ -3250,34 +3364,36 @@ var file_npan_v1_api_proto_depIdxs = []int32{
 	8,  // 31: npan.v1.SyncProgressState.CatalogRootProgressEntry.value:type_name -> npan.v1.RootSyncProgress
 	18, // 32: npan.v1.HealthService.Health:input_type -> npan.v1.HealthRequest
 	20, // 33: npan.v1.HealthService.Readyz:input_type -> npan.v1.ReadyzRequest
-	22, // 34: npan.v1.AppService.AppSearch:input_type -> npan.v1.AppSearchRequest
-	24, // 35: npan.v1.AppService.AppDownloadURL:input_type -> npan.v1.AppDownloadURLRequest
-	26, // 36: npan.v1.AuthService.CreateToken:input_type -> npan.v1.CreateTokenRequest
-	28, // 37: npan.v1.SearchService.RemoteSearch:input_type -> npan.v1.RemoteSearchRequest
-	29, // 38: npan.v1.SearchService.LocalSearch:input_type -> npan.v1.LocalSearchRequest
-	31, // 39: npan.v1.SearchService.DownloadURL:input_type -> npan.v1.DownloadURLRequest
-	33, // 40: npan.v1.AdminService.StartSync:input_type -> npan.v1.StartSyncRequest
-	35, // 41: npan.v1.AdminService.InspectRoots:input_type -> npan.v1.InspectRootsRequest
-	37, // 42: npan.v1.AdminService.GetIndexStats:input_type -> npan.v1.GetIndexStatsRequest
-	39, // 43: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
-	41, // 44: npan.v1.AdminService.WatchSyncProgress:input_type -> npan.v1.WatchSyncProgressRequest
-	43, // 45: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
-	19, // 46: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
-	21, // 47: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
-	23, // 48: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
-	25, // 49: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
-	27, // 50: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
-	15, // 51: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
-	30, // 52: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
-	32, // 53: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
-	34, // 54: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
-	36, // 55: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
-	38, // 56: npan.v1.AdminService.GetIndexStats:output_type -> npan.v1.GetIndexStatsResponse
-	40, // 57: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
-	42, // 58: npan.v1.AdminService.WatchSyncProgress:output_type -> npan.v1.WatchSyncProgressResponse
-	44, // 59: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
-	46, // [46:60] is the sub-list for method output_type
-	32, // [32:46] is the sub-list for method input_type
+	22, // 34: npan.v1.AppService.GetSearchConfig:input_type -> npan.v1.GetSearchConfigRequest
+	24, // 35: npan.v1.AppService.AppSearch:input_type -> npan.v1.AppSearchRequest
+	26, // 36: npan.v1.AppService.AppDownloadURL:input_type -> npan.v1.AppDownloadURLRequest
+	28, // 37: npan.v1.AuthService.CreateToken:input_type -> npan.v1.CreateTokenRequest
+	30, // 38: npan.v1.SearchService.RemoteSearch:input_type -> npan.v1.RemoteSearchRequest
+	31, // 39: npan.v1.SearchService.LocalSearch:input_type -> npan.v1.LocalSearchRequest
+	33, // 40: npan.v1.SearchService.DownloadURL:input_type -> npan.v1.DownloadURLRequest
+	35, // 41: npan.v1.AdminService.StartSync:input_type -> npan.v1.StartSyncRequest
+	37, // 42: npan.v1.AdminService.InspectRoots:input_type -> npan.v1.InspectRootsRequest
+	39, // 43: npan.v1.AdminService.GetIndexStats:input_type -> npan.v1.GetIndexStatsRequest
+	41, // 44: npan.v1.AdminService.GetSyncProgress:input_type -> npan.v1.GetSyncProgressRequest
+	43, // 45: npan.v1.AdminService.WatchSyncProgress:input_type -> npan.v1.WatchSyncProgressRequest
+	45, // 46: npan.v1.AdminService.CancelSync:input_type -> npan.v1.CancelSyncRequest
+	19, // 47: npan.v1.HealthService.Health:output_type -> npan.v1.HealthResponse
+	21, // 48: npan.v1.HealthService.Readyz:output_type -> npan.v1.ReadyzResponse
+	23, // 49: npan.v1.AppService.GetSearchConfig:output_type -> npan.v1.GetSearchConfigResponse
+	25, // 50: npan.v1.AppService.AppSearch:output_type -> npan.v1.AppSearchResponse
+	27, // 51: npan.v1.AppService.AppDownloadURL:output_type -> npan.v1.AppDownloadURLResponse
+	29, // 52: npan.v1.AuthService.CreateToken:output_type -> npan.v1.CreateTokenResponse
+	15, // 53: npan.v1.SearchService.RemoteSearch:output_type -> npan.v1.RemoteSearchResponse
+	32, // 54: npan.v1.SearchService.LocalSearch:output_type -> npan.v1.LocalSearchResponse
+	34, // 55: npan.v1.SearchService.DownloadURL:output_type -> npan.v1.DownloadURLResponse
+	36, // 56: npan.v1.AdminService.StartSync:output_type -> npan.v1.StartSyncResponse
+	38, // 57: npan.v1.AdminService.InspectRoots:output_type -> npan.v1.InspectRootsResponse
+	40, // 58: npan.v1.AdminService.GetIndexStats:output_type -> npan.v1.GetIndexStatsResponse
+	42, // 59: npan.v1.AdminService.GetSyncProgress:output_type -> npan.v1.GetSyncProgressResponse
+	44, // 60: npan.v1.AdminService.WatchSyncProgress:output_type -> npan.v1.WatchSyncProgressResponse
+	46, // 61: npan.v1.AdminService.CancelSync:output_type -> npan.v1.CancelSyncResponse
+	47, // [47:62] is the sub-list for method output_type
+	32, // [32:47] is the sub-list for method input_type
 	32, // [32:32] is the sub-list for extension type_name
 	32, // [32:32] is the sub-list for extension extendee
 	0,  // [0:32] is the sub-list for field type_name
@@ -3293,20 +3409,20 @@ func file_npan_v1_api_proto_init() {
 	file_npan_v1_api_proto_msgTypes[6].OneofWrappers = []any{}
 	file_npan_v1_api_proto_msgTypes[7].OneofWrappers = []any{}
 	file_npan_v1_api_proto_msgTypes[16].OneofWrappers = []any{}
-	file_npan_v1_api_proto_msgTypes[17].OneofWrappers = []any{}
 	file_npan_v1_api_proto_msgTypes[19].OneofWrappers = []any{}
 	file_npan_v1_api_proto_msgTypes[21].OneofWrappers = []any{}
 	file_npan_v1_api_proto_msgTypes[23].OneofWrappers = []any{}
-	file_npan_v1_api_proto_msgTypes[24].OneofWrappers = []any{}
+	file_npan_v1_api_proto_msgTypes[25].OneofWrappers = []any{}
 	file_npan_v1_api_proto_msgTypes[26].OneofWrappers = []any{}
 	file_npan_v1_api_proto_msgTypes[28].OneofWrappers = []any{}
+	file_npan_v1_api_proto_msgTypes[30].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_npan_v1_api_proto_rawDesc), len(file_npan_v1_api_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   44,
+			NumMessages:   46,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

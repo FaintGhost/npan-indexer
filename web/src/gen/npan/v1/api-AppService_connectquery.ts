@@ -5,6 +5,11 @@
 import { AppService } from "./api_pb";
 
 /**
+ * @generated from rpc npan.v1.AppService.GetSearchConfig
+ */
+export const getSearchConfig = AppService.method.getSearchConfig;
+
+/**
  * @generated from rpc npan.v1.AppService.AppSearch
  */
 export const appSearch = AppService.method.appSearch;

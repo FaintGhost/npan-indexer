@@ -5,6 +5,10 @@ import { server } from '../tests/mocks/server'
 import { createTestProvider } from '../tests/test-providers'
 import { useDownload } from './use-download'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 describe('useDownload', () => {
   const wrapper = createTestProvider()
   const mockOpen = vi.fn()
@@ -22,8 +26,12 @@ describe('useDownload', () => {
   it('fetches download URL and opens in new tab', async () => {
     server.use(
       http.post('/npan.v1.AppService/AppDownloadURL', async ({ request }) => {
-        const body = await request.json() as { fileId?: string }
-        expect(body.fileId).toBe('42')
+        const body: unknown = await request.json()
+        expect(isRecord(body)).toBe(true)
+        if (!isRecord(body)) {
+          throw new Error('expected download request body to be an object')
+        }
+        expect(body).toEqual({ fileId: '42' })
         return HttpResponse.json({
           result: {
             fileId: '42',

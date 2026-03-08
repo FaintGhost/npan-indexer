@@ -188,8 +188,18 @@ message ReadyzResponse {
 }
 
 service AppService {
+  rpc GetSearchConfig(GetSearchConfigRequest) returns (GetSearchConfigResponse);
   rpc AppSearch(AppSearchRequest) returns (AppSearchResponse);
   rpc AppDownloadURL(AppDownloadURLRequest) returns (AppDownloadURLResponse);
+}
+
+message GetSearchConfigRequest {}
+
+message GetSearchConfigResponse {
+  string host = 1;
+  string index_name = 2;
+  string search_api_key = 3;
+  bool instantsearch_enabled = 4;
 }
 
 message AppSearchRequest {

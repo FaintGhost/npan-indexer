@@ -180,6 +180,22 @@ func TestEnsureSettings_DisplayedAttributes_IncludesNewFields(t *testing.T) {
   }
 }
 
+func TestEnsureSettings_FilterableAttributes_ExposeFileCategory(t *testing.T) {
+  s := callEnsureSettings(t)
+
+  if !containsString(s.FilterableAttributes, "file_category") {
+    t.Fatalf("FilterableAttributes should contain %q, got %v", "file_category", s.FilterableAttributes)
+  }
+}
+
+func TestEnsureSettings_DisplayedAttributes_ExposeFileCategory(t *testing.T) {
+  s := callEnsureSettings(t)
+
+  if !containsString(s.DisplayedAttributes, "file_category") {
+    t.Fatalf("DisplayedAttributes should contain %q, got %v", "file_category", s.DisplayedAttributes)
+  }
+}
+
 // ---------- remaining IndexManager stubs (unused, panic on call) ----------
 
 func (m *settingsCaptureIndex) UpdateSettings(s *meilisearch.Settings) (*meilisearch.TaskInfo, error) {

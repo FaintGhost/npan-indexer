@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { TransportProvider } from '@connectrpc/connect-query'
 import { routeTree } from './routeTree.gen'
 import { appQueryClient, appTransport } from '@/lib/connect-transport'
+import 'instantsearch.css/themes/reset.css'
 import './app.css'
 
 const router = createRouter({

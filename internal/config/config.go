@@ -31,9 +31,13 @@ type Config struct {
 	SubID        int64
 	SubType      npan.TokenSubjectType
 
-	MeiliHost   string
-	MeiliAPIKey string
-	MeiliIndex  string
+	MeiliHost                   string
+	MeiliAPIKey                 string
+	MeiliIndex                  string
+	PublicSearchHost            string
+	PublicSearchIndexName       string
+	PublicSearchAPIKey          string
+	PublicSearchInstantsearchOn bool
 
 	CheckpointTemplate  string
 	ProgressFile        string
@@ -160,9 +164,13 @@ func Load() Config {
 		SubID:        readInt64("NPA_SUB_ID", 0),
 		SubType:      subType,
 
-		MeiliHost:   readString("MEILI_HOST", "http://127.0.0.1:7700"),
-		MeiliAPIKey: readString("MEILI_API_KEY", ""),
-		MeiliIndex:  readString("MEILI_INDEX", "npan_items"),
+		MeiliHost:                   readString("MEILI_HOST", "http://127.0.0.1:7700"),
+		MeiliAPIKey:                 readString("MEILI_API_KEY", ""),
+		MeiliIndex:                  readString("MEILI_INDEX", "npan_items"),
+		PublicSearchHost:            readString("MEILI_PUBLIC_SEARCH_HOST", ""),
+		PublicSearchIndexName:       readString("MEILI_PUBLIC_SEARCH_INDEX", ""),
+		PublicSearchAPIKey:          readString("MEILI_PUBLIC_SEARCH_API_KEY", ""),
+		PublicSearchInstantsearchOn: readBool("MEILI_PUBLIC_INSTANTSEARCH_ENABLED", false),
 
 		CheckpointTemplate:  readString("NPA_CHECKPOINT_FILE", "./data/checkpoints/full-crawl.json"),
 		ProgressFile:        readString("NPA_PROGRESS_FILE", "./data/progress/full-sync-progress.json"),

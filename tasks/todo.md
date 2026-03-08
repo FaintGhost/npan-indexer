@@ -953,3 +953,95 @@
 - 风险与后续建议：
   - 若未来增加平台矩阵（不止 amd64/arm64），需同步调整 `Validate downloaded digest count` 的固定数量（当前为 `2`）。
   - 修复合入 `main` 后需重新触发 Docker Publish，重新生成干净 manifest；部署端建议优先使用 `sha-<commit>` tag 或 platform digest 验证回归。
+
+## 新任务：React InstantSearch 直连 Meilisearch 设计（Brainstorming）
+
+- [x] 1. 评估当前搜索页、Connect 搜索链路与 Meilisearch 索引能力的适配性
+- [x] 2. 调研 Meilisearch 官方 React InstantSearch / instant-meilisearch 最佳实践
+- [x] 3. 确认方案 A 的访问边界为公共搜索，收敛 search-only key 安全模型
+- [x] 4. 产出设计文档包到 `docs/plans/2026-03-07-react-instantsearch-design/`
+- [x] 5. 形成 BDD、架构、最佳实践与灰度回滚边界
+
+## Review（React InstantSearch 直连 Meilisearch 设计）
+
+- 结论：
+  - 采用方案 A：前端使用官方 `react-instantsearch` + `@meilisearch/instant-meilisearch` 直连 Meilisearch。
+  - 搜索页访问边界已确认是公共搜索，因此浏览器可使用 search-only key；下载链路继续保留 `AppService.AppDownloadURL`。
+  - 首批必须保留 `AppSearch` 作为灰度与回滚兜底，不做一次性切断。
+- 关键设计决策：
+  - 新增运行时公开搜索配置接口，下发 `host/indexName/searchApiKey/instantsearchEnabled`。
+  - 搜索状态统一交由 `InstantSearch` 管理，替换当前手工 `useInfiniteQuery + URLSearchParams + 本地 ext 过滤` 状态机。
+  - 文件分类筛选升级为索引字段 `file_category` + refinement，不再保留前端本地二次过滤。
+  - 首批以官方默认直连模式为准，不提前复刻旧后端 `preprocessQuery()` 与 `All -> Last` fallback；通过结果对比决定是否后续补 adapter。
+- 设计产物：
+  - `docs/plans/2026-03-07-react-instantsearch-design/_index.md`
+  - `docs/plans/2026-03-07-react-instantsearch-design/bdd-specs.md`
+  - `docs/plans/2026-03-07-react-instantsearch-design/architecture.md`
+  - `docs/plans/2026-03-07-react-instantsearch-design/best-practices.md`
+- 后续移交：
+  - 下一步应使用 `superpowers:writing-plans` 基于该设计拆分实施计划，再进入 `superpowers:executing-plans`。
+
+## 新任务：React InstantSearch 直连 Meilisearch 实施计划（Writing Plans）
+
+- [x] 1. 基于设计文档产出计划目录 `docs/plans/2026-03-07-react-instantsearch-plan/`
+- [x] 2. 将任务拆分为 BDD 驱动的 Red/Green 粒度（每个任务单文件）
+- [x] 3. 补齐 `task-003` ~ `task-007` 的依赖、验证命令与回归收口任务
+- [x] 4. 回填执行移交说明，明确下一步进入 `superpowers:executing-plans`
+
+## Review（React InstantSearch 直连 Meilisearch / 实施计划）
+
+- 计划目录：
+  - `docs/plans/2026-03-07-react-instantsearch-plan/_index.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-001-public-search-config-test.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-001-public-search-config-impl.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-002-search-bootstrap-fallback-test.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-002-search-bootstrap-fallback-impl.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-003-file-category-index-test.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-003-file-category-index-impl.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-004-instantsearch-results-test.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-004-instantsearch-results-impl.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-005-routing-refinement-test.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-005-routing-refinement-impl.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-006-download-integration-test.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-006-download-integration-impl.md`
+  - `docs/plans/2026-03-07-react-instantsearch-plan/task-007-verification-and-rollout-gate.md`
+- 关键依赖已固化：
+  - `task-003` 先完成 `file_category` 索引与 settings 基础。
+  - `task-004` 再切换结果拥有权到 InstantSearch hits / InfiniteHits / 高亮。
+  - `task-005` 建立在 `task-003 + task-004` 之上，负责 routing 与 refinement。
+  - `task-006` 只依赖 `task-004`，专注“新结果模型 + 旧下载链路”桥接。
+  - `task-007` 作为最终闸门，收口新旧双栈验证、差异对比与灰度回滚条件。
+- 提交边界：
+  - Boundary A：`task-001` ~ `task-002`
+  - Boundary B：`task-003` ~ `task-005`
+  - Boundary C：`task-006` ~ `task-007`
+- 范围约束：
+  - 首批保留 `AppSearch` fallback。
+  - 首批不引入 tenant token。
+  - 首批不预先复刻旧后端 `preprocessQuery()` 与 `All -> Last` fallback。
+- 后续移交：
+  - 下一步应使用 `superpowers:executing-plans` 基于该计划执行实现与验证。
+
+## Review（React InstantSearch 直连 Meilisearch / Task 006-007 收口）
+
+- 下载集成验证（Task 006）：
+  - `web/src/components/search-page.test.tsx` 新增 public InstantSearch 下载用例，锁定“点击下载后仍调用 `AppService.AppDownloadURL`，且不使用 hit 内 `downloadUrl`”。
+  - `web/e2e/tests/search.spec.ts` 与 `web/e2e/pages/search-page.ts` 新增 public 下载网络断言，覆盖浏览器真实交互链路。
+  - `web/src/hooks/use-download.test.ts` 同步收口请求体断言，保持测试内无 `any` / 类型断言兜底。
+- 全链路验证结果（Task 007）：
+  - `GOCACHE=/tmp/go-build go test ./... -count=1` 通过（258 passed / 16 packages）。
+  - `cd web && bun vitest run` 通过（25 files / 201 tests）。
+  - `docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120` + `./tests/smoke/smoke_test.sh` 通过（34 passed / 0 failed）。
+  - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright` 通过（42 passed / 2 skipped；`admin.live` 真实链路用例按预期跳过）。
+  - `git diff --check` 通过。
+- 新旧链路差异结论：
+  - public 直连链路首批明确不复刻 legacy 后端 `preprocessQuery()` 与 `All -> Last` fallback；这是计划内可接受差异，后续是否补 adapter 由结果对比决定。
+  - legacy 继续使用后端查询预处理 + 本地扩展名过滤；public 改为 `file_category` refinement、InstantSearch routing 状态恢复，以及基于 Meili `_highlightResult` 的前端高亮渲染。
+  - 两条链路的下载边界保持一致，均继续通过 `AppService.AppDownloadURL` 受控下发真实下载地址。
+- 灰度启用与回滚闸门：
+  - 默认启用前提：`MEILI_PUBLIC_INSTANTSEARCH_ENABLED=true`，且 `MEILI_PUBLIC_SEARCH_HOST` / `MEILI_PUBLIC_SEARCH_INDEX` / `MEILI_PUBLIC_SEARCH_API_KEY` 均完整；public key 不得回落复用私有 `MEILI_API_KEY`。
+  - 灰度验收项：public 首屏引导、URL 恢复、`file_category` refinement、下载 RPC、legacy fallback 搜索/下载均需持续通过。
+  - 回滚条件：若直连链路出现不可接受的召回/相关性偏差或下载回归，立即关闭 `instantsearchEnabled`，前端自动回退到 `AppSearch`。
+- 结论：
+  - 当前实现已满足把 `instantsearchEnabled` 作为发布闸门进行灰度的条件。
+  - 在未补齐针对 `preprocessQuery()` / `All -> Last` 的业务结果对比前，不建议移除 legacy fallback。

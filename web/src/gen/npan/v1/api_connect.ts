@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { AppDownloadURLRequest, AppDownloadURLResponse, AppSearchRequest, AppSearchResponse, CancelSyncRequest, CancelSyncResponse, CreateTokenRequest, CreateTokenResponse, DownloadURLRequest, DownloadURLResponse, GetIndexStatsRequest, GetIndexStatsResponse, GetSyncProgressRequest, GetSyncProgressResponse, HealthRequest, HealthResponse, InspectRootsRequest, InspectRootsResponse, LocalSearchRequest, LocalSearchResponse, ReadyzRequest, ReadyzResponse, RemoteSearchRequest, RemoteSearchResponse, StartSyncRequest, StartSyncResponse, WatchSyncProgressRequest, WatchSyncProgressResponse } from "./api_pb.js";
+import { AppDownloadURLRequest, AppDownloadURLResponse, AppSearchRequest, AppSearchResponse, CancelSyncRequest, CancelSyncResponse, CreateTokenRequest, CreateTokenResponse, DownloadURLRequest, DownloadURLResponse, GetIndexStatsRequest, GetIndexStatsResponse, GetSearchConfigRequest, GetSearchConfigResponse, GetSyncProgressRequest, GetSyncProgressResponse, HealthRequest, HealthResponse, InspectRootsRequest, InspectRootsResponse, LocalSearchRequest, LocalSearchResponse, ReadyzRequest, ReadyzResponse, RemoteSearchRequest, RemoteSearchResponse, StartSyncRequest, StartSyncResponse, WatchSyncProgressRequest, WatchSyncProgressResponse } from "./api_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -39,6 +39,15 @@ export const HealthService = {
 export const AppService = {
   typeName: "npan.v1.AppService",
   methods: {
+    /**
+     * @generated from rpc npan.v1.AppService.GetSearchConfig
+     */
+    getSearchConfig: {
+      name: "GetSearchConfig",
+      I: GetSearchConfigRequest,
+      O: GetSearchConfigResponse,
+      kind: MethodKind.Unary,
+    },
     /**
      * @generated from rpc npan.v1.AppService.AppSearch
      */
