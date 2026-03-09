@@ -10,6 +10,7 @@
 - Web 搜索页面（React + Vite）
 - 管理后台（同步启动/取消/进度）
 - Connect-RPC API（主路径）
+- 运维 CLI（token / 搜索 / 下载 / 同步 / 进度）
 
 当前迁移状态：
 - 已接入 `buf` 生成链路
@@ -30,7 +31,7 @@
 ### 服务端核心
 
 - `cmd/server`：HTTP 服务启动入口（加载配置、启动 Echo、嵌入前端）
-- `cmd/cli`：CLI 入口（同步、进度查询等）
+- `cmd/cli`：CLI 入口（同步、进度查询、检索、下载等）
 - `internal/httpx`：HTTP 路由、鉴权、中间件、Connect server adapter
 - `internal/service`：业务服务层（同步编排、搜索等）
 - `internal/npan`：Npan API/OAuth 客户端封装
@@ -45,7 +46,8 @@
 - `web/src/hooks`：前端 hooks（下载、鉴权、热键等）
 - `web/src/lib/connect-transport.ts`：Connect transport / QueryClient 配置
 - `web/src/lib/*adapter.ts`：Proto <-> UI domain 映射
-- `web/e2e`：Playwright E2E（admin/search/download/边界场景）
+- `web/src/lib/search-config.ts`：公开搜索 bootstrap 配置加载与模式切换
+- `web/e2e`：Playwright E2E（admin/search/download/live）
 
 ### 契约与生成代码
 
@@ -60,14 +62,18 @@
 
 - Connect-RPC（主路径）
   - `/npan.v1.HealthService/*`
-  - `/npan.v1.AppService/*`
-  - `/npan.v1.AuthService/*`
-  - `/npan.v1.SearchService/*`
-  - `/npan.v1.AdminService/*`
+  - `/npan.v1.AppService/*`（`EmbeddedAuth()`）
+  - `/npan.v1.AuthService/*`（`APIKeyAuth()`）
+  - `/npan.v1.SearchService/*`（`APIKeyAuth()`）
+  - `/npan.v1.AdminService/*`（`APIKeyAuth()` + `ConfigFallbackAuth()` + `RateLimitMiddleware()`）
+- HTTP 健康检查
+  - `GET /healthz`
+  - `GET /readyz`
 
 实践建议：
 - 前端新逻辑优先接 Connect
 - 改 E2E 时优先校验 Connect `POST /npan.v1.*` 请求体
+- `AppService` 不要简单归类为“公开 API”或“管理 API”；它是内嵌前端与公开搜索 bootstrap 的专用入口
 
 ## 4. 生成链路（改契约时必须看）
 
@@ -100,32 +106,35 @@ go run ./cmd/server
 cd web && bun install && bun run dev
 ```
 
-### 单元测试
+### 常用验证
 
 ```bash
-# Go
-GOCACHE=/tmp/go-build go test ./...
+# Go（与 Makefile 一致）
+make test
 
 # Frontend
-cd web && bun vitest run
+make test-frontend
+
+# Frontend typecheck
+cd web && bun run typecheck
+
+# 禁止运行时代码回退到 /api/v1
+make rest-guard
 ```
 
 ### Docker 冒烟 / E2E（推荐回归链）
 
 ```bash
-# 冒烟（34 项）
-docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
-./tests/smoke/smoke_test.sh
+# 冒烟
+make smoke-test
 
-# Playwright E2E（32 项）
-docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright
-
-# 清理
-docker compose -f docker-compose.ci.yml --profile e2e down --volumes
+# 冒烟 + Playwright E2E
+make e2e-test
 ```
 
 注意：
-- `tests/smoke/smoke_test.sh` 默认端口已对齐 `docker-compose.ci.yml`（`11323` / `19091`）
+- `docker-compose.ci.yml` 端口映射为 `11323` / `19091` / `17700`
+- `tests/smoke/smoke_test.sh` 默认已对齐 `BASE_URL=http://localhost:11323` 与 `METRICS_URL=http://localhost:19091`
 - `docker-compose.yml`（开发/部署）端口仍是 `1323` / `9091`
 
 ## 6. 常见坑（迁移后高频）
@@ -155,8 +164,17 @@ docker compose -f docker-compose.ci.yml --profile e2e down --volumes
 ### 6.3 `go:embed` / 前端产物
 
 后端会嵌入前端构建产物（`web/dist`）。
-- 本地 `go run ./cmd/server` 前若无 `web/dist`，需要先构建前端或使用仓库已有产物
+- 嵌入方式定义于 `web/embed.go`：`//go:embed all:dist`
+- 本地 `go run ./cmd/server` 前若无 `web/dist`，需要先构建前端
 - Dockerfile 会自动构建前端并复制到镜像
+
+### 6.4 文档与命令漂移
+
+高频误差点：
+- 把 `AppService` 同时写成“公开”和“管理”入口
+- 写死 smoke / E2E 用例条目数
+- 忘记区分 `docker-compose.yml` 与 `docker-compose.ci.yml` 的端口
+- live E2E 说明未与 `docker-compose.e2e-live.yml` 的必填变量同步
 
 ## 7. 改动建议（给接手 agent）
 
@@ -166,11 +184,13 @@ docker compose -f docker-compose.ci.yml --profile e2e down --volumes
 - `web/src/routes/index.lazy.tsx`
 - `web/src/components/admin-sync-page.tsx`
 - `web/src/lib/connect-transport.ts`
+- `web/src/lib/search-config.ts`
 - `web/src/lib/connect-*-adapter.ts`
 
 并执行至少：
 ```bash
-cd web && bun vitest run
+make test-frontend
+cd web && bun run typecheck
 ```
 
 ### 如果你在改后端 API / 同步逻辑
@@ -180,16 +200,18 @@ cd web && bun vitest run
 - `internal/httpx/handlers*.go`
 - `internal/service/*`
 - `internal/indexer/*`
+- `internal/cli/root.go`
 
 并执行至少：
 ```bash
-GOCACHE=/tmp/go-build go test ./...
+make test
 ```
 
 ### 如果你在改契约（字段/RPC）
 
 请同时考虑：
 - Connect protobuf 契约（Buf）
+- `gen/go` 与 `web/src/gen` 的生成产物
 - E2E 与 smoke 的断言路径/请求格式是否需要更新
 
 ## 8. 提交前最小检查单
@@ -199,18 +221,17 @@ GOCACHE=/tmp/go-build go test ./...
 buf lint && buf generate
 
 # 2) 单测
-GOCACHE=/tmp/go-build go test ./...
-cd web && bun vitest run
+make test
+make test-frontend
+cd web && bun run typecheck
 
 # 3) 长链路（改了接口/页面/鉴权/同步流程时）
-docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
-./tests/smoke/smoke_test.sh
-docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright
-docker compose -f docker-compose.ci.yml --profile e2e down --volumes
+make smoke-test
+make e2e-test
 ```
 
 ---
 
 如果你刚接手这个仓库，建议第一轮只做两件事：
-1. 跑通 `go test ./...` 与 `cd web && bun vitest run`
-2. 阅读 `internal/httpx/server.go` 和 `web/src/routes/index.lazy.tsx`，确认 Connect-only 结构
+1. 跑通 `make test`、`make test-frontend` 与 `cd web && bun run typecheck`
+2. 阅读 `internal/httpx/server.go` 和 `web/src/routes/index.lazy.tsx`，确认 Connect-only 结构与前端公开搜索 bootstrap 方式

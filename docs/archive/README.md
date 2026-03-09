@@ -9,5 +9,9 @@
 
 ## 当前建议
 
-- 新功能与当前行为说明优先写入 `README.md` 与 `docs/runbooks/`。
-- 历史资料仅用于追溯，不建议直接作为现网操作指南。
+- 当前实现、部署方式、路由与命令请优先查阅：
+  - `README.md`
+  - `docs/runbooks/index-sync-operations.md`
+  - `docs/STRUCTURE.md`
+- `docs/archive/**` 仅用于历史追溯，不建议直接作为现网操作指南。
+- `docs/plans/**` 同样属于设计/实施历史记录，不能替代当前运行时事实文档。
