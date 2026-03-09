@@ -103,3 +103,7 @@
   - 新增/修改 Connect server streaming 能力时，必须加“启用全部中间件（含 Prometheus）”的后端回归测试。
   - 每次修复线上 streaming 问题后，E2E 至少补一个可观测守卫（console/page error 或网络级断言），避免仅靠功能按钮通过。
   - 服务端改动验证 E2E 时，默认使用 `docker compose ... up --build`，避免旧镜像掩盖修复结果。
+- 用户纠正：分析 Admin 刷新目录详情问题时，先确认“无同步任务时前端是否仍在轮询/订阅 progress”，不要把覆盖来源默认归因到运行中的同步任务。
+- 规则：
+  - 排查 `/admin` 目录详情/进度问题时，先检查 `GetSyncProgress` 的 `enabled/refetchInterval` 与 `WatchSyncProgress` 的启动条件，而不是先假设只有运行中任务才会触发覆盖。
+  - 对“本地 inspect 结果 + 远端 progress”双源状态，必须增加回归测试覆盖“后续轮询覆盖”和“NotFound 清空”两类竞态。

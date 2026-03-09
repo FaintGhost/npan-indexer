@@ -22,7 +22,7 @@ import {
   SyncProgressSchema,
   preferTimestampMillis,
 } from '@/lib/sync-schemas'
-import type { InspectRootsResponse, SyncProgress } from '@/lib/sync-schemas'
+import type { InspectRootsResponse, RootProgress, SyncProgress } from '@/lib/sync-schemas'
 import { useAdminAuth } from '@/hooks/use-admin-auth'
 import { ApiKeyDialog } from '@/components/api-key-dialog'
 import { SyncProgressDisplay } from '@/components/sync-progress-display'
@@ -99,6 +99,110 @@ function normalizeSyncProgressTimestamps(progress: SyncProgress): SyncProgress {
     catalogRootProgress: progress.catalogRootProgress
       ? normalizeRootProgressTimestamps(progress.catalogRootProgress)
       : progress.catalogRootProgress,
+  }
+}
+
+function mergeRootProgressMaps(
+  incoming: Record<string, RootProgress>,
+  overlay?: Record<string, RootProgress>,
+): Record<string, RootProgress> {
+  if (!overlay || Object.keys(overlay).length === 0) {
+    return incoming
+  }
+
+  const merged: Record<string, RootProgress> = { ...incoming }
+  for (const [key, overlayValue] of Object.entries(overlay)) {
+    const incomingValue = merged[key]
+    if (!incomingValue) {
+      merged[key] = overlayValue
+      continue
+    }
+    merged[key] = {
+      ...overlayValue,
+      ...incomingValue,
+      estimatedTotalDocs:
+        incomingValue.estimatedTotalDocs ?? overlayValue.estimatedTotalDocs,
+      updatedAtTs: incomingValue.updatedAtTs ?? overlayValue.updatedAtTs,
+      stats: {
+        ...overlayValue.stats,
+        ...incomingValue.stats,
+        startedAtTs:
+          incomingValue.stats.startedAtTs ?? overlayValue.stats.startedAtTs,
+        endedAtTs:
+          incomingValue.stats.endedAtTs ?? overlayValue.stats.endedAtTs,
+      },
+    }
+  }
+
+  return merged
+}
+
+function mergeCatalogProgress(
+  previous: SyncProgress | null,
+  incoming: SyncProgress | null,
+): SyncProgress | null {
+  const previousCatalogRoots = previous?.catalogRoots ?? []
+  const previousCatalogRootNames = previous?.catalogRootNames ?? previous?.rootNames
+  const previousCatalogRootProgress =
+    previous?.catalogRootProgress ?? previous?.rootProgress
+  const hasPreviousCatalogProgress =
+    Object.keys(previousCatalogRootProgress ?? {}).length > 0
+
+  if (!incoming) {
+    if (previousCatalogRoots.length === 0 && !hasPreviousCatalogProgress) {
+      return null
+    }
+
+    const now = Date.now()
+    return {
+      status: previous?.status ?? 'idle',
+      mode: previous?.mode ?? 'full',
+      startedAt: previous?.startedAt ?? now,
+      updatedAt: previous?.updatedAt ?? now,
+      roots: previous?.roots ?? [],
+      rootNames: previous?.rootNames,
+      catalogRoots: previousCatalogRoots,
+      catalogRootNames: previousCatalogRootNames,
+      completedRoots: previous?.completedRoots ?? [],
+      activeRoot: previous?.activeRoot,
+      lastError: previous?.lastError,
+      verification: previous?.verification,
+      incrementalStats: previous?.incrementalStats,
+      aggregateStats: previous?.aggregateStats ?? {
+        foldersVisited: 0,
+        filesIndexed: 0,
+        filesDiscovered: 0,
+        skippedFiles: 0,
+        pagesFetched: 0,
+        failedRequests: 0,
+        startedAt: 0,
+        endedAt: 0,
+      },
+      rootProgress: previous?.rootProgress ?? {},
+      catalogRootProgress: previousCatalogRootProgress,
+      startedAtTs: previous?.startedAtTs,
+      updatedAtTs: previous?.updatedAtTs,
+    }
+  }
+
+  const incomingCatalogRoots = incoming.catalogRoots ?? []
+  const catalogRoots = [...new Set([...incomingCatalogRoots, ...previousCatalogRoots])].sort(
+    (a, b) => a - b,
+  )
+  const catalogRootNames = {
+    ...(previousCatalogRootNames ?? {}),
+    ...(incoming.catalogRootNames ?? incoming.rootNames ?? {}),
+  }
+  const catalogRootProgress = mergeRootProgressMaps(
+    incoming.catalogRootProgress ?? incoming.rootProgress,
+    previousCatalogRootProgress,
+  )
+
+  return {
+    ...incoming,
+    catalogRoots: catalogRoots.length > 0 ? catalogRoots : incoming.catalogRoots,
+    catalogRootNames,
+    catalogRootProgress,
   }
 }
 
@@ -224,7 +328,7 @@ export function AdminSyncPage() {
     if (progressQuery.data === undefined) {
       return
     }
-    setProgress(progressQuery.data ?? null)
+    setProgress((prev) => mergeCatalogProgress(prev, progressQuery.data ?? null))
     setError(null)
   }, [progressQuery.data])
 
@@ -235,7 +339,7 @@ export function AdminSyncPage() {
     }
 
     if (queryError instanceof ConnectError && queryError.code === Code.NotFound) {
-      setProgress(null)
+      setProgress((prev) => mergeCatalogProgress(prev, null))
       setError(null)
       return
     }
@@ -273,7 +377,7 @@ export function AdminSyncPage() {
           const normalized = normalizeSyncProgressTimestamps(
             SyncProgressSchema.parse(mapped),
           )
-          setProgress(normalized)
+          setProgress((prev) => mergeCatalogProgress(prev, normalized))
           setError(null)
         }
 
@@ -295,7 +399,7 @@ export function AdminSyncPage() {
             return
           }
           if (err.code === Code.NotFound) {
-            setProgress(null)
+            setProgress((prev) => mergeCatalogProgress(prev, null))
             setError(null)
           }
         }
