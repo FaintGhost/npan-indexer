@@ -34,10 +34,12 @@ type SyncStartRequest struct {
 }
 
 type SyncManager struct {
-	index         *search.MeiliIndex
-	progressStore *storage.JSONProgressStore
-	meiliHost     string
-	meiliIndex    string
+	index            *search.MeiliIndex
+	progressStore    storage.ProgressStore
+	syncStateStore   storage.SyncStateStore
+	checkpointStores storage.CheckpointStoreFactory
+	meiliHost        string
+	meiliIndex       string
 
 	defaultCheckpointTemplate string
 	defaultRootWorkers        int
@@ -47,7 +49,6 @@ type SyncManager struct {
 	minTimeMS                 int
 	activityChecker           indexer.ActivityChecker
 
-	syncStateFile           string
 	defaultIncrementalQuery string
 	defaultWindowOverlapMS  int64
 	metricsReporter         metrics.SyncReporter
@@ -59,7 +60,9 @@ type SyncManager struct {
 
 type SyncManagerArgs struct {
 	Index              *search.MeiliIndex
-	ProgressStore      *storage.JSONProgressStore
+	ProgressStore      storage.ProgressStore
+	SyncStateStore     storage.SyncStateStore
+	CheckpointStores   storage.CheckpointStoreFactory
 	MeiliHost          string
 	MeiliIndex         string
 	CheckpointTemplate string
@@ -69,7 +72,6 @@ type SyncManagerArgs struct {
 	MaxConcurrent      int
 	MinTimeMS          int
 	ActivityChecker    indexer.ActivityChecker
-	SyncStateFile      string
 	IncrementalQuery   string
 	WindowOverlapMS    int64
 	MetricsReporter    metrics.SyncReporter
@@ -79,6 +81,8 @@ func NewSyncManager(args SyncManagerArgs) *SyncManager {
 	return &SyncManager{
 		index:                     args.Index,
 		progressStore:             args.ProgressStore,
+		syncStateStore:            args.SyncStateStore,
+		checkpointStores:          args.CheckpointStores,
 		meiliHost:                 args.MeiliHost,
 		meiliIndex:                args.MeiliIndex,
 		defaultCheckpointTemplate: args.CheckpointTemplate,
@@ -88,7 +92,6 @@ func NewSyncManager(args SyncManagerArgs) *SyncManager {
 		maxConcurrent:             args.MaxConcurrent,
 		minTimeMS:                 args.MinTimeMS,
 		activityChecker:           args.ActivityChecker,
-		syncStateFile:             args.SyncStateFile,
 		defaultIncrementalQuery:   args.IncrementalQuery,
 		defaultWindowOverlapMS:    args.WindowOverlapMS,
 		metricsReporter:           args.MetricsReporter,
@@ -99,6 +102,17 @@ func (m *SyncManager) IsRunning() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.running
+}
+
+func (m *SyncManager) effectiveSyncStateStore() storage.SyncStateStore {
+	return m.syncStateStore
+}
+
+func (m *SyncManager) effectiveCheckpointStoreFactory() storage.CheckpointStoreFactory {
+	if m.checkpointStores != nil {
+		return m.checkpointStores
+	}
+	return storage.NewJSONCheckpointStoreFactory()
 }
 
 func (m *SyncManager) GetProgress() (*models.SyncProgressState, error) {
@@ -562,7 +576,7 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 	}
 	progressMu.Unlock()
 
-	checkpointStore := storage.NewJSONCheckpointStore(checkpointFile)
+	checkpointStore := m.effectiveCheckpointStoreFactory().ForKey(checkpointFile)
 
 	stats, err := indexer.RunFullCrawl(ctx, indexer.FullCrawlDeps{
 		API:             api,
@@ -753,8 +767,11 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 		return err
 	}
 
-	syncStateStore := storage.NewJSONSyncStateStore(m.syncStateFile)
-	syncState, _ := syncStateStore.Load()
+	syncStateStore := m.effectiveSyncStateStore()
+	var syncState *models.SyncState
+	if syncStateStore != nil {
+		syncState, _ = syncStateStore.Load()
+	}
 
 	if effectiveMode == models.SyncModeIncremental {
 		if syncState == nil || syncState.LastSyncTime <= 0 {
@@ -807,7 +824,7 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	// crawl checkpoint, otherwise full crawl may resume from a stale queue.
 	if forceRebuild || !resume {
 		for _, rootID := range roots {
-			checkpointStore := storage.NewJSONCheckpointStore(rootCheckpointMap[rootID])
+			checkpointStore := m.effectiveCheckpointStoreFactory().ForKey(rootCheckpointMap[rootID])
 			if err := checkpointStore.Clear(); err != nil {
 				return fmt.Errorf("clear checkpoint for root %d: %w", rootID, err)
 			}
@@ -976,7 +993,7 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	updateAggregateFromRoots(progress)
 
 	// Write cursor for future incremental runs
-	if m.syncStateFile != "" {
+	if syncStateStore != nil {
 		_ = syncStateStore.Save(&models.SyncState{LastSyncTime: time.Now().UnixMilli()})
 	}
 
@@ -998,7 +1015,7 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 	return m.progressStore.Save(progress)
 }
 
-func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, request SyncStartRequest, syncState *models.SyncState, syncStateStore *storage.JSONSyncStateStore) error {
+func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, request SyncStartRequest, syncState *models.SyncState, syncStateStore storage.SyncStateStore) error {
 	incrStartTime := time.Now()
 	now := incrStartTime.UnixMilli()
 
@@ -1063,7 +1080,7 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 	} else {
 		progress.Status = "done"
 
-		if m.syncStateFile != "" && syncStateStore != nil {
+		if syncStateStore != nil {
 			_ = syncStateStore.Save(&models.SyncState{
 				LastSyncTime: progress.IncrementalStats.CursorAfter,
 			})

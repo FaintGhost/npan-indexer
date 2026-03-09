@@ -1,0 +1,158 @@
+version: '3'
+
+tasks:
+  guard:rest:
+    desc: Verify runtime code avoids legacy REST paths
+    summary: |
+      Scans runtime code for legacy /api/v1 references.
+      Mirrors the previous Makefile guard behavior and keeps documentation and generated assets out of scope.
+    preconditions:
+      - sh: command -v rg >/dev/null 2>&1
+        msg: rg is required for guard:rest
+    cmds:
+      - |
+        if rg -n "/api/v1/" \
+          --glob '!docs/archive/**' \
+          --glob '!docs/plans/**' \
+          --glob '!tasks/**' \
+          --glob '!Makefile' \
+          --glob '!web/dist/**' \
+          --glob '!**/*.md' \
+          --glob '!**/*.yaml' \
+          --glob '!**/*.yml' \
+          .; then
+          echo "ERROR: runtime code must not contain REST /api/v1 paths"
+          exit 1
+        fi
+
+  test:go:
+    desc: Run Go unit tests
+    summary: |
+      Runs the Go short test suite with race detection.
+      Uses the same test flags as the previous Makefile target.
+    env:
+      GOCACHE: /tmp/go-build
+    preconditions:
+      - sh: command -v go >/dev/null 2>&1
+        msg: go is required for test:go
+    cmds:
+      - go test ./... -short -count=1 -race
+
+  test:web:
+    desc: Run frontend unit tests
+    summary: |
+      Runs the frontend test script from web/package.json via Bun.
+      The web workspace remains the single source of truth for frontend test execution.
+    dir: web
+    preconditions:
+      - sh: command -v bun >/dev/null 2>&1
+        msg: bun is required for test:web
+      - sh: test -f package.json
+        msg: web/package.json is required for test:web
+    cmds:
+      - bun run test
+
+  verify:quick:
+    desc: Run the fast pre-commit verification suite
+    summary: |
+      Aggregates the lightweight repository checks used most often during local development:
+      guard:rest, test:go, and test:web.
+    deps:
+      - task: guard:rest
+      - task: test:go
+      - task: test:web
+
+  stack:ci:up:
+    desc: Start the CI Docker Compose stack
+    summary: |
+      Starts docker-compose.ci.yml from a clean state and waits for services to become healthy.
+      This task is shared by local smoke and end-to-end verification flows.
+    preconditions:
+      - sh: command -v docker >/dev/null 2>&1
+        msg: docker is required for stack:ci:up
+    cmds:
+      - docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120
+
+  stack:ci:logs:
+    desc: Export logs from the CI Docker Compose stack
+    summary: |
+      Prints logs for services defined in docker-compose.ci.yml.
+      Intended for failure investigation in local verification and CI workflows.
+    preconditions:
+      - sh: command -v docker >/dev/null 2>&1
+        msg: docker is required for stack:ci:logs
+    cmds:
+      - docker compose -f docker-compose.ci.yml logs
+
+  stack:ci:down:
+    desc: Stop and clean the CI Docker Compose stack
+    summary: |
+      Stops services from docker-compose.ci.yml and removes attached volumes.
+      This cleanup step must run even when smoke or end-to-end verification fails.
+    preconditions:
+      - sh: command -v docker >/dev/null 2>&1
+        msg: docker is required for stack:ci:down
+    cmds:
+      - docker compose -f docker-compose.ci.yml down --volumes
+
+  smoke:run:
+    desc: Run the smoke validation script
+    summary: |
+      Executes tests/smoke/smoke_test.sh against the CI stack defaults.
+      Uses BASE_URL=http://localhost:11323 and METRICS_URL=http://localhost:19091.
+    env:
+      BASE_URL: http://localhost:11323
+      METRICS_URL: http://localhost:19091
+    preconditions:
+      - sh: command -v bash >/dev/null 2>&1
+        msg: bash is required for smoke:run
+      - sh: command -v curl >/dev/null 2>&1
+        msg: curl is required for smoke:run
+      - sh: command -v jq >/dev/null 2>&1
+        msg: jq is required for smoke:run
+      - sh: test -f tests/smoke/smoke_test.sh
+        msg: tests/smoke/smoke_test.sh is required for smoke:run
+    cmds:
+      - bash tests/smoke/smoke_test.sh
+
+  e2e:run:
+    desc: Run Playwright in the CI container profile
+    summary: |
+      Executes the Playwright container defined in docker-compose.ci.yml.
+      Reuses the existing --profile e2e playwright flow without changing its runtime semantics.
+    preconditions:
+      - sh: command -v docker >/dev/null 2>&1
+        msg: docker is required for e2e:run
+    cmds:
+      - docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright
+
+  verify:smoke:
+    desc: Run Docker smoke verification
+    summary: |
+      Starts the CI Docker Compose stack from a cold state, runs the smoke validation script,
+      and always performs docker compose down --volumes cleanup afterward.
+    cmds:
+      - task: stack:ci:up
+      - defer: { task: stack:ci:down }
+      - task: smoke:run
+
+  verify:e2e:
+    desc: Run end-to-end verification
+    summary: |
+      Starts the CI Docker Compose stack from a cold state, runs smoke validation first,
+      then executes the Playwright container flow, and always performs docker compose
+      down --volumes cleanup afterward.
+    cmds:
+      - task: stack:ci:up
+      - defer: { task: stack:ci:down }
+      - task: smoke:run
+      - task: e2e:run
+
+  verify:all:
+    desc: Run the full regression entrypoint
+    summary: |
+      Runs the fast local verification entrypoint first and only proceeds to the full end-to-end
+      verification flow when the quick checks succeed.
+    cmds:
+      - task: verify:quick
+      - task: verify:e2e

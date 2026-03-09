@@ -39,6 +39,8 @@ NPA_TOKEN=...
 NPA_CLIENT_ID=...
 NPA_CLIENT_SECRET=...
 NPA_SUB_ID=...
+# 可选：覆盖默认 SQLite 状态库位置
+# NPA_STATE_DB_FILE=./data/state/sync-state.sqlite
 ```
 
 说明：
@@ -47,6 +49,9 @@ NPA_SUB_ID=...
 - 上游认证支持两种来源：
   - 直接提供 `NPA_TOKEN`
   - 提供 `NPA_CLIENT_ID` / `NPA_CLIENT_SECRET` / `NPA_SUB_ID`，由服务端换取 token
+- 若只做最小功能联调，也可先提供 `NPA_TOKEN`，跳过 OAuth 三元组。
+- `NPA_STATE_DB_FILE` 是同步状态的主存储，默认路径为 `./data/state/sync-state.sqlite`。
+- `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留为 legacy JSON 导入来源，用于首次惰性迁移与人工对照，不再是运行时主状态源。
 - 若要启用浏览器直连 Meilisearch 的公开搜索，还需要配置 `MEILI_PUBLIC_*`，并使用 dedicated search-only key。
 
 ### 2.3 启动
@@ -80,7 +85,24 @@ curl -sS http://localhost:1323/readyz
 - 搜索页：`http://localhost:1323/`
 - 管理页：`http://localhost:1323/admin/`
 
-### 2.6 可选：启用浏览器公开搜索
+### 2.6 SQLite 状态库说明
+
+当前同步状态默认写入单一 SQLite 文件：
+
+- 默认路径：`./data/state/sync-state.sqlite`
+- 配置项：`NPA_STATE_DB_FILE`
+
+状态库中统一保存：
+- 全量同步进度（progress）
+- 增量游标（sync state）
+- crawl checkpoint
+
+排障建议：
+- 先看 `NPA_STATE_DB_FILE` 指向的 SQLite 文件是否存在、是否持续更新。
+- 若需要对照迁移前状态，可同时保留 `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 指向的 JSON 文件；它们仅作为 legacy 导入来源，不再是默认读路径。
+- CLI `sync-progress` 默认也会优先读取 SQLite，可用 `--state-db-file` 显式指定状态库。
+
+### 2.7 可选：启用浏览器公开搜索
 
 当你希望搜索页优先走浏览器直连 Meilisearch 的 public InstantSearch 链路时，配置：
 
@@ -97,7 +119,7 @@ MEILI_PUBLIC_INSTANTSEARCH_ENABLED=true
 - 前端会先通过 `AppService.GetSearchConfig` 拉取公开搜索配置。
 - 若公开搜索配置不完整，或 `MEILI_PUBLIC_INSTANTSEARCH_ENABLED=false`，搜索页会自动回退到 legacy Connect `AppSearch` 链路。
 
-### 2.7 本地 Docker + 真实凭据跑 admin live E2E
+### 2.8 本地 Docker + 真实凭据跑 admin live E2E
 
 当你需要对 `/admin` 关键流程做真实数据验证时，可叠加 `docker-compose.e2e-live.yml`。
 
@@ -217,7 +239,8 @@ go run ./cmd/cli download-url --file-id 123
 
 - CLI 默认从环境变量读取凭据和 Meilisearch 配置。
 - `sync` 支持 `--progress-output human|json`。
-- 默认进度文件与状态文件来自 `.env` / `.env.example` 中的 `NPA_PROGRESS_FILE`、`NPA_SYNC_STATE_FILE`、`NPA_CHECKPOINT_FILE`。
+- `sync-progress` 默认优先读取 `NPA_STATE_DB_FILE` 指向的 SQLite 状态库，也可通过 `--state-db-file` 显式指定。
+- `NPA_PROGRESS_FILE`、`NPA_SYNC_STATE_FILE`、`NPA_CHECKPOINT_FILE` 仍可用于 legacy 导入与排障对照，但不再是运行时主状态源。
 
 ## 4. 本地开发（不走 Docker 全栈）
 
@@ -253,24 +276,31 @@ cd web && bun install && bun run build
 
 ## 5. 常用命令
 
-```bash
-# 后端测试（与 Makefile 一致，含 -short/-count=1/-race）
-make test
+长驻开发命令请使用上面的“本地开发”章节；下面统一列出仓库验证入口。
 
-# 前端测试
-make test-frontend
+```bash
+# 查看公开任务
+task --list
+
+# 快速验证（guard:rest + Go + 前端单测）
+task verify:quick
+
+# 单独执行某一类验证
+task guard:rest
+task test:go
+task test:web
 
 # 前端类型检查
 cd web && bun run typecheck
 
-# 防回退检查（禁止在运行时代码中重新引入 /api/v1 路径）
-make rest-guard
+# CI 冒烟测试
+task verify:smoke
 
-# CI compose 冒烟回归
-make smoke-test
+# 完整链路回归（smoke + Playwright E2E）
+task verify:e2e
 
-# CI compose 冒烟 + Playwright E2E
-make e2e-test
+# 全量回归（verify:quick -> verify:e2e）
+task verify:all
 
 # 契约变更后的生成链路
 buf lint
@@ -340,8 +370,8 @@ buf generate
 补充说明：
 
 - `tests/smoke/smoke_test.sh` 默认 `BASE_URL=http://localhost:11323`、`METRICS_URL=http://localhost:19091`。
-- `make smoke-test` 会自动拉起 `docker-compose.ci.yml` 并运行 smoke script。
-- `make e2e-test` 会在 smoke 后继续运行 Playwright 容器。
+- `task verify:smoke` 会自动拉起 `docker-compose.ci.yml` 并运行 smoke script。
+- `task verify:e2e` 会在 smoke 后继续运行 Playwright 容器。
 - `docker-compose.ci.yml` 中的 Playwright 服务默认命令为 `npm install 2>/dev/null; npx playwright test`。
 
 ## 9. 常见问题

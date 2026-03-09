@@ -23,6 +23,7 @@
 - 后端：Go 1.25+, Echo v5, Meilisearch, Prometheus
 - 前端：React 19, Vite, TanStack Router, Bun, Vitest, Playwright
 - RPC：Buf + Protobuf + Connect-RPC（Connect/gRPC/gRPC-Web handler 由 connect-go 生成）
+- 状态持久化：SQLite（`modernc.org/sqlite`，默认文件 `./data/state/sync-state.sqlite`）
 - 契约：
   - Protobuf（Connect 路径）：`proto/npan/v1/api.proto`
 
@@ -109,27 +110,29 @@ cd web && bun install && bun run dev
 ### 常用验证
 
 ```bash
-# Go（与 Makefile 一致）
-make test
+# 查看可用任务
+task --list
+
+# Go
+task test:go
 
 # Frontend
-make test-frontend
+task test:web
 
 # Frontend typecheck
 cd web && bun run typecheck
 
 # 禁止运行时代码回退到 /api/v1
-make rest-guard
+task guard:rest
 ```
-
 ### Docker 冒烟 / E2E（推荐回归链）
 
 ```bash
 # 冒烟
-make smoke-test
+task verify:smoke
 
 # 冒烟 + Playwright E2E
-make e2e-test
+task verify:e2e
 ```
 
 注意：
@@ -168,13 +171,27 @@ make e2e-test
 - 本地 `go run ./cmd/server` 前若无 `web/dist`，需要先构建前端
 - Dockerfile 会自动构建前端并复制到镜像
 
-### 6.4 文档与命令漂移
+### 6.4 SQLite 状态库与 legacy JSON
+
+当前同步状态默认已切到 SQLite：
+- 默认路径：`NPA_STATE_DB_FILE=./data/state/sync-state.sqlite`
+- `cmd/server/main.go` 与 `internal/cli/root.go` 都通过 `storage.NewSQLiteStateStores(...)` 初始化状态存储
+- `progress` / `sync_state` / `checkpoint` 统一写入 SQLite
+
+兼容边界：
+- `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留，但角色仅是 legacy 导入来源
+- 不要把 legacy JSON 当作运行时主状态源
+- 排障时优先检查 SQLite 文件，再决定是否对照旧 JSON
+- CLI `sync-progress` 默认读 SQLite，可通过 `--state-db-file` 指定路径
+
+### 6.5 文档与命令漂移
 
 高频误差点：
 - 把 `AppService` 同时写成“公开”和“管理”入口
 - 写死 smoke / E2E 用例条目数
 - 忘记区分 `docker-compose.yml` 与 `docker-compose.ci.yml` 的端口
 - live E2E 说明未与 `docker-compose.e2e-live.yml` 的必填变量同步
+- 继续在文档中使用已废弃的 `make` 入口，而不是当前 `Taskfile` 任务
 
 ## 7. 改动建议（给接手 agent）
 
@@ -189,7 +206,7 @@ make e2e-test
 
 并执行至少：
 ```bash
-make test-frontend
+task test:web
 cd web && bun run typecheck
 ```
 
@@ -204,7 +221,7 @@ cd web && bun run typecheck
 
 并执行至少：
 ```bash
-make test
+task test:go
 ```
 
 ### 如果你在改契约（字段/RPC）
@@ -221,17 +238,17 @@ make test
 buf lint && buf generate
 
 # 2) 单测
-make test
-make test-frontend
+task test:go
+task test:web
 cd web && bun run typecheck
 
 # 3) 长链路（改了接口/页面/鉴权/同步流程时）
-make smoke-test
-make e2e-test
+task verify:smoke
+task verify:e2e
 ```
 
 ---
 
 如果你刚接手这个仓库，建议第一轮只做两件事：
-1. 跑通 `make test`、`make test-frontend` 与 `cd web && bun run typecheck`
+1. 跑通 `task test:go`、`task test:web` 与 `cd web && bun run typecheck`
 2. 阅读 `internal/httpx/server.go` 和 `web/src/routes/index.lazy.tsx`，确认 Connect-only 结构与前端公开搜索 bootstrap 方式

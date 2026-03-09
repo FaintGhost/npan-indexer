@@ -711,17 +711,18 @@ func newRoutingTestSyncManager(t *testing.T, stubIndex meilisearch.IndexManager)
 	progressStore := storage.NewJSONProgressStore(progressFile)
 
 	return NewSyncManager(SyncManagerArgs{
-		Index:              meiliIdx,
-		ProgressStore:      progressStore,
-		MeiliHost:          "http://127.0.0.1:7700",
-		MeiliIndex:         "test_items",
+		Index:            meiliIdx,
+		ProgressStore:    progressStore,
+		SyncStateStore:   storage.NewJSONSyncStateStore(syncStateFile),
+		CheckpointStores: storage.NewJSONCheckpointStoreFactory(),
+		MeiliHost:        "http://127.0.0.1:7700",
+		MeiliIndex:       "test_items",
 		CheckpointTemplate: checkpointFile,
 		RootWorkers:        1,
 		ProgressEvery:      1,
 		Retry:              models.RetryPolicyOptions{},
 		MaxConcurrent:      10,
 		MinTimeMS:          0,
-		SyncStateFile:      syncStateFile,
 	})
 }
 
@@ -779,7 +780,7 @@ func TestCursorUpdate_FullCrawlSuccess(t *testing.T) {
 	}
 
 	// Core assertion: sync state file must be written with LastSyncTime > 0.
-	syncStateStore := storage.NewJSONSyncStateStore(mgr.syncStateFile)
+	syncStateStore := mgr.syncStateStore
 	state, err := syncStateStore.Load()
 	if err != nil {
 		t.Fatalf("failed to load sync state: %v", err)
@@ -829,7 +830,7 @@ func TestCursorUpdate_FullCrawlFailure(t *testing.T) {
 	}
 
 	// Core assertion: sync state file must NOT exist or LastSyncTime must be 0.
-	syncStateStore := storage.NewJSONSyncStateStore(mgr.syncStateFile)
+	syncStateStore := mgr.syncStateStore
 	state, err := syncStateStore.Load()
 	if err != nil {
 		t.Fatalf("failed to load sync state: %v", err)

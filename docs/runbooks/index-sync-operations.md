@@ -9,9 +9,22 @@
   - `NPA_TOKEN`
   - 或 `NPA_CLIENT_ID` / `NPA_CLIENT_SECRET` / `NPA_SUB_ID`
 - 已配置索引参数：`MEILI_HOST`、`MEILI_API_KEY`、`MEILI_INDEX`
+- 已确认同步状态库路径（默认 `NPA_STATE_DB_FILE=./data/state/sync-state.sqlite`）。
 - 若计划从管理接口直接回退使用服务端凭据，确认：
   - `NPA_ALLOW_CONFIG_AUTH_FALLBACK=true`
   - 且服务端环境中存在有效 `NPA_TOKEN` 或完整 OAuth 三元组
+
+## 1.1 状态持久化说明
+
+当前运行时以 SQLite 作为同步状态主存储，统一保存：
+- `progress`：全量/当前同步进度
+- `sync_state`：增量游标（`lastSyncTime` 等）
+- `checkpoint`：全量 crawl 断点
+
+兼容策略：
+- `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留，用于首次读取时从 legacy JSON 惰性导入 SQLite。
+- 导入后，运行时主读写路径仍是 `NPA_STATE_DB_FILE` 指向的 SQLite 文件。
+- 本轮迁移不会自动删除旧 JSON；如需排障，可保留旧文件做人工对照。
 
 ## 2. 端口与入口
 
@@ -40,15 +53,14 @@
 建议先执行：
 
 ```bash
-make test
-make test-frontend
+task verify:quick
 cd web && bun run typecheck
 ```
 
 如果要回归容器链路，再执行：
 
 ```bash
-make smoke-test
+task verify:smoke
 ```
 
 ### 3.2 方式 A：CLI 触发（适合本地排障）
@@ -125,7 +137,8 @@ curl -sS -X POST \
 ## 4. 增量同步调度
 
 - 建议每 5~15 分钟执行一次增量同步。
-- 增量游标文件默认来自 `NPA_SYNC_STATE_FILE`。
+- 增量游标运行时主存储位于 `NPA_STATE_DB_FILE` 指向的 SQLite `sync_state` 命名空间。
+- `NPA_SYNC_STATE_FILE` 仍保留为 legacy JSON 导入来源，不再是默认主读写路径。
 - 增量查询词默认来自 `NPA_INCREMENTAL_QUERY_WORDS`，默认值是 `* OR *`。
 - 回看窗口默认来自 `NPA_SYNC_WINDOW_OVERLAP_MS`，默认值是 `2000` 毫秒。
 - 同步成功后会写入新的 `lastSyncTime`；失败时保留旧游标。
@@ -199,8 +212,16 @@ go run ./cmd/cli download-url --file-id 123
 
 1. 检查 Meilisearch 健康：`curl "$MEILI_HOST/health"`
 2. 检查 `GET /healthz` 与 `GET /readyz`
-3. 检查云盘 token 是否过期，或 OAuth 三元组是否仍可换取 token
-4. 若增量游标损坏：回退 `NPA_SYNC_STATE_FILE` 到最近有效版本后重跑增量
-5. 若全量 checkpoint 异常：核对 `NPA_CHECKPOINT_FILE` 与 `NPA_PROGRESS_FILE`
-6. 若索引污染严重：清空目标索引后重跑全量
-7. 若 smoke / E2E 超时：确认测试是否仍等待旧 REST `/api/v1/*` 路径，当前应校验 Connect `POST /npan.v1.*`
+3. 检查云盘 token 是否过期，或 OAuth 三元组是否仍可换取 token。
+4. 检查 SQLite 状态库是否存在且可更新：
+  - 路径默认是 `./data/state/sync-state.sqlite`
+  - 也可通过 `NPA_STATE_DB_FILE` 覆盖
+5. 若需要人工确认当前进度，执行：
+  - `go run ./cmd/cli sync-progress --state-db-file ./data/state/sync-state.sqlite`
+6. 若增量游标异常：优先检查 SQLite 中的 `sync_state` 是否符合预期；必要时可用保留的 legacy JSON 做对照。
+7. 若全量 checkpoint 异常：先核对 SQLite 中的 checkpoint 是否更新；必要时再对照 `NPA_CHECKPOINT_FILE` 对应的 legacy 文件。
+8. 若索引污染严重：清空目标索引后重跑全量。
+9. 若怀疑是迁移问题：
+  - 确认 `NPA_PROGRESS_FILE` / `NPA_SYNC_STATE_FILE` 仍指向原 JSON 文件。
+  - 保留旧 JSON，不要先删除；程序会在 SQLite 缺失对应记录时惰性导入。
+10. 若 smoke / E2E 超时：确认测试是否仍等待旧 REST `/api/v1/*` 路径，当前应校验 Connect `POST /npan.v1.*`

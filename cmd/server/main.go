@@ -49,13 +49,25 @@ func main() {
 	cachedService := search.NewCachedQueryService(queryService, 256, 30*time.Second, tracker)
 	instrSearch := metrics.NewInstrumentedSearchService(cachedService, cachedService, searchMetrics)
 
-	progressStore := storage.NewJSONProgressStore(cfg.ProgressFile)
+	stateStores, err := storage.NewSQLiteStateStores(storage.SQLiteStateStoresConfig{
+		StateDBFile:         cfg.StateDBFile,
+		LegacyProgressFile:  cfg.ProgressFile,
+		LegacySyncStateFile: cfg.SyncStateFile,
+	})
+	if err != nil {
+		logger.Error("初始化 SQLite 状态库失败", "error", err)
+		os.Exit(1)
+	}
+	defer stateStores.DB.Close()
+
 	syncReporter := metrics.NewPrometheusSyncReporter(syncMetrics)
 	syncManager := service.NewSyncManager(service.SyncManagerArgs{
-		Index:              meiliIndex,
-		ProgressStore:      progressStore,
-		MeiliHost:          cfg.MeiliHost,
-		MeiliIndex:         cfg.MeiliIndex,
+		Index:            meiliIndex,
+		ProgressStore:    stateStores.ProgressStore,
+		SyncStateStore:   stateStores.SyncStateStore,
+		CheckpointStores: stateStores.CheckpointStoreFactory,
+		MeiliHost:        cfg.MeiliHost,
+		MeiliIndex:       cfg.MeiliIndex,
 		CheckpointTemplate: cfg.CheckpointTemplate,
 		RootWorkers:        cfg.SyncRootWorkers,
 		ProgressEvery:      cfg.SyncProgressEvery,
@@ -63,7 +75,6 @@ func main() {
 		MaxConcurrent:      cfg.SyncMaxConcurrent,
 		MinTimeMS:          cfg.SyncMinTimeMS,
 		ActivityChecker:    tracker,
-		SyncStateFile:      cfg.SyncStateFile,
 		IncrementalQuery:   cfg.IncrementalQuery,
 		WindowOverlapMS:    cfg.SyncWindowOverlapMS,
 		MetricsReporter:    syncReporter,

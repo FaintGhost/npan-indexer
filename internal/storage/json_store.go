@@ -11,10 +11,32 @@ import (
 	"npan/internal/models"
 )
 
+type ProgressStore interface {
+	Load() (*models.SyncProgressState, error)
+	Save(state *models.SyncProgressState) error
+}
+
+type SyncStateStore interface {
+	Load() (*models.SyncState, error)
+	Save(state *models.SyncState) error
+}
+
+type CheckpointStore interface {
+	Load() (*models.CrawlCheckpoint, error)
+	Save(checkpoint *models.CrawlCheckpoint) error
+	Clear() error
+}
+
+type CheckpointStoreFactory interface {
+	ForKey(key string) CheckpointStore
+}
+
 type JSONCheckpointStore struct {
 	filePath string
 	mu       sync.Mutex
 }
+
+type JSONCheckpointStoreFactory struct{}
 
 func writeFileAtomic(filePath string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(filePath)
@@ -72,6 +94,48 @@ func writeFileAtomic(filePath string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
+func loadJSONFile[T any](filePath string) (*T, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var value T
+	if err := json.Unmarshal(data, &value); err != nil {
+		return nil, err
+	}
+	return &value, nil
+}
+
+func saveJSONFile(filePath string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(filePath, data, 0o644)
+}
+
+func normalizeSyncProgressState(state *models.SyncProgressState) *models.SyncProgressState {
+	if state == nil {
+		return nil
+	}
+	if state.RootProgress == nil {
+		state.RootProgress = map[string]*models.RootSyncProgress{}
+	}
+	return state
+}
+
+func NewJSONCheckpointStoreFactory() *JSONCheckpointStoreFactory {
+	return &JSONCheckpointStoreFactory{}
+}
+
+func (f *JSONCheckpointStoreFactory) ForKey(key string) CheckpointStore {
+	return NewJSONCheckpointStore(key)
+}
+
 func NewJSONCheckpointStore(filePath string) *JSONCheckpointStore {
 	return &JSONCheckpointStore{filePath: filePath}
 }
@@ -80,31 +144,14 @@ func (s *JSONCheckpointStore) Load() (*models.CrawlCheckpoint, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := os.ReadFile(s.filePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	var checkpoint models.CrawlCheckpoint
-	if err := json.Unmarshal(data, &checkpoint); err != nil {
-		return nil, err
-	}
-	return &checkpoint, nil
+	return loadJSONFile[models.CrawlCheckpoint](s.filePath)
 }
 
 func (s *JSONCheckpointStore) Save(checkpoint *models.CrawlCheckpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := json.MarshalIndent(checkpoint, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return writeFileAtomic(s.filePath, data, 0o644)
+	return saveJSONFile(s.filePath, checkpoint)
 }
 
 func (s *JSONCheckpointStore) Clear() error {
@@ -130,36 +177,18 @@ func (s *JSONProgressStore) Load() (*models.SyncProgressState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := os.ReadFile(s.filePath)
+	state, err := loadJSONFile[models.SyncProgressState](s.filePath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
 		return nil, err
 	}
-
-	var state models.SyncProgressState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
-	}
-
-	if state.RootProgress == nil {
-		state.RootProgress = map[string]*models.RootSyncProgress{}
-	}
-
-	return &state, nil
+	return normalizeSyncProgressState(state), nil
 }
 
 func (s *JSONProgressStore) Save(state *models.SyncProgressState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return writeFileAtomic(s.filePath, data, 0o644)
+	return saveJSONFile(s.filePath, state)
 }
 
 type JSONSyncStateStore struct {
@@ -175,29 +204,12 @@ func (s *JSONSyncStateStore) Load() (*models.SyncState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := os.ReadFile(s.filePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	var state models.SyncState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
-	}
-	return &state, nil
+	return loadJSONFile[models.SyncState](s.filePath)
 }
 
 func (s *JSONSyncStateStore) Save(state *models.SyncState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return writeFileAtomic(s.filePath, data, 0o644)
+	return saveJSONFile(s.filePath, state)
 }

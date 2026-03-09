@@ -26,12 +26,13 @@
 - 若计划让管理接口回退使用服务端凭据，显式确认 `NPA_ALLOW_CONFIG_AUTH_FALLBACK=true`，并同时提供 `NPA_TOKEN` 或完整 OAuth 三元组。
 - 若启用浏览器公开搜索，确认 `MEILI_PUBLIC_*` 已配置完整，且 `MEILI_PUBLIC_SEARCH_API_KEY` 为 dedicated search-only key。
 - 运行验证：
-  - `make test`
-  - `make test-frontend`
+  - `task verify:quick`
   - `cd web && bun run typecheck`
-  - `make smoke-test`
-  - `make e2e-test`
+  - `task verify:smoke`
+  - `task verify:e2e`
 - 若改了 protobuf 契约，额外执行：
   - `buf lint`
   - `buf generate`
-- 若部署在反向代理后，再根据实际网络拓扑评估是否调整 `IPExtractor`。
+- 若开放公网接口，配置 `NPA_ADMIN_API_KEY`（>= 16 字符，空值启动时 panic）。
+- 默认保持 `NPA_ALLOW_CONFIG_AUTH_FALLBACK=false`。
+- 若部署在反向代理后，将 `IPExtractor` 改为 `ExtractIPFromXFFHeader()`。

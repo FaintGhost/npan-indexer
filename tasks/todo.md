@@ -4,15 +4,15 @@
 
 ## 目标
 
-- 以当前代码与配置为准，同步主文档、运行手册、代理说明与配置示例，消除 Connect-only、命令、端口、live E2E 与公开搜索说明的漂移。
+- 以当前代码与配置为准，同步主文档、运行手册、代理说明与配置示例，消除 Connect-only、命令、端口、live E2E、公开搜索、Taskfile 与 SQLite 状态持久化说明的漂移。
 
 ## 计划清单
 
-- [x] 1. 盘点现有文档并核对代码中的真相源（路由、鉴权、命令、端口、前端嵌入、公开搜索配置）
+- [x] 1. 盘点现有文档并核对代码中的真相源（路由、鉴权、命令、端口、前端嵌入、公开搜索配置、Taskfile、SQLite 状态库）
 - [x] 2. 更新 `README.md` 与 `.env.example`
 - [x] 3. 更新 `CLAUDE.md` 与 `docs/STRUCTURE.md`
 - [x] 4. 更新 `docs/runbooks/index-sync-operations.md` 与 `docs/archive/README.md`
-- [ ] 5. 运行一致性校对并回填 Review
+- [x] 5. 运行一致性校对并回填 Review
 
 ## Review（全量更新项目文档）
 
@@ -24,15 +24,60 @@
   - `docs/runbooks/index-sync-operations.md`
   - `docs/archive/README.md`
 - 同步结果：
-  - README 已改为以当前 Connect-only 运行形态为中心，修正 `AppService` 归类、live E2E 凭据要求、CLI/Makefile 命令与 CI 端口说明。
-  - `.env.example` 已补充 `NPA_TOKEN`、`NPA_ALLOW_CONFIG_AUTH_FALLBACK`、`MEILI_PUBLIC_*`、同步状态文件相关注释，和当前配置加载逻辑对齐。
-  - `CLAUDE.md` 与 `docs/STRUCTURE.md` 已收敛为当前接手入口，避免继续写死 smoke/E2E 条目数。
-  - 运行手册已切换到 `AdminService` Connect 路径与当前 CLI 命令，不再把历史 REST 路径当作现网入口。
+  - README 已改为以当前 Connect-only 运行形态为中心，同时补充 Taskfile 验证入口、SQLite 状态库、公开搜索与 live E2E 约束。
+  - `.env.example` 已补充 `NPA_TOKEN`、`NPA_ALLOW_CONFIG_AUTH_FALLBACK`、`MEILI_PUBLIC_*`、同步状态与增量同步相关注释，并与当前配置加载逻辑对齐。
+  - `CLAUDE.md` 与 `docs/STRUCTURE.md` 已收敛为当前接手入口，改用 Taskfile 命令并补充 SQLite/legacy JSON 边界。
+  - 运行手册已切换到 `AdminService` Connect 路径与当前 CLI / SQLite 运行事实，不再把历史 REST 路径或 legacy JSON 当作现网主入口。
   - archive 入口已明确仅用于历史追溯，当前事实应优先查阅 README / runbook / STRUCTURE。
 - 验证结果：
-  - 已对照 `internal/httpx/server.go`、`internal/httpx/middleware_auth.go`、`internal/httpx/connect_app_auth_search.go`、`Makefile`、`docker-compose.ci.yml`、`docker-compose.e2e-live.yml`、`tests/smoke/smoke_test.sh`、`proto/npan/v1/api.proto` 完成事实复核。
-  - 已执行 `git diff --check -- README.md CLAUDE.md docs/STRUCTURE.md docs/runbooks/index-sync-operations.md docs/archive/README.md .env.example tasks/todo.md`，通过。
-  - 已定向检索主文档，确认不再保留写死 smoke/E2E 条目数；出现 `/api/v1/*` 的地方仅用于说明“历史路径已废弃”或排障提示，不再作为当前入口描述。
+  - 已对照 `internal/httpx/server.go`、`internal/httpx/middleware_auth.go`、`internal/httpx/connect_app_auth_search.go`、`Taskfile.yml`、`docker-compose.ci.yml`、`docker-compose.e2e-live.yml`、`tests/smoke/smoke_test.sh`、`proto/npan/v1/api.proto`、`internal/config/config.go`、`internal/cli/root.go` 完成事实复核。
+  - 已定向检索主文档，确认运行验证入口已从 `make` 收敛到当前 `Taskfile`，并补齐 SQLite 状态库说明。
+  - `/api/v1/*` 仅保留在历史路径废弃说明与排障提示中，不再作为当前入口描述。
+
+# 任务计划（2026-03-08）
+
+## 新任务：同步状态迁移到 SQLite
+
+## 目标
+
+- 将当前全量进度、增量游标与 crawl checkpoint 的持久化从多份 JSON 文件迁移到单一 SQLite 状态库，提升任务状态恢复可靠性，同时保持 Admin Connect API、CLI 与现有进度模型语义不变。
+
+## 计划清单
+
+- [x] 1. 审计当前同步状态持久化链路（progress / sync_state / checkpoint）与不可靠边界
+- [x] 2. 产出 SQLite 迁移设计文档与 BDD 规格：`docs/plans/2026-03-08-sync-state-sqlite-design/`
+- [x] 3. 产出可执行实施计划：`docs/plans/2026-03-08-sync-state-sqlite-plan/`
+- [x] 4. 待确认后按 BDD 顺序执行：state store -> SyncManager 抽象 -> checkpoint 生命周期 -> Admin/CLI wiring
+- [x] 5. 完成全量验证链与运行文档收口
+
+## 评审记录（SQLite 状态迁移实施结果）
+
+- 结论：SQLite 已成为 progress / sync_state / checkpoint 的主状态源；Admin Connect API 与 CLI `sync-progress` 已切换到统一状态库读取路径。
+- 驱动选择：继续使用 `modernc.org/sqlite`，保持 `CGO_ENABLED=0` 构建兼容，不切换到 `ncruces/go-sqlite3`。
+- 迁移策略：保留 `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 作为非破坏式 legacy JSON 导入来源；本轮不自动删除旧文件。
+- 代码落点：
+  - `internal/storage/sqlite_store.go`：SQLite state store + namespace/key + JSON payload + 惰性导入
+  - `internal/service/sync_manager.go`：切换为注入式 progress/sync-state/checkpoint store 抽象
+  - `cmd/server/main.go`：服务端运行时切到 SQLite state stores
+  - `internal/cli/root.go`：CLI runtime 与 `sync-progress` 切到 SQLite
+- 验证结果：
+  - `GOCACHE=/tmp/go-build go test ./... -count=1` 通过（全量 Go 测试）
+  - `cd web && bun run test` 通过（27 files / 224 tests）
+  - `docker compose -f docker-compose.ci.yml up --build -d --wait --wait-timeout 120` 通过
+  - `./tests/smoke/smoke_test.sh` 通过（34/34）
+  - `docker compose -f docker-compose.ci.yml --profile e2e run --rm playwright` 通过（42 passed / 2 skipped）
+- 文档收口：
+  - `README.md` 已补充 `NPA_STATE_DB_FILE`、legacy JSON 角色与 CLI `--state-db-file` 说明
+  - `docs/runbooks/index-sync-operations.md` 已补充 SQLite 主状态源与排障路径
+  - `CLAUDE.md` 已补充默认 SQLite 状态库入口与兼容边界
+- 额外记录：
+  - 本轮前端验证失败的根因不是业务回归，而是 `web` 目录未安装依赖，导致 `vitest: command not found`；执行 `cd web && bun install --frozen-lockfile` 后恢复。
+- 关键设计产物：
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/_index.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/architecture.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/bdd-specs.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-design/best-practices.md`
+  - `docs/plans/2026-03-08-sync-state-sqlite-plan/_index.md`
 
 # 任务计划（2026-03-04）
 
@@ -1146,3 +1191,44 @@
   - 已在 `web/src/lib/public-search-request-adapter.ts` 的 public search wrapper 层增加空查询短路：当本轮请求全部为空 query 时，直接返回空结果而不触发真实 Meilisearch 搜索。
   - 已新增并跑通对应回归测试，覆盖“初始空查询不发请求”与“clear 后不发请求”；同时复跑 `src/components/search-page.test.tsx` 与前端全量 Vitest 均通过（27 files / 223 tests）。
   - 修复后再次做 focused review，未发现新的高置信度重要问题；search-as-you-type、Enter/按钮提交、`file_category` refinement、legacy fallback 与空结果兼容性均保持成立。
+
+## 新任务：修复 public 文件类别筛选失效（Writing Plans）
+
+- [x] 1. 完成根因调查，确认问题位于 `SearchFilters` 的 refinement token 使用方式，而非索引侧 `file_category` 数据
+- [x] 2. 基于 `docs/plans/2026-03-08-react-instantsearch-alignment-design/` 产出针对本次回归的最小修复计划目录
+- [x] 3. 将任务拆分为 BDD 驱动的 Red/Green 粒度，覆盖 token 语义测试、实现修复与回归验证
+- [x] 4. 经用户确认后进入计划执行，修复 public 搜索中“文档/图片/视频”等筛选返回空结果的问题
+
+## Review（public 文件类别筛选失效 / 执行结果）
+
+- 根因：
+  - `web/src/components/search-filters.tsx` 原实现把固定 UI 分类值 `doc/image/video/...` 直接传给 `useRefinementList().refine()`。
+  - 在 React InstantSearch 中，筛选切换应优先使用 `useRefinementList().items` 提供的真实 refinement token；否则 token 与内部状态可能不一致，导致“全部”正常但其他类别结果为 0。
+- 改动文件：
+  - `web/src/components/search-filters.tsx`
+  - `web/src/components/search-filters.test.tsx`
+- 修复结果：
+  - `SearchFilters` 改为优先使用 `useRefinementList().items` 中的真实 token 进行切换与取消。
+  - 为保证 URL 首次恢复和轻量测试客户端场景不回归，当前实现对“token 暂不可用”保留了受控 fallback：回退到原始 `doc/image/...` filter 值。
+  - 按钮选中态继续兼容 `useCurrentRefinements()` 的首屏恢复语义，因此 URL、选中态与请求 refinement 保持一致。
+- 验证：
+  - `cd /var/tmp/vibe-kanban/worktrees/caa8-meilisearch-inst/npan-indexer/web && bun x vitest run src/components/search-filters.test.tsx src/components/search-page.test.tsx` 通过（32 passed）。
+  - `cd /var/tmp/vibe-kanban/worktrees/caa8-meilisearch-inst/npan-indexer/web && bun x vitest run` 通过（27 files / 224 tests）。
+- 阻塞级差异：
+  - 本轮未发现默认过滤基线、URL 恢复、clear 语义、legacy fallback 的新增阻塞级回归。
+
+## Review（public 文件类别筛选失效 / 计划）
+
+- 根因结论：
+  - `web/src/components/search-filters.tsx` 当前把固定 UI 值 `doc/image/video/...` 直接传给 `useRefinementList().refine()`。
+  - React InstantSearch 的正确契约是使用 `useRefinementList().items` 提供的真实 `item.value` token 驱动 refinement。
+  - 因此“全部”正常，而切换到其他文件类别时会出现 refinement token 与 InstantSearch 内部状态不一致，最终导致结果为 0。
+- 计划目录：
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/_index.md`
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/task-001-file-category-refinement-token-test.md`
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/task-001-file-category-refinement-token-impl.md`
+  - `docs/plans/2026-03-08-public-file-category-refinement-fix-plan/task-002-public-filter-regression-verification.md`
+- 执行边界：
+  - 仅修复 public InstantSearch `file_category` refinement token 驱动，不改 legacy 本地筛选分支。
+  - 默认过滤基线仍保留在 public request adapter 层，不新增结果层本地裁剪。
+  - 验证优先使用 `cd web && bun vitest run ...`，必要时补跑搜索相关 Playwright。

@@ -56,3 +56,23 @@ func TestLoad_CustomTimeouts(t *testing.T) {
     }
   }
 }
+
+func TestLoad_DefaultStateDBFile(t *testing.T) {
+  t.Setenv("NPA_STATE_DB_FILE", "")
+
+  cfg := Load()
+
+  if cfg.StateDBFile != "./data/state/sync-state.sqlite" {
+    t.Fatalf("expected default state db file, got %q", cfg.StateDBFile)
+  }
+}
+
+func TestLoad_CustomStateDBFile(t *testing.T) {
+  t.Setenv("NPA_STATE_DB_FILE", "./tmp/custom-sync-state.sqlite")
+
+  cfg := Load()
+
+  if cfg.StateDBFile != "./tmp/custom-sync-state.sqlite" {
+    t.Fatalf("expected custom state db file, got %q", cfg.StateDBFile)
+  }
+}

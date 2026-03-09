@@ -29,7 +29,8 @@ func newTestHandlers(t *testing.T) *Handlers {
 	progressFile := filepath.Join(t.TempDir(), "progress.json")
 	progressStore := storage.NewJSONProgressStore(progressFile)
 	syncManager := service.NewSyncManager(service.SyncManagerArgs{
-		ProgressStore: progressStore,
+		ProgressStore:    progressStore,
+		CheckpointStores: storage.NewJSONCheckpointStoreFactory(),
 	})
 
 	return &Handlers{
