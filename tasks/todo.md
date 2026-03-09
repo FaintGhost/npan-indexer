@@ -1,5 +1,34 @@
 # 任务计划（2026-03-09）
 
+## 新任务：提炼未合并文档提交中的有效内容
+
+## 目标
+
+- 从 `feat/react-instantsearch-rollout` 的未合并文档提交中，仅提炼当前主线仍缺失的 public search key 获取与验证说明，避免把已过时的 README 结构整段带回 `main`。
+
+## 计划清单
+
+- [x] 1. 审查未合并提交与当前主线文档差异，区分“仍有价值”与“已被覆盖”的内容
+- [x] 2. 仅将 public key 获取步骤、最小验证命令与 env 边界注释补入主线文档
+- [x] 3. 复核最终 diff，确认不引入过时说明并给出后续处理建议
+
+## Review（提炼未合并文档提交中的有效内容）
+
+- 来源提交：`bf3d165 docs(search): clarify public key setup`
+- 保留内容：
+  - `README.md` 中的 public search key 获取步骤与最小验证命令
+  - `.env.example` 中的 public search 变量归属、key/uid 区分与启用条件注释
+  - `.env.meilisearch.example` 中的容器边界与 `MEILI_MASTER_KEY` 说明
+- 明确未带回主线的内容：
+  - 旧版 README 结构调整
+  - `tasks/lessons.md` 的经验记录
+  - 原提交中的 `tasks/todo.md` 任务记录
+- 验证结果：
+  - 已复核 `git diff -- README.md .env.example .env.meilisearch.example`，确认仅保留当前主线仍缺失的文档增量
+  - 本轮为纯文档/注释变更，未修改运行时代码，也未引入旧版部署说明回退
+
+# 任务计划（2026-03-09）
+
 ## 新任务：全量更新项目文档
 
 ## 目标

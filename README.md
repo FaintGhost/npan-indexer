@@ -118,6 +118,50 @@ MEILI_PUBLIC_INSTANTSEARCH_ENABLED=true
 - `MEILI_PUBLIC_SEARCH_API_KEY` 必须是 dedicated search-only key，不能复用私有 `MEILI_API_KEY`。
 - 前端会先通过 `AppService.GetSearchConfig` 拉取公开搜索配置。
 - 若公开搜索配置不完整，或 `MEILI_PUBLIC_INSTANTSEARCH_ENABLED=false`，搜索页会自动回退到 legacy Connect `AppSearch` 链路。
+- 以上 4 个变量由 `npan` 应用读取，并通过 `AppService.GetSearchConfig` 下发给浏览器；不要写到 `.env.meilisearch` / `meilisearch` 服务。
+- `MEILI_PUBLIC_SEARCH_HOST` 必须是浏览器可访问的地址；生产环境不要填 Docker 内网地址，例如 `http://meilisearch:7700`。
+- 服务端不会在 `MEILI_PUBLIC_SEARCH_API_KEY` 为空时回落复用私有 `MEILI_API_KEY`。
+
+#### 获取 public search key（最小步骤）
+
+1. 在 `.env.meilisearch` 中配置 `MEILI_MASTER_KEY` 并启动 Meilisearch。
+2. 先用 `GET /keys` 检查现有 key；若拿不到真实 `key` 字段，就新建一个 search-only key。
+3. 把返回 JSON 里的 `key` 写入应用 `.env` 的 `MEILI_PUBLIC_SEARCH_API_KEY`；不要填 `uid`。
+
+```bash
+curl -sS \
+  -H 'Authorization: Bearer <MEILI_MASTER_KEY>' \
+  http://localhost:7700/keys
+```
+
+```bash
+curl -sS -X POST \
+  -H 'Authorization: Bearer <MEILI_MASTER_KEY>' \
+  -H 'Content-Type: application/json' \
+  -d '{"actions":["search"],"indexes":["npan_items"]}' \
+  http://localhost:7700/keys
+```
+
+#### 最小验证
+
+```bash
+curl -sS -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{}' \
+  http://localhost:1323/npan.v1.AppService/GetSearchConfig
+```
+
+返回里应能看到 `instantsearchEnabled`、`host`、`indexName`、`searchApiKey`。
+
+```bash
+curl -sS -X POST \
+  -H 'Authorization: Bearer <MEILI_PUBLIC_SEARCH_API_KEY>' \
+  -H 'Content-Type: application/json' \
+  -d '{"queries":[{"indexUid":"npan_items","q":"test","limit":1}]}' \
+  http://localhost:7700/multi-search
+```
+
+如果这里返回 `invalid_api_key`，优先检查填的是不是 `key` 而不是 `uid`，以及该 key 是否具有目标索引的 `search` 权限。
 
 ### 2.8 本地 Docker + 真实凭据跑 admin live E2E
 
