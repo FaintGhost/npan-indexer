@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../tests/mocks/server'
@@ -58,6 +58,12 @@ function toConnectProgressResponse(progress: Record<string, unknown>) {
   }
 }
 
+async function advanceTimers(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms)
+  })
+}
+
 const validProgress = {
   status: 'idle',
   mode: 'full',
@@ -104,14 +110,17 @@ function mockAdminBasics(options?: {
 }
 
 describe('AdminSyncPage', () => {
-  const wrapper = createTestProvider()
-
   beforeEach(() => {
     localStorage.clear()
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('shows API key dialog when no stored key', () => {
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
     expect(screen.getByPlaceholderText(/API Key/i)).toBeInTheDocument()
   })
 
@@ -119,7 +128,8 @@ describe('AdminSyncPage', () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     mockAdminBasics()
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
@@ -130,7 +140,8 @@ describe('AdminSyncPage', () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     mockAdminBasics()
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '全量' })).toBeInTheDocument()
@@ -156,7 +167,8 @@ describe('AdminSyncPage', () => {
       }),
     )
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     expect(await screen.findByText('正在检查索引状态...')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '增量' })).toBeDisabled()
@@ -166,7 +178,8 @@ describe('AdminSyncPage', () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     mockAdminBasics({ indexDocumentCount: 0 })
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await screen.findByText('请先执行一次全量索引')
     const user = userEvent.setup()
@@ -178,7 +191,8 @@ describe('AdminSyncPage', () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
     mockAdminBasics({ indexStatsStatus: 500 })
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     expect(await screen.findByText('无法确认索引状态，请稍后重试')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '增量' })).toBeDisabled()
@@ -213,7 +227,8 @@ describe('AdminSyncPage', () => {
       }),
     )
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await screen.findByText('运行中')
     expect(screen.getByRole('button', { name: '全量' })).toBeDisabled()
@@ -252,7 +267,8 @@ describe('AdminSyncPage', () => {
       indexDocumentCount: 10,
     })
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await screen.findByRole('button', { name: '增量' })
     const user = userEvent.setup()
@@ -294,7 +310,8 @@ describe('AdminSyncPage', () => {
       }),
     )
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await screen.findByText(/当前已勾选/) 
     const user = userEvent.setup()
@@ -367,7 +384,8 @@ describe('AdminSyncPage', () => {
       }),
     )
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
@@ -392,6 +410,151 @@ describe('AdminSyncPage', () => {
     expect(payload.resumeProgress).toBeUndefined()
   })
 
+  it('keeps inspected catalog details after later progress polling overwrites base progress', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+
+    let progressRequestCount = 0
+    server.use(
+      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
+        progressRequestCount += 1
+        return HttpResponse.json(toConnectProgressResponse({
+          ...validProgress,
+          roots: [1001, 1002],
+          catalogRoots: [1001, 1002],
+          rootNames: { '1001': 'A', '1002': 'B' },
+          catalogRootNames: { '1001': 'A', '1002': 'B' },
+          rootProgress: {},
+          catalogRootProgress: {
+            '1001': {
+              rootFolderId: 1001,
+              status: 'done',
+              estimatedTotalDocs: null,
+              stats: validProgress.aggregateStats,
+              updatedAt: 0,
+            },
+            '1002': {
+              rootFolderId: 1002,
+              status: 'done',
+              estimatedTotalDocs: null,
+              stats: validProgress.aggregateStats,
+              updatedAt: 0,
+            },
+          },
+        }))
+      }),
+      http.post('/npan.v1.AdminService/GetIndexStats', () => {
+        return HttpResponse.json({ documentCount: '10' })
+      }),
+      http.post('/npan.v1.AdminService/WatchSyncProgress', () => {
+        return HttpResponse.json({ code: 'unimplemented' }, { status: 501 })
+      }),
+      http.post('/npan.v1.AdminService/InspectRoots', async ({ request }) => {
+        const body: unknown = await request.json()
+        assertRecord(body)
+        expect(body.folderIds).toEqual(['1001', '1002'])
+        return HttpResponse.json({
+          items: [
+            { folderId: '1001', name: 'A', itemCount: '10', estimatedTotalDocs: '11' },
+            { folderId: '1002', name: 'B', itemCount: '20', estimatedTotalDocs: '21' },
+          ],
+          errors: [],
+        })
+      }),
+    )
+
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
+
+    await waitFor(() => {
+      expect(progressRequestCount).toBeGreaterThan(0)
+      expect(screen.getByRole('button', { name: /刷新目录详情/i })).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync })
+    await user.click(screen.getByRole('button', { name: /刷新目录详情/i }))
+    await user.click(screen.getByRole('button', { name: /展开/i }))
+
+    expect(await screen.findByText('估计 11')).toBeInTheDocument()
+    expect(screen.getByText('估计 21')).toBeInTheDocument()
+
+    await advanceTimers(2100)
+
+    await waitFor(() => {
+      expect(progressRequestCount).toBeGreaterThan(1)
+    })
+    expect(screen.getByText('估计 11')).toBeInTheDocument()
+    expect(screen.getByText('估计 21')).toBeInTheDocument()
+  })
+
+  it('keeps inspected catalog details when later progress requests return not found', async () => {
+    localStorage.setItem(STORAGE_KEY, 'valid-key')
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+
+    let progressRequestCount = 0
+    server.use(
+      http.post('/npan.v1.AdminService/GetSyncProgress', () => {
+        progressRequestCount += 1
+        if (progressRequestCount === 1) {
+          return HttpResponse.json(toConnectProgressResponse({
+            ...validProgress,
+            roots: [1001],
+            catalogRoots: [1001],
+            rootNames: { '1001': 'A' },
+            catalogRootNames: { '1001': 'A' },
+            rootProgress: {},
+            catalogRootProgress: {
+              '1001': {
+                rootFolderId: 1001,
+                status: 'done',
+                estimatedTotalDocs: null,
+                stats: validProgress.aggregateStats,
+                updatedAt: 0,
+              },
+            },
+          }))
+        }
+        return HttpResponse.json({ code: 'not_found', message: '未找到同步进度' }, { status: 404 })
+      }),
+      http.post('/npan.v1.AdminService/GetIndexStats', () => {
+        return HttpResponse.json({ documentCount: '10' })
+      }),
+      http.post('/npan.v1.AdminService/WatchSyncProgress', () => {
+        return HttpResponse.json({ code: 'unimplemented' }, { status: 501 })
+      }),
+      http.post('/npan.v1.AdminService/InspectRoots', () => {
+        return HttpResponse.json({
+          items: [
+            { folderId: '1001', name: 'A', itemCount: '10', estimatedTotalDocs: '11' },
+          ],
+          errors: [],
+        })
+      }),
+    )
+
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
+
+    await waitFor(() => {
+      expect(progressRequestCount).toBe(1)
+      expect(screen.getByRole('button', { name: /刷新目录详情/i })).toBeInTheDocument()
+    })
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync })
+    await user.click(screen.getByRole('button', { name: /刷新目录详情/i }))
+    await user.click(screen.getByRole('button', { name: /展开/i }))
+
+    expect(await screen.findByText('估计 11')).toBeInTheDocument()
+
+    await advanceTimers(2100)
+
+    await waitFor(() => {
+      expect(progressRequestCount).toBeGreaterThan(1)
+    })
+    expect(screen.queryByText('暂无同步记录')).not.toBeInTheDocument()
+    expect(screen.getByText('估计 11')).toBeInTheDocument()
+  })
+
   it('full sync with force rebuild explicitly disables resume', async () => {
     localStorage.setItem(STORAGE_KEY, 'valid-key')
 
@@ -406,7 +569,8 @@ describe('AdminSyncPage', () => {
       }),
     )
 
-    render(<AdminSyncPage />, { wrapper })
+    const isolatedWrapper = createTestProvider()
+    render(<AdminSyncPage />, { wrapper: isolatedWrapper })
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /^启动同步$/ })).toBeInTheDocument()
