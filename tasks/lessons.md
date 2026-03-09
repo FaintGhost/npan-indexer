@@ -107,3 +107,8 @@
 - 规则：
   - 排查 `/admin` 目录详情/进度问题时，先检查 `GetSyncProgress` 的 `enabled/refetchInterval` 与 `WatchSyncProgress` 的启动条件，而不是先假设只有运行中任务才会触发覆盖。
   - 对“本地 inspect 结果 + 远端 progress”双源状态，必须增加回归测试覆盖“后续轮询覆盖”和“NotFound 清空”两类竞态。
+- 用户纠正：执行测试前，先检查项目是否配置了 `task`/`Taskfile` 之类的统一任务入口；如果有，优先用它，不要直接手写零散测试命令。
+- 规则：
+  - 开始验证前先搜索仓库中的 `Taskfile*.yml` / `Taskfile*.yaml` / `taskfile*.yml` / `taskfile*.yaml`。
+  - 若存在统一任务入口，优先通过 `task <name>` 执行标准测试链，而不是手动拆分命令。
+  - 若不存在，再退回到仓库文档中的原生命令，并向用户明确说明“此仓库未配置 task”。
