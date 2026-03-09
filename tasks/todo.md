@@ -1,3 +1,39 @@
+# 任务计划（2026-03-09）
+
+## 新任务：全量更新项目文档
+
+## 目标
+
+- 以当前代码与配置为准，同步主文档、运行手册、代理说明与配置示例，消除 Connect-only、命令、端口、live E2E、公开搜索、Taskfile 与 SQLite 状态持久化说明的漂移。
+
+## 计划清单
+
+- [x] 1. 盘点现有文档并核对代码中的真相源（路由、鉴权、命令、端口、前端嵌入、公开搜索配置、Taskfile、SQLite 状态库）
+- [x] 2. 更新 `README.md` 与 `.env.example`
+- [x] 3. 更新 `CLAUDE.md` 与 `docs/STRUCTURE.md`
+- [x] 4. 更新 `docs/runbooks/index-sync-operations.md` 与 `docs/archive/README.md`
+- [x] 5. 运行一致性校对并回填 Review
+
+## Review（全量更新项目文档）
+
+- 改动文件：
+  - `README.md`
+  - `.env.example`
+  - `CLAUDE.md`
+  - `docs/STRUCTURE.md`
+  - `docs/runbooks/index-sync-operations.md`
+  - `docs/archive/README.md`
+- 同步结果：
+  - README 已改为以当前 Connect-only 运行形态为中心，同时补充 Taskfile 验证入口、SQLite 状态库、公开搜索与 live E2E 约束。
+  - `.env.example` 已补充 `NPA_TOKEN`、`NPA_ALLOW_CONFIG_AUTH_FALLBACK`、`MEILI_PUBLIC_*`、同步状态与增量同步相关注释，并与当前配置加载逻辑对齐。
+  - `CLAUDE.md` 与 `docs/STRUCTURE.md` 已收敛为当前接手入口，改用 Taskfile 命令并补充 SQLite/legacy JSON 边界。
+  - 运行手册已切换到 `AdminService` Connect 路径与当前 CLI / SQLite 运行事实，不再把历史 REST 路径或 legacy JSON 当作现网主入口。
+  - archive 入口已明确仅用于历史追溯，当前事实应优先查阅 README / runbook / STRUCTURE。
+- 验证结果：
+  - 已对照 `internal/httpx/server.go`、`internal/httpx/middleware_auth.go`、`internal/httpx/connect_app_auth_search.go`、`Taskfile.yml`、`docker-compose.ci.yml`、`docker-compose.e2e-live.yml`、`tests/smoke/smoke_test.sh`、`proto/npan/v1/api.proto`、`internal/config/config.go`、`internal/cli/root.go` 完成事实复核。
+  - 已定向检索主文档，确认运行验证入口已从 `make` 收敛到当前 `Taskfile`，并补齐 SQLite 状态库说明。
+  - `/api/v1/*` 仅保留在历史路径废弃说明与排障提示中，不再作为当前入口描述。
+
 # 任务计划（2026-03-08）
 
 ## 新任务：同步状态迁移到 SQLite
