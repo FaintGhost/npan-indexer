@@ -52,6 +52,29 @@ function getFilters(request: PublicSearchRequest): string {
   return ''
 }
 
+function getFacetFilters(request: PublicSearchRequest): string[] {
+  const facetFilters = request.params?.facetFilters
+  if (!Array.isArray(facetFilters)) {
+    return []
+  }
+
+  const tokens: string[] = []
+  for (const entry of facetFilters) {
+    if (typeof entry === 'string') {
+      tokens.push(entry)
+      continue
+    }
+    if (Array.isArray(entry)) {
+      for (const nested of entry) {
+        if (typeof nested === 'string') {
+          tokens.push(nested)
+        }
+      }
+    }
+  }
+  return tokens
+}
+
 function normalizeTypesenseFilter(filter: string): string {
   return filter
     .replace(/\bAND\b/g, '&&')
@@ -60,6 +83,27 @@ function normalizeTypesenseFilter(filter: string): string {
     .replace(/(\w+)\s*=\s*(true|false|\d+)/g, '$1:=$2')
     .replace(/(\w+):"([^"]+)"/g, '$1:=`$2`')
     .replace(/(\w+):([A-Za-z0-9_-]+)/g, '$1:=`$2`')
+}
+
+function facetFiltersToTypesenseFilter(tokens: string[]): string {
+  const clauses = tokens
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token) => {
+      const parts = token.split(':')
+      if (parts.length < 2) {
+        return ''
+      }
+      const field = parts.shift()?.trim()
+      const value = parts.join(':').trim()
+      if (!field || !value) {
+        return ''
+      }
+      return `${field}:=\`${value}\``
+    })
+    .filter(Boolean)
+
+  return clauses.join(' || ')
 }
 
 function toFacetMap(facetCounts: TypesenseFacetCount[] | undefined): Record<string, Record<string, number>> {
@@ -114,9 +158,14 @@ function buildTypesenseURL(config: PublicSearchClientConfig, request: PublicSear
   url.searchParams.set('page', String(page))
   url.searchParams.set('exhaustive_search', 'true')
 
-  const filter = normalizeTypesenseFilter(getFilters(request))
-  if (filter.trim()) {
-    url.searchParams.set('filter_by', filter)
+  const filters = [normalizeTypesenseFilter(getFilters(request))]
+  const facetFilter = facetFiltersToTypesenseFilter(getFacetFilters(request))
+  if (facetFilter) {
+    filters.push(facetFilter)
+  }
+  const filterBy = filters.filter((item) => item.trim()).join(' && ')
+  if (filterBy.trim()) {
+    url.searchParams.set('filter_by', filterBy)
   }
 
   return url.toString()

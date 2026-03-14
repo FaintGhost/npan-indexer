@@ -75,8 +75,10 @@ type typesenseHighlight struct {
 
 func (t *TypesenseIndex) EnsureSettings(ctx context.Context) error {
 	info, status, err := t.fetchCollection(ctx)
-	if err != nil && status != http.StatusNotFound {
-		return err
+	if err != nil {
+		if status != http.StatusNotFound {
+			return err
+		}
 	}
 	if status == http.StatusOK {
 		return validateTypesenseCollection(info)

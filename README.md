@@ -54,8 +54,8 @@ NPA_SUB_ID=...
 - 若只做最小功能联调，也可先提供 `NPA_TOKEN`，跳过 OAuth 三元组。
 - `NPA_STATE_DB_FILE` 是同步状态的主存储，默认路径为 `./data/state/sync-state.sqlite`。
 - `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留为 legacy JSON 导入来源，用于首次惰性迁移与人工对照，不再是运行时主状态源。
-- 若要启用浏览器直连 Meilisearch 的公开搜索，还需要配置 `MEILI_PUBLIC_*`，并使用 dedicated search-only key。
-- Typesense 后端下，搜索页会自动走 Connect `AppSearch` 链路；当前不支持浏览器直连 InstantSearch。
+- 若要启用浏览器直连公开搜索，可配置 `NPA_PUBLIC_INSTANTSEARCH_ENABLED=true`，并按后端分别提供对应的 public host / index / search-only key。
+- Typesense 索引实现位于 `internal/search/typesense_index.go`，对应单测位于 `internal/search/typesense_index_test.go`。
 
 ### 2.3 启动
 
@@ -108,24 +108,34 @@ curl -sS http://localhost:1323/readyz
 
 ### 2.7 可选：启用浏览器公开搜索
 
-当你希望搜索页优先走浏览器直连 Meilisearch 的 public InstantSearch 链路时，配置：
+当你希望搜索页优先走浏览器直连 public InstantSearch 链路时，按当前后端配置：
 
 ```bash
+NPA_PUBLIC_INSTANTSEARCH_ENABLED=true
+
+# Meilisearch backend
 MEILI_PUBLIC_SEARCH_HOST=http://127.0.0.1:7700
 MEILI_PUBLIC_SEARCH_INDEX=npan_items
 MEILI_PUBLIC_SEARCH_API_KEY=<search-only-key>
-MEILI_PUBLIC_INSTANTSEARCH_ENABLED=true
+
+# Typesense backend
+TYPESENSE_PUBLIC_SEARCH_HOST=http://127.0.0.1:8108
+TYPESENSE_PUBLIC_SEARCH_INDEX=npan_items
+TYPESENSE_PUBLIC_SEARCH_API_KEY=<search-only-key>
 ```
 
 注意：
 
 - `MEILI_PUBLIC_SEARCH_API_KEY` 必须是 dedicated search-only key，不能复用私有 `MEILI_API_KEY`。
-- 该能力仅在 `NPA_SEARCH_BACKEND=meilisearch` 下可用。
+- `TYPESENSE_PUBLIC_SEARCH_API_KEY` 也必须是 dedicated search-only key，不能复用私有 `TYPESENSE_API_KEY`。
 - 前端会先通过 `AppService.GetSearchConfig` 拉取公开搜索配置。
-- 若公开搜索配置不完整，或 `MEILI_PUBLIC_INSTANTSEARCH_ENABLED=false`，搜索页会自动回退到 legacy Connect `AppSearch` 链路。
+- 返回里会包含 `provider`，由前端在 Meilisearch / Typesense InstantSearch client 之间切换。
+- 若公开搜索配置不完整，或 `NPA_PUBLIC_INSTANTSEARCH_ENABLED=false`，搜索页会自动回退到 legacy Connect `AppSearch` 链路。
 - 以上 4 个变量由 `npan` 应用读取，并通过 `AppService.GetSearchConfig` 下发给浏览器；不要写到 `.env.meilisearch` / `meilisearch` 服务。
 - `MEILI_PUBLIC_SEARCH_HOST` 必须是浏览器可访问的地址；生产环境不要填 Docker 内网地址，例如 `http://meilisearch:7700`。
 - 服务端不会在 `MEILI_PUBLIC_SEARCH_API_KEY` 为空时回落复用私有 `MEILI_API_KEY`。
+- `TYPESENSE_PUBLIC_SEARCH_HOST` 也必须是浏览器可访问的地址；生产环境不要填 Docker 内网地址，例如 `http://typesense:8108`。
+- 服务端不会在 `TYPESENSE_PUBLIC_SEARCH_API_KEY` 为空时回落复用私有 `TYPESENSE_API_KEY`。
 
 #### 获取 public search key（最小步骤）
 
@@ -156,7 +166,7 @@ curl -sS -X POST \
   http://localhost:1323/npan.v1.AppService/GetSearchConfig
 ```
 
-返回里应能看到 `instantsearchEnabled`、`host`、`indexName`、`searchApiKey`。
+返回里应能看到 `provider`、`instantsearchEnabled`、`host`、`indexName`、`searchApiKey`。
 
 ```bash
 curl -sS -X POST \

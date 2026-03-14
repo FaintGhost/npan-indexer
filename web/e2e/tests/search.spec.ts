@@ -382,16 +382,21 @@ test.describe('搜索流程', () => {
     await enablePublicSearchBootstrapWithProvider(page, 'typesense')
     searchPage = new SearchPage(page)
 
-    const responsePromise = searchPage.waitForPublicSearchResponse({
-      query: 'design',
-      filterContains: 'file_category',
-    }, 10_000)
-    await searchPage.goto('/?query=design&file_category=doc')
-    const response = await responsePromise
+    await searchPage.goto('/')
 
-    expect(response.status()).toBe(200)
-    await expect(searchPage.searchInput).toHaveValue('design')
-    await expect(page.getByRole('radio', { name: '文档' })).toBeChecked()
+    const firstResponse = searchPage.waitForPublicSearchResponse({
+      query: 'project',
+    }, 10_000)
+    await searchPage.searchInput.fill('project')
+    await page.getByRole('button', { name: '搜索', exact: true }).click()
+    expect((await firstResponse).status()).toBe(200)
+
+    const docFilter = page.getByRole('radio', { name: '文档' })
+    await docFilter.click()
+
+    await expect(searchPage.searchInput).toHaveValue('project')
+    await expect(docFilter).toBeChecked()
+    await expect(page).toHaveURL(/file_category=doc/)
     await expect(page.getByTitle('project-design-spec.docx')).toBeVisible()
   })
 

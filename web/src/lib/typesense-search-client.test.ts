@@ -100,4 +100,33 @@ describe('createTypesensePublicSearchClient', () => {
       ],
     })
   })
+
+  it('translates facetFilters into Typesense filter_by clauses', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        found: 1,
+        hits: [],
+        facet_counts: [],
+      }),
+    })
+
+    const client = createTypesensePublicSearchClient({
+      provider: 'typesense',
+      host: 'https://typesense.example.com',
+      indexName: 'npan-public',
+      searchApiKey: 'public-search-key',
+    })
+
+    await client.searchClient.search([{
+      indexName: 'npan-public',
+      params: {
+        query: 'a',
+        facetFilters: [['file_category:doc']],
+      },
+    }])
+
+    const [url] = fetchMock.mock.calls[0] ?? []
+    expect(String(url)).toContain('filter_by=file_category%3A%3D%60doc%60')
+  })
 })

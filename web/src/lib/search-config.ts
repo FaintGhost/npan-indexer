@@ -18,15 +18,33 @@ export type SearchBootstrapMode = 'public' | 'legacy'
 export async function loadSearchConfig(
   transport: Transport = appTransport,
 ): Promise<PublicSearchConfig> {
-  const response = await callUnaryMethod(transport, getSearchConfigMethod, {})
+  try {
+    const response = await callUnaryMethod(transport, getSearchConfigMethod, {})
 
-  return PublicSearchConfigSchema.parse({
-    host: response.host,
-    indexName: response.indexName,
-    searchApiKey: response.searchApiKey,
-    instantsearchEnabled: response.instantsearchEnabled,
-    provider: response.provider || 'meilisearch',
-  })
+    return PublicSearchConfigSchema.parse({
+      host: response.host,
+      indexName: response.indexName,
+      searchApiKey: response.searchApiKey,
+      instantsearchEnabled: response.instantsearchEnabled,
+      provider: response.provider || 'meilisearch',
+    })
+  } catch (connectError) {
+    console.warn('GetSearchConfig Connect RPC failed, falling back to plain fetch', connectError)
+    try {
+      const response = await fetch('/npan.v1.AppService/GetSearchConfig', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      })
+
+      return PublicSearchConfigSchema.parse(await response.json())
+    } catch (fetchError) {
+      console.warn('GetSearchConfig fallback fetch failed', fetchError)
+      throw fetchError
+    }
+  }
 }
 
 export function resolveSearchBootstrapMode(
