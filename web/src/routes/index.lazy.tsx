@@ -262,7 +262,7 @@ function SearchPageFrame({
                 </p>
               </div>
               <div className="inline-flex items-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800">
-                Powered by Meilisearch
+                Powered by Local Search
               </div>
             </div>
 

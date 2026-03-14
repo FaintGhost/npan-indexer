@@ -37,6 +37,7 @@ func NewTypesenseIndex(host string, apiKey string, collection string) *Typesense
 type typesenseCollectionSchema struct {
 	Name                string                     `json:"name"`
 	DefaultSortingField string                     `json:"default_sorting_field,omitempty"`
+	TokenSeparators     []string                   `json:"token_separators,omitempty"`
 	Fields              []typesenseCollectionField `json:"fields"`
 }
 
@@ -49,9 +50,10 @@ type typesenseCollectionField struct {
 }
 
 type typesenseCollectionInfo struct {
-	Name         string                     `json:"name"`
-	NumDocuments int64                      `json:"num_documents"`
-	Fields       []typesenseCollectionField `json:"fields"`
+	Name            string                     `json:"name"`
+	NumDocuments    int64                      `json:"num_documents"`
+	TokenSeparators []string                   `json:"token_separators"`
+	Fields          []typesenseCollectionField `json:"fields"`
 }
 
 type typesenseSearchResponse struct {
@@ -83,6 +85,7 @@ func (t *TypesenseIndex) EnsureSettings(ctx context.Context) error {
 	schema := typesenseCollectionSchema{
 		Name:                t.collection,
 		DefaultSortingField: "modified_at",
+		TokenSeparators:     []string{"-", "_"},
 		Fields: []typesenseCollectionField{
 			{Name: "doc_id", Type: "string"},
 			{Name: "source_id", Type: "int64", Sort: true},
@@ -201,6 +204,7 @@ func (t *TypesenseIndex) Search(params models.LocalSearchParams) ([]models.Index
 		query.Set("query_by_weights", "8,6,4,1")
 		query.Set("page", fmt.Sprintf("%d", page))
 		query.Set("per_page", fmt.Sprintf("%d", pageSize))
+		query.Set("exhaustive_search", "true")
 		query.Set("sort_by", "_text_match:desc,modified_at:desc")
 		query.Set("highlight_fields", "name")
 		query.Set("highlight_start_tag", "<mark>")
@@ -299,6 +303,9 @@ func validateTypesenseCollection(info typesenseCollectionInfo) error {
 			return fmt.Errorf("typesense collection 字段 %s 类型错误: got=%s want=%s", name, gotType, wantType)
 		}
 	}
+	if !containsTokenSeparator(info.TokenSeparators, "-") || !containsTokenSeparator(info.TokenSeparators, "_") {
+		return fmt.Errorf("typesense collection 缺少必要 token_separators，需包含 '-' 和 '_'")
+	}
 	return nil
 }
 
@@ -357,6 +364,15 @@ func typesenseHighlightName(hit typesenseSearchHit) string {
 func quoteTypesenseString(value string) string {
 	escaped := strings.ReplaceAll(value, "`", "\\`")
 	return "`" + escaped + "`"
+}
+
+func containsTokenSeparator(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *TypesenseIndex) doJSON(ctx context.Context, method string, path string, query url.Values, body any, out any) error {

@@ -178,6 +178,7 @@ async function createTypesenseCollection(): Promise<void> {
     body: JSON.stringify({
       name: TYPESENSE_COLLECTION,
       default_sorting_field: 'modified_at',
+      token_separators: ['-', '_'],
       fields: [
         { name: 'doc_id', type: 'string' },
         { name: 'source_id', type: 'int64', sort: true },

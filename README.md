@@ -1,10 +1,10 @@
 # npan
 
-Npan 外部索引服务：把 Npan 云盘文件元数据同步到 Meilisearch，提供 Web 搜索页、管理后台、Connect-RPC API 和运维 CLI。
+Npan 外部索引服务：把 Npan 云盘文件元数据同步到本地搜索索引，提供 Web 搜索页、管理后台、Connect-RPC API 和运维 CLI。
 
 - 后端：Go + Echo
 - 前端：React + Vite + Bun
-- 搜索：Meilisearch
+- 搜索：Meilisearch / Typesense
 - RPC：Buf + Connect-RPC（connect-go / connect-es）
 
 ## 1. 你会得到什么
@@ -26,6 +26,7 @@ Npan 外部索引服务：把 Npan 云盘文件元数据同步到 Meilisearch，
 ```bash
 cp .env.example .env
 cp .env.meilisearch.example .env.meilisearch
+cp .env.typesense.example .env.typesense
 ```
 
 至少修改 `.env` 中这些字段：
@@ -46,6 +47,7 @@ NPA_SUB_ID=...
 说明：
 
 - `NPA_ADMIN_API_KEY` 必填，且长度必须 `>= 16`。
+- `NPA_SEARCH_BACKEND` 默认是 `meilisearch`；切换到 Typesense 时设为 `typesense`。
 - 上游认证支持两种来源：
   - 直接提供 `NPA_TOKEN`
   - 提供 `NPA_CLIENT_ID` / `NPA_CLIENT_SECRET` / `NPA_SUB_ID`，由服务端换取 token
@@ -53,6 +55,7 @@ NPA_SUB_ID=...
 - `NPA_STATE_DB_FILE` 是同步状态的主存储，默认路径为 `./data/state/sync-state.sqlite`。
 - `NPA_PROGRESS_FILE` 与 `NPA_SYNC_STATE_FILE` 仍保留为 legacy JSON 导入来源，用于首次惰性迁移与人工对照，不再是运行时主状态源。
 - 若要启用浏览器直连 Meilisearch 的公开搜索，还需要配置 `MEILI_PUBLIC_*`，并使用 dedicated search-only key。
+- Typesense 后端下，搜索页会自动走 Connect `AppSearch` 链路；当前不支持浏览器直连 InstantSearch。
 
 ### 2.3 启动
 
@@ -65,6 +68,7 @@ docker compose up -d --build
 - 应用：`http://localhost:1323`
 - 指标：`http://localhost:9091/metrics`
 - Meilisearch：`http://localhost:7700`
+- Typesense：`http://localhost:8108`
 
 ### 2.4 验证服务是否可用
 
@@ -116,6 +120,7 @@ MEILI_PUBLIC_INSTANTSEARCH_ENABLED=true
 注意：
 
 - `MEILI_PUBLIC_SEARCH_API_KEY` 必须是 dedicated search-only key，不能复用私有 `MEILI_API_KEY`。
+- 该能力仅在 `NPA_SEARCH_BACKEND=meilisearch` 下可用。
 - 前端会先通过 `AppService.GetSearchConfig` 拉取公开搜索配置。
 - 若公开搜索配置不完整，或 `MEILI_PUBLIC_INSTANTSEARCH_ENABLED=false`，搜索页会自动回退到 legacy Connect `AppSearch` 链路。
 - 以上 4 个变量由 `npan` 应用读取，并通过 `AppService.GetSearchConfig` 下发给浏览器；不要写到 `.env.meilisearch` / `meilisearch` 服务。
@@ -281,7 +286,7 @@ go run ./cmd/cli download-url --file-id 123
 
 说明：
 
-- CLI 默认从环境变量读取凭据和 Meilisearch 配置。
+- CLI 默认从环境变量读取凭据和当前搜索后端配置（Meilisearch / Typesense）。
 - `sync` 支持 `--progress-output human|json`。
 - `sync-progress` 默认优先读取 `NPA_STATE_DB_FILE` 指向的 SQLite 状态库，也可通过 `--state-db-file` 显式指定。
 - `NPA_PROGRESS_FILE`、`NPA_SYNC_STATE_FILE`、`NPA_CHECKPOINT_FILE` 仍可用于 legacy 导入与排障对照，但不再是运行时主状态源。

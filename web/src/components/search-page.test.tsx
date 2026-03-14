@@ -424,6 +424,7 @@ describe('SearchPage', () => {
     setTestURL('/')
     render(<SearchPage />, { wrapper })
     expect(screen.getByText('等待探索')).toBeInTheDocument()
+    expect(screen.getByText('Powered by Local Search')).toBeInTheDocument()
   })
 
   it('keeps hero mode at viewport height without vertical scrolling', () => {
