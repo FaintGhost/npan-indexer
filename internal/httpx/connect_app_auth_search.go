@@ -93,8 +93,10 @@ func (h *Handlers) resolveTokenForConnect(ctx context.Context, header http.Heade
 
 func (s *appConnectServer) GetSearchConfig(_ context.Context, _ *connect.Request[npanv1.GetSearchConfigRequest]) (*connect.Response[npanv1.GetSearchConfigResponse], error) {
 	cfg := s.handlers.cfg
+	backend, _ := search.ParseBackend(cfg.SearchBackend)
 	searchAPIKey := strings.TrimSpace(cfg.PublicSearchAPIKey)
-	instantsearchEnabled := cfg.PublicSearchInstantsearchOn &&
+	instantsearchEnabled := search.SupportsPublicInstantsearch(backend) &&
+		cfg.PublicSearchInstantsearchOn &&
 		strings.TrimSpace(cfg.PublicSearchHost) != "" &&
 		strings.TrimSpace(cfg.PublicSearchIndexName) != "" &&
 		searchAPIKey != ""

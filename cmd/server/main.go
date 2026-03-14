@@ -37,14 +37,26 @@ func main() {
 	syncMetrics := metrics.NewSyncMetrics(promReg)
 	searchMetrics := metrics.NewSearchMetrics(promReg)
 
-	meiliIndex := search.NewMeiliIndex(cfg.MeiliHost, cfg.MeiliAPIKey, cfg.MeiliIndex)
-	if err := meiliIndex.EnsureSettings(context.Background()); err != nil {
-		logger.Error("初始化 Meili 设置失败", "error", err)
+	index, backendInfo, err := search.NewIndexOperator(search.BackendConfig{
+		Backend:             cfg.SearchBackend,
+		MeiliHost:           cfg.MeiliHost,
+		MeiliAPIKey:         cfg.MeiliAPIKey,
+		MeiliIndex:          cfg.MeiliIndex,
+		TypesenseHost:       cfg.TypesenseHost,
+		TypesenseAPIKey:     cfg.TypesenseAPIKey,
+		TypesenseCollection: cfg.TypesenseCollection,
+	})
+	if err != nil {
+		logger.Error("初始化搜索后端失败", "error", err)
+		os.Exit(1)
+	}
+	if err := index.EnsureSettings(context.Background()); err != nil {
+		logger.Error("初始化搜索后端设置失败", "error", err, "backend", backendInfo.Backend)
 		os.Exit(1)
 	}
 
-	instrMeili := metrics.NewInstrumentedMeiliIndex(meiliIndex, searchMetrics)
-	queryService := search.NewQueryService(instrMeili)
+	instrIndex := metrics.NewInstrumentedMeiliIndex(index, searchMetrics)
+	queryService := search.NewQueryService(instrIndex)
 	tracker := search.NewSearchActivityTracker(5)
 	cachedService := search.NewCachedQueryService(queryService, 256, 30*time.Second, tracker)
 	instrSearch := metrics.NewInstrumentedSearchService(cachedService, cachedService, searchMetrics)
@@ -62,12 +74,12 @@ func main() {
 
 	syncReporter := metrics.NewPrometheusSyncReporter(syncMetrics)
 	syncManager := service.NewSyncManager(service.SyncManagerArgs{
-		Index:            meiliIndex,
-		ProgressStore:    stateStores.ProgressStore,
-		SyncStateStore:   stateStores.SyncStateStore,
-		CheckpointStores: stateStores.CheckpointStoreFactory,
-		MeiliHost:        cfg.MeiliHost,
-		MeiliIndex:       cfg.MeiliIndex,
+		Index:              index,
+		ProgressStore:      stateStores.ProgressStore,
+		SyncStateStore:     stateStores.SyncStateStore,
+		CheckpointStores:   stateStores.CheckpointStoreFactory,
+		MeiliHost:          backendInfo.Host,
+		MeiliIndex:         backendInfo.Index,
 		CheckpointTemplate: cfg.CheckpointTemplate,
 		RootWorkers:        cfg.SyncRootWorkers,
 		ProgressEvery:      cfg.SyncProgressEvery,

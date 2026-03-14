@@ -9,6 +9,7 @@ import (
 
 	"npan/internal/models"
 	"npan/internal/npan"
+	"npan/internal/search"
 )
 
 type Config struct {
@@ -31,9 +32,13 @@ type Config struct {
 	SubID        int64
 	SubType      npan.TokenSubjectType
 
+	SearchBackend               string
 	MeiliHost                   string
 	MeiliAPIKey                 string
 	MeiliIndex                  string
+	TypesenseHost               string
+	TypesenseAPIKey             string
+	TypesenseCollection         string
 	PublicSearchHost            string
 	PublicSearchIndexName       string
 	PublicSearchAPIKey          string
@@ -165,9 +170,13 @@ func Load() Config {
 		SubID:        readInt64("NPA_SUB_ID", 0),
 		SubType:      subType,
 
+		SearchBackend:               readString("NPA_SEARCH_BACKEND", string(search.BackendMeilisearch)),
 		MeiliHost:                   readString("MEILI_HOST", "http://127.0.0.1:7700"),
 		MeiliAPIKey:                 readString("MEILI_API_KEY", ""),
 		MeiliIndex:                  readString("MEILI_INDEX", "npan_items"),
+		TypesenseHost:               readString("TYPESENSE_HOST", "http://127.0.0.1:8108"),
+		TypesenseAPIKey:             readString("TYPESENSE_API_KEY", ""),
+		TypesenseCollection:         readString("TYPESENSE_COLLECTION", "npan_items"),
 		PublicSearchHost:            readString("MEILI_PUBLIC_SEARCH_HOST", ""),
 		PublicSearchIndexName:       readString("MEILI_PUBLIC_SEARCH_INDEX", ""),
 		PublicSearchAPIKey:          readString("MEILI_PUBLIC_SEARCH_API_KEY", ""),

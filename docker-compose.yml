@@ -15,12 +15,29 @@ services:
       timeout: 3s
       retries: 5
 
+  typesense:
+    image: typesense/typesense:29.0
+    container_name: typesense
+    restart: always
+    command: '--data-dir /data --api-key=${TYPESENSE_API_KEY:-dev-typesense-key-please-change} --enable-cors'
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8108/health || wget -q -O /dev/null http://127.0.0.1:8108/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   npan:
     build: .
     container_name: npan
     restart: always
     depends_on:
       meilisearch:
+        condition: service_healthy
+      typesense:
         condition: service_healthy
     ports:
       - "1323:1323"
@@ -30,10 +47,13 @@ services:
     env_file:
       - .env
     environment:
+      NPA_SEARCH_BACKEND: ${NPA_SEARCH_BACKEND:-meilisearch}
       # 覆盖 .env 中的 MEILI_HOST，使用 docker 内部网络
       MEILI_HOST: http://meilisearch:7700
+      TYPESENSE_HOST: http://typesense:8108
       METRICS_ADDR: ":9091"
 
 volumes:
   meili-data:
+  typesense-data:
   npan-data:

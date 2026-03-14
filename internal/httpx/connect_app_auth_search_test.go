@@ -138,6 +138,30 @@ func TestConnectAppGetSearchConfig_DisablesInstantsearchWhenPublicConfigIncomple
 	}
 }
 
+func TestConnectAppGetSearchConfig_DisablesInstantsearchForTypesenseBackend(t *testing.T) {
+	t.Parallel()
+
+	handlers := newTestHandlers(t)
+	handlers.cfg.SearchBackend = "typesense"
+	handlers.cfg.PublicSearchHost = "https://search.example.com"
+	handlers.cfg.PublicSearchIndexName = "npan-public"
+	handlers.cfg.PublicSearchAPIKey = "public-search-key"
+	handlers.cfg.PublicSearchInstantsearchOn = true
+
+	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	ts := httptest.NewServer(e)
+	defer ts.Close()
+
+	client := npanv1connect.NewAppServiceClient(ts.Client(), ts.URL)
+	resp, err := client.GetSearchConfig(context.Background(), connect.NewRequest(&npanv1.GetSearchConfigRequest{}))
+	if err != nil {
+		t.Fatalf("GetSearchConfig RPC returned error: %v", err)
+	}
+	if resp.Msg.GetInstantsearchEnabled() {
+		t.Fatal("expected instantsearch_enabled=false for typesense backend")
+	}
+}
+
 func TestConnectAppSearch_NoAPIKeyRequired(t *testing.T) {
 	t.Parallel()
 

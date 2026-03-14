@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures/auth'
 import { SearchPage } from '../pages/search-page'
-import { seedMeilisearch, clearMeilisearch } from '../fixtures/seed'
+import { seedSearchBackend, clearSearchBackend } from '../fixtures/seed'
 
 const PUBLIC_MEILI_HOST = process.env.MEILI_PUBLIC_SEARCH_HOST ?? process.env.MEILI_HOST ?? 'http://localhost:7700'
 const PUBLIC_MEILI_INDEX = process.env.MEILI_PUBLIC_SEARCH_INDEX ?? process.env.MEILI_INDEX ?? 'npan_items'
@@ -126,11 +126,11 @@ test.describe('搜索流程', () => {
   let searchPage: SearchPage
 
   test.beforeAll(async () => {
-    await seedMeilisearch()
+    await seedSearchBackend()
   })
 
   test.afterAll(async () => {
-    await clearMeilisearch()
+    await clearSearchBackend()
   })
 
   test.beforeEach(async ({ page }) => {
@@ -352,11 +352,11 @@ test.describe('下载流程', () => {
   let searchPage: SearchPage
 
   test.beforeAll(async () => {
-    await seedMeilisearch()
+    await seedSearchBackend()
   })
 
   test.afterAll(async () => {
-    await clearMeilisearch()
+    await clearSearchBackend()
   })
 
   test.beforeEach(async ({ page }) => {
@@ -529,11 +529,11 @@ test.describe('边界场景', () => {
   let searchPage: SearchPage
 
   test.beforeAll(async () => {
-    await seedMeilisearch()
+    await seedSearchBackend()
   })
 
   test.afterAll(async () => {
-    await clearMeilisearch()
+    await clearSearchBackend()
   })
 
   test.beforeEach(async ({ page }) => {

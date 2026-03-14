@@ -443,9 +443,13 @@ func newSearchRemoteCommand(cfg config.Config) *cobra.Command {
 
 func newSearchLocalCommand(cfg config.Config) *cobra.Command {
 	var query string
+	var searchBackend string
 	var indexName string
 	var meiliHost string
 	var meiliKey string
+	var typesenseHost string
+	var typesenseKey string
+	var typesenseCollection string
 	var searchType string
 	var page int64
 	var pageSize int64
@@ -459,14 +463,25 @@ func newSearchLocalCommand(cfg config.Config) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "search-local",
-		Short: "搜索本地 Meilisearch 索引",
+		Short: "搜索本地索引",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(query) == "" {
 				return fmt.Errorf("--query 不能为空")
 			}
 
-			meiliIndex := search.NewMeiliIndex(meiliHost, meiliKey, indexName)
-			queryService := search.NewQueryService(meiliIndex)
+			index, _, err := search.NewIndexOperator(search.BackendConfig{
+				Backend:             searchBackend,
+				MeiliHost:           meiliHost,
+				MeiliAPIKey:         meiliKey,
+				MeiliIndex:          indexName,
+				TypesenseHost:       typesenseHost,
+				TypesenseAPIKey:     typesenseKey,
+				TypesenseCollection: typesenseCollection,
+			})
+			if err != nil {
+				return err
+			}
+			queryService := search.NewQueryService(index)
 
 			var parentIDPtr *int64
 			if hasParentID {
@@ -500,9 +515,13 @@ func newSearchLocalCommand(cfg config.Config) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&query, "query", "", "搜索关键词")
+	cmd.Flags().StringVar(&searchBackend, "search-backend", cfg.SearchBackend, "搜索后端: meilisearch|typesense")
 	cmd.Flags().StringVar(&indexName, "index", cfg.MeiliIndex, "Meili 索引名")
 	cmd.Flags().StringVar(&meiliHost, "meili-host", cfg.MeiliHost, "Meili 地址")
 	cmd.Flags().StringVar(&meiliKey, "meili-key", cfg.MeiliAPIKey, "Meili API key")
+	cmd.Flags().StringVar(&typesenseHost, "typesense-host", cfg.TypesenseHost, "Typesense 地址")
+	cmd.Flags().StringVar(&typesenseKey, "typesense-key", cfg.TypesenseAPIKey, "Typesense API key")
+	cmd.Flags().StringVar(&typesenseCollection, "typesense-collection", cfg.TypesenseCollection, "Typesense collection 名")
 	cmd.Flags().StringVar(&searchType, "type", "all", "搜索类型: file|folder|all")
 	cmd.Flags().Int64Var(&page, "page", 1, "页码，从 1 开始")
 	cmd.Flags().Int64Var(&pageSize, "page-size", 20, "每页数量")
@@ -574,9 +593,13 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 	var progressEvery int
 	var progressOutput string
 	var checkpointTemplate string
+	var searchBackend string
 	var meiliHost string
 	var meiliKey string
 	var meiliIndexName string
+	var typesenseHost string
+	var typesenseKey string
+	var typesenseCollection string
 	var syncStateFile string
 	var windowOverlapMS int64
 	var incrementalQueryWords string
@@ -596,7 +619,7 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "sync",
-		Short: "同步到 Meilisearch（全量或增量）",
+		Short: "同步到本地搜索索引（全量或增量）",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			syncMode, err := resolveSyncMode(mode)
 			if err != nil {
@@ -624,8 +647,19 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 				departmentIDs = append([]int64{}, cfg.DefaultDepartmentIDs...)
 			}
 
-			meiliIndex := search.NewMeiliIndex(meiliHost, meiliKey, meiliIndexName)
-			if err := meiliIndex.EnsureSettings(cmd.Context()); err != nil {
+			index, backendInfo, err := search.NewIndexOperator(search.BackendConfig{
+				Backend:             searchBackend,
+				MeiliHost:           meiliHost,
+				MeiliAPIKey:         meiliKey,
+				MeiliIndex:          meiliIndexName,
+				TypesenseHost:       typesenseHost,
+				TypesenseAPIKey:     typesenseKey,
+				TypesenseCollection: typesenseCollection,
+			})
+			if err != nil {
+				return err
+			}
+			if err := index.EnsureSettings(cmd.Context()); err != nil {
 				return err
 			}
 
@@ -640,12 +674,12 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 			defer stateStores.DB.Close()
 
 			syncManager := service.NewSyncManager(service.SyncManagerArgs{
-				Index:            meiliIndex,
-				ProgressStore:    stateStores.ProgressStore,
-				SyncStateStore:   stateStores.SyncStateStore,
-				CheckpointStores: stateStores.CheckpointStoreFactory,
-				MeiliHost:        meiliHost,
-				MeiliIndex:       meiliIndexName,
+				Index:              index,
+				ProgressStore:      stateStores.ProgressStore,
+				SyncStateStore:     stateStores.SyncStateStore,
+				CheckpointStores:   stateStores.CheckpointStoreFactory,
+				MeiliHost:          backendInfo.Host,
+				MeiliIndex:         backendInfo.Index,
 				CheckpointTemplate: checkpointTemplate,
 				RootWorkers:        rootWorkers,
 				ProgressEvery:      progressEvery,
@@ -740,9 +774,13 @@ func newSyncCommand(cfg config.Config) *cobra.Command {
 	cmd.Flags().IntVar(&progressEvery, "progress-every", cfg.SyncProgressEvery, "每处理 N 页记录一次进度")
 	cmd.Flags().StringVar(&progressOutput, "progress-output", "human", "进度输出模式: human|json")
 	cmd.Flags().StringVar(&checkpointTemplate, "checkpoint-template", cfg.CheckpointTemplate, "checkpoint 文件模板")
+	cmd.Flags().StringVar(&searchBackend, "search-backend", cfg.SearchBackend, "搜索后端: meilisearch|typesense")
 	cmd.Flags().StringVar(&meiliHost, "meili-host", cfg.MeiliHost, "Meili 地址")
 	cmd.Flags().StringVar(&meiliKey, "meili-key", cfg.MeiliAPIKey, "Meili API key")
 	cmd.Flags().StringVar(&meiliIndexName, "meili-index", cfg.MeiliIndex, "Meili 索引名")
+	cmd.Flags().StringVar(&typesenseHost, "typesense-host", cfg.TypesenseHost, "Typesense 地址")
+	cmd.Flags().StringVar(&typesenseKey, "typesense-key", cfg.TypesenseAPIKey, "Typesense API key")
+	cmd.Flags().StringVar(&typesenseCollection, "typesense-collection", cfg.TypesenseCollection, "Typesense collection 名")
 	cmd.Flags().StringVar(&syncStateFile, "sync-state-file", cfg.SyncStateFile, "增量游标状态文件路径")
 	cmd.Flags().Int64Var(&windowOverlapMS, "window-overlap-ms", 2000, "增量窗口回看毫秒数，防止边界漏数")
 	cmd.Flags().StringVar(&incrementalQueryWords, "incremental-query-words", cfg.IncrementalQuery, "增量查询词（默认 * OR *，可覆盖）")

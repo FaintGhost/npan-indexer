@@ -4,10 +4,16 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"npan/internal/search"
 )
 
 func (c Config) Validate() error {
 	var errs []string
+	backend, backendErr := search.ParseBackend(c.SearchBackend)
+	if backendErr != nil {
+		errs = append(errs, backendErr.Error())
+	}
 
 	if strings.TrimSpace(c.AdminAPIKey) == "" {
 		errs = append(errs, "NPA_ADMIN_API_KEY 不能为空")
@@ -15,11 +21,21 @@ func (c Config) Validate() error {
 		errs = append(errs, "NPA_ADMIN_API_KEY 长度不应少于 16 字符")
 	}
 
-	if c.MeiliHost == "" {
-		errs = append(errs, "MEILI_HOST 不能为空")
-	}
-	if c.MeiliIndex == "" {
-		errs = append(errs, "MEILI_INDEX 不能为空")
+	switch backend {
+	case search.BackendTypesense:
+		if strings.TrimSpace(c.TypesenseHost) == "" {
+			errs = append(errs, "TYPESENSE_HOST 不能为空")
+		}
+		if strings.TrimSpace(c.TypesenseCollection) == "" {
+			errs = append(errs, "TYPESENSE_COLLECTION 不能为空")
+		}
+	case search.BackendMeilisearch, "":
+		if strings.TrimSpace(c.MeiliHost) == "" {
+			errs = append(errs, "MEILI_HOST 不能为空")
+		}
+		if strings.TrimSpace(c.MeiliIndex) == "" {
+			errs = append(errs, "MEILI_INDEX 不能为空")
+		}
 	}
 	if c.BaseURL == "" {
 		errs = append(errs, "NPA_BASE_URL 不能为空")
@@ -33,21 +49,25 @@ func (c Config) Validate() error {
 	publicSearchAPIKey := strings.TrimSpace(c.PublicSearchAPIKey)
 	privateMeiliAPIKey := strings.TrimSpace(c.MeiliAPIKey)
 
-	if publicSearchAPIKey == "" && privateMeiliAPIKey != "" {
+	if backend == search.BackendMeilisearch && publicSearchAPIKey == "" && privateMeiliAPIKey != "" {
 		errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能为空，不能回落复用私有 MEILI_API_KEY，浏览器公开 search 必须使用 dedicated search-only key")
 	}
 	if c.PublicSearchInstantsearchOn {
-		if publicSearchHost == "" {
-			errs = append(errs, "MEILI_PUBLIC_SEARCH_HOST 不能为空，开启公开搜索时必须显式提供 public host")
-		}
-		if publicSearchIndexName == "" {
-			errs = append(errs, "MEILI_PUBLIC_SEARCH_INDEX 不能为空，开启公开搜索时必须显式提供 public index")
-		}
-		if publicSearchAPIKey == "" {
-			errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能为空，开启公开搜索时必须使用 dedicated search-only key")
+		if !search.SupportsPublicInstantsearch(backend) {
+			errs = append(errs, "当前搜索后端不支持浏览器直连 InstantSearch，请关闭 MEILI_PUBLIC_INSTANTSEARCH_ENABLED 或切换回 meilisearch")
+		} else {
+			if publicSearchHost == "" {
+				errs = append(errs, "MEILI_PUBLIC_SEARCH_HOST 不能为空，开启公开搜索时必须显式提供 public host")
+			}
+			if publicSearchIndexName == "" {
+				errs = append(errs, "MEILI_PUBLIC_SEARCH_INDEX 不能为空，开启公开搜索时必须显式提供 public index")
+			}
+			if publicSearchAPIKey == "" {
+				errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能为空，开启公开搜索时必须使用 dedicated search-only key")
+			}
 		}
 	}
-	if publicSearchAPIKey != "" && publicSearchAPIKey == privateMeiliAPIKey {
+	if backend == search.BackendMeilisearch && publicSearchAPIKey != "" && publicSearchAPIKey == privateMeiliAPIKey {
 		errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能复用私有 MEILI_API_KEY")
 	}
 
@@ -75,8 +95,11 @@ func (c Config) LogValue() slog.Value {
 		slog.String("ServerAddr", c.ServerAddr),
 		slog.String("MetricsAddr", c.MetricsAddr),
 		slog.String("BaseURL", c.BaseURL),
+		slog.String("SearchBackend", c.SearchBackend),
 		slog.String("MeiliHost", c.MeiliHost),
 		slog.String("MeiliIndex", c.MeiliIndex),
+		slog.String("TypesenseHost", c.TypesenseHost),
+		slog.String("TypesenseCollection", c.TypesenseCollection),
 		slog.String("PublicSearchHost", c.PublicSearchHost),
 		slog.String("PublicSearchIndexName", c.PublicSearchIndexName),
 		slog.Bool("PublicSearchInstantsearchOn", c.PublicSearchInstantsearchOn),
@@ -84,6 +107,7 @@ func (c Config) LogValue() slog.Value {
 		slog.String("ClientSecret", "[REDACTED]"),
 		slog.String("Token", "[REDACTED]"),
 		slog.String("MeiliAPIKey", "[REDACTED]"),
+		slog.String("TypesenseAPIKey", "[REDACTED]"),
 		slog.String("PublicSearchAPIKey", "[REDACTED]"),
 	)
 }

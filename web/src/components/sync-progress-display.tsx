@@ -117,7 +117,7 @@ export function SyncProgressDisplay({ progress, rootSelection }: SyncProgressDis
           <div className="rounded-xl border border-blue-200 bg-blue-50/85 p-3">
             <p className="text-sm font-medium text-blue-700">验证通过</p>
             <p className="mt-1 text-xs text-blue-600">
-              MeiliSearch 文档数: {progress.verification.meiliDocCount.toLocaleString()}
+              索引文档数: {progress.verification.meiliDocCount.toLocaleString()}
             </p>
           </div>
         ) : (
