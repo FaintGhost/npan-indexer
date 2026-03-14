@@ -5,6 +5,7 @@ import { getSearchConfig as getSearchConfigMethod } from '@/gen/npan/v1/api-AppS
 import { appTransport } from '@/lib/connect-transport'
 
 const PublicSearchConfigSchema = z.object({
+  provider: z.enum(['meilisearch', 'typesense']).default('meilisearch'),
   host: z.string().trim(),
   indexName: z.string().trim(),
   searchApiKey: z.string().trim(),
@@ -24,6 +25,7 @@ export async function loadSearchConfig(
     indexName: response.indexName,
     searchApiKey: response.searchApiKey,
     instantsearchEnabled: response.instantsearchEnabled,
+    provider: response.provider || 'meilisearch',
   })
 }
 

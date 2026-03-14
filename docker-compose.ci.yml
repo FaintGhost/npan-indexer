@@ -22,6 +22,8 @@ services:
     command: '--data-dir /data --api-key=ci-test-typesense-key-5678 --enable-cors'
     ports:
       - "18108:8108"
+    tmpfs:
+      - /data
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8108/health || wget -q -O /dev/null http://127.0.0.1:8108/health"]
       interval: 5s

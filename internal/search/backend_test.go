@@ -45,7 +45,7 @@ func TestSupportsPublicInstantsearch(t *testing.T) {
 	if !SupportsPublicInstantsearch(BackendMeilisearch) {
 		t.Fatal("expected meilisearch to support public instantsearch")
 	}
-	if SupportsPublicInstantsearch(BackendTypesense) {
-		t.Fatal("expected typesense to disable public instantsearch bootstrap")
+	if !SupportsPublicInstantsearch(BackendTypesense) {
+		t.Fatal("expected typesense to support public instantsearch bootstrap")
 	}
 }

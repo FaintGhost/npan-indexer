@@ -40,7 +40,7 @@ func ParseBackend(raw string) (Backend, error) {
 }
 
 func SupportsPublicInstantsearch(backend Backend) bool {
-	return backend == BackendMeilisearch
+	return backend == BackendMeilisearch || backend == BackendTypesense
 }
 
 func NewIndexOperator(cfg BackendConfig) (IndexOperator, BackendInfo, error) {

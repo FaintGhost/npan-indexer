@@ -47,28 +47,53 @@ func (c Config) Validate() error {
 	publicSearchHost := strings.TrimSpace(c.PublicSearchHost)
 	publicSearchIndexName := strings.TrimSpace(c.PublicSearchIndexName)
 	publicSearchAPIKey := strings.TrimSpace(c.PublicSearchAPIKey)
+	typesensePublicSearchHost := strings.TrimSpace(c.TypesensePublicSearchHost)
+	typesensePublicSearchIndex := strings.TrimSpace(c.TypesensePublicSearchIndex)
+	typesensePublicSearchAPIKey := strings.TrimSpace(c.TypesensePublicSearchAPIKey)
 	privateMeiliAPIKey := strings.TrimSpace(c.MeiliAPIKey)
+	privateTypesenseAPIKey := strings.TrimSpace(c.TypesenseAPIKey)
 
 	if backend == search.BackendMeilisearch && publicSearchAPIKey == "" && privateMeiliAPIKey != "" {
 		errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能为空，不能回落复用私有 MEILI_API_KEY，浏览器公开 search 必须使用 dedicated search-only key")
 	}
+	if backend == search.BackendTypesense && typesensePublicSearchAPIKey == "" && privateTypesenseAPIKey != "" {
+		errs = append(errs, "TYPESENSE_PUBLIC_SEARCH_API_KEY 不能为空，不能回落复用私有 TYPESENSE_API_KEY，浏览器公开 search 必须使用 dedicated search-only key")
+	}
 	if c.PublicSearchInstantsearchOn {
-		if !search.SupportsPublicInstantsearch(backend) {
-			errs = append(errs, "当前搜索后端不支持浏览器直连 InstantSearch，请关闭 MEILI_PUBLIC_INSTANTSEARCH_ENABLED 或切换回 meilisearch")
+		if search.SupportsPublicInstantsearch(backend) {
+			switch backend {
+			case search.BackendTypesense:
+				if typesensePublicSearchHost == "" {
+					errs = append(errs, "TYPESENSE_PUBLIC_SEARCH_HOST 不能为空，开启公开搜索时必须显式提供 public host")
+				}
+				if typesensePublicSearchIndex == "" {
+					errs = append(errs, "TYPESENSE_PUBLIC_SEARCH_INDEX 不能为空，开启公开搜索时必须显式提供 public index")
+				}
+				if typesensePublicSearchAPIKey == "" {
+					errs = append(errs, "TYPESENSE_PUBLIC_SEARCH_API_KEY 不能为空，开启公开搜索时必须使用 dedicated search-only key")
+				}
+			case search.BackendMeilisearch:
+				fallthrough
+			default:
+				if publicSearchHost == "" {
+					errs = append(errs, "MEILI_PUBLIC_SEARCH_HOST 不能为空，开启公开搜索时必须显式提供 public host")
+				}
+				if publicSearchIndexName == "" {
+					errs = append(errs, "MEILI_PUBLIC_SEARCH_INDEX 不能为空，开启公开搜索时必须显式提供 public index")
+				}
+				if publicSearchAPIKey == "" {
+					errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能为空，开启公开搜索时必须使用 dedicated search-only key")
+				}
+			}
 		} else {
-			if publicSearchHost == "" {
-				errs = append(errs, "MEILI_PUBLIC_SEARCH_HOST 不能为空，开启公开搜索时必须显式提供 public host")
-			}
-			if publicSearchIndexName == "" {
-				errs = append(errs, "MEILI_PUBLIC_SEARCH_INDEX 不能为空，开启公开搜索时必须显式提供 public index")
-			}
-			if publicSearchAPIKey == "" {
-				errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能为空，开启公开搜索时必须使用 dedicated search-only key")
-			}
+			errs = append(errs, "当前搜索后端不支持浏览器直连 InstantSearch")
 		}
 	}
 	if backend == search.BackendMeilisearch && publicSearchAPIKey != "" && publicSearchAPIKey == privateMeiliAPIKey {
 		errs = append(errs, "MEILI_PUBLIC_SEARCH_API_KEY 不能复用私有 MEILI_API_KEY")
+	}
+	if backend == search.BackendTypesense && typesensePublicSearchAPIKey != "" && typesensePublicSearchAPIKey == privateTypesenseAPIKey {
+		errs = append(errs, "TYPESENSE_PUBLIC_SEARCH_API_KEY 不能复用私有 TYPESENSE_API_KEY")
 	}
 
 	if c.SyncMaxConcurrent <= 0 || c.SyncMaxConcurrent > 20 {
@@ -102,6 +127,8 @@ func (c Config) LogValue() slog.Value {
 		slog.String("TypesenseCollection", c.TypesenseCollection),
 		slog.String("PublicSearchHost", c.PublicSearchHost),
 		slog.String("PublicSearchIndexName", c.PublicSearchIndexName),
+		slog.String("TypesensePublicSearchHost", c.TypesensePublicSearchHost),
+		slog.String("TypesensePublicSearchIndex", c.TypesensePublicSearchIndex),
 		slog.Bool("PublicSearchInstantsearchOn", c.PublicSearchInstantsearchOn),
 		slog.String("AdminAPIKey", "[REDACTED]"),
 		slog.String("ClientSecret", "[REDACTED]"),
@@ -109,5 +136,6 @@ func (c Config) LogValue() slog.Value {
 		slog.String("MeiliAPIKey", "[REDACTED]"),
 		slog.String("TypesenseAPIKey", "[REDACTED]"),
 		slog.String("PublicSearchAPIKey", "[REDACTED]"),
+		slog.String("TypesensePublicSearchAPIKey", "[REDACTED]"),
 	)
 }

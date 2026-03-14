@@ -85,6 +85,13 @@ jobs:
   smoke-test:
     needs: [unit-test-go, unit-test-frontend, rest-guard]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [meilisearch, typesense]
+    name: smoke-test-${{ matrix.backend }}
+    env:
+      NPA_SEARCH_BACKEND: ${{ matrix.backend }}
     steps:
       - uses: actions/checkout@v4
 
@@ -110,6 +117,13 @@ jobs:
   e2e-test:
     needs: [smoke-test]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [meilisearch, typesense]
+    name: e2e-test-${{ matrix.backend }}
+    env:
+      NPA_SEARCH_BACKEND: ${{ matrix.backend }}
     steps:
       - uses: actions/checkout@v4
 

@@ -11,7 +11,7 @@ const { createPublicSearchClientSpy } = vi.hoisted(() => ({
   createPublicSearchClientSpy: vi.fn(),
 }))
 
-vi.mock('@/lib/meili-search-client', () => ({
+vi.mock('@/lib/public-search-client', () => ({
   createPublicSearchClient: createPublicSearchClientSpy,
 }))
 
@@ -86,12 +86,14 @@ function makeSearchResponse(count: number, total: number) {
 }
 
 function makeSearchConfigResponse(overrides?: {
+  provider?: 'meilisearch' | 'typesense'
   host?: string
   indexName?: string
   searchApiKey?: string
   instantsearchEnabled?: boolean
 }) {
   return {
+    provider: 'meilisearch',
     host: 'https://search.example.com',
     indexName: 'npan-public',
     searchApiKey: 'public-search-key',
@@ -473,13 +475,36 @@ describe('SearchPage', () => {
 
     await waitFor(() => {
       expect(createPublicSearchClientSpy).toHaveBeenCalledWith({
+        provider: 'meilisearch',
         host: 'https://search.example.com',
         indexName: 'npan-public',
         searchApiKey: 'public-search-key',
       })
-    })
+    }, { timeout: 5_000 })
 
     expect(appSearchCalls).toBe(0)
+  })
+
+  it('bootstraps typesense public search client when GetSearchConfig enables typesense instantsearch', async () => {
+    setTestURL('/')
+
+    server.use(
+      http.post(GET_SEARCH_CONFIG_PATH, () => HttpResponse.json(makeSearchConfigResponse({
+        provider: 'typesense',
+        host: 'https://typesense.example.com',
+      }))),
+    )
+
+    render(<SearchPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(createPublicSearchClientSpy).toHaveBeenCalledWith({
+        provider: 'typesense',
+        host: 'https://typesense.example.com',
+        indexName: 'npan-public',
+        searchApiKey: 'public-search-key',
+      })
+    }, { timeout: 5_000 })
   })
 
   it('does not issue a real public search request on initial render when query is empty', async () => {

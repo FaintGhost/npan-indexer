@@ -108,12 +108,13 @@ func TestConfig_LogValue_RedactsPublicSearchAPIKey(t *testing.T) {
 
 func TestConfig_LogValue_ShowsNonSensitiveFields(t *testing.T) {
 	cfg := Config{
-		ServerAddr:    ":1323",
-		BaseURL:       "https://npan.example.com/openapi",
-		SearchBackend: "typesense",
-		MeiliHost:     "http://127.0.0.1:7700",
-		TypesenseHost: "http://127.0.0.1:8108",
-		SubType:       npan.TokenSubjectUser,
+		ServerAddr:                ":1323",
+		BaseURL:                   "https://npan.example.com/openapi",
+		SearchBackend:             "typesense",
+		MeiliHost:                 "http://127.0.0.1:7700",
+		TypesenseHost:             "http://127.0.0.1:8108",
+		TypesensePublicSearchHost: "https://typesense.example.com",
+		SubType:                   npan.TokenSubjectUser,
 	}
 
 	got := cfg.LogValue()
@@ -127,6 +128,7 @@ func TestConfig_LogValue_ShowsNonSensitiveFields(t *testing.T) {
 		{"SearchBackend", "typesense"},
 		{"MeiliHost", "http://127.0.0.1:7700"},
 		{"TypesenseHost", "http://127.0.0.1:8108"},
+		{"TypesensePublicSearchHost", "https://typesense.example.com"},
 	}
 
 	for _, tc := range cases {
@@ -155,5 +157,22 @@ func TestConfig_LogValue_RedactsTypesenseAPIKey(t *testing.T) {
 	}
 	if val.String() != "[REDACTED]" {
 		t.Errorf("expected TypesenseAPIKey to be [REDACTED], got %q", val.String())
+	}
+}
+
+func TestConfig_LogValue_RedactsTypesensePublicSearchAPIKey(t *testing.T) {
+	cfg := Config{
+		TypesensePublicSearchAPIKey: "typesense-search-key",
+		SubType:                     npan.TokenSubjectUser,
+	}
+
+	got := cfg.LogValue()
+
+	val, ok := findAttr(t, got, "TypesensePublicSearchAPIKey")
+	if !ok {
+		t.Fatal("TypesensePublicSearchAPIKey not found in LogValue output")
+	}
+	if val.String() != "[REDACTED]" {
+		t.Errorf("expected TypesensePublicSearchAPIKey to be [REDACTED], got %q", val.String())
 	}
 }

@@ -12,6 +12,7 @@ describe('search config bootstrap contract', () => {
 
   it('uses public mode only when flag and required fields are present', () => {
     expect(resolveSearchBootstrapMode({
+      provider: 'meilisearch',
       host: 'https://search.example.com',
       indexName: 'npan-public',
       searchApiKey: 'public-search-key',
@@ -21,6 +22,7 @@ describe('search config bootstrap contract', () => {
 
   it('uses legacy mode when instantsearch is disabled', () => {
     expect(resolveSearchBootstrapMode({
+      provider: 'meilisearch',
       host: 'https://search.example.com',
       indexName: 'npan-public',
       searchApiKey: 'public-search-key',
@@ -30,10 +32,21 @@ describe('search config bootstrap contract', () => {
 
   it('uses legacy mode when any required public field is missing', () => {
     expect(resolveSearchBootstrapMode({
+      provider: 'typesense',
       host: '',
       indexName: 'npan-public',
       searchApiKey: 'public-search-key',
       instantsearchEnabled: true,
     })).toBe('legacy')
+  })
+
+  it('uses public mode for typesense when required fields are present', () => {
+    expect(resolveSearchBootstrapMode({
+      provider: 'typesense',
+      host: 'https://typesense.example.com',
+      indexName: 'npan-public',
+      searchApiKey: 'public-search-key',
+      instantsearchEnabled: true,
+    })).toBe('public')
   })
 })

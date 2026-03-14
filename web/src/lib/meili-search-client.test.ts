@@ -8,9 +8,9 @@ vi.mock('@meilisearch/instant-meilisearch', () => ({
   instantMeiliSearch: instantMeiliSearchMock,
 }))
 
-import { createPublicSearchClient } from './meili-search-client'
+import { createMeiliPublicSearchClient } from './meili-search-client'
 
-describe('createPublicSearchClient', () => {
+describe('createMeiliPublicSearchClient', () => {
   beforeEach(() => {
     instantMeiliSearchMock.mockReset()
     instantMeiliSearchMock.mockReturnValue({
@@ -21,7 +21,8 @@ describe('createPublicSearchClient', () => {
   })
 
   it('passes public baseline filters through the official instant-meilisearch configuration entry', () => {
-    createPublicSearchClient({
+    createMeiliPublicSearchClient({
+      provider: 'meilisearch',
       host: 'https://search.example.com',
       indexName: 'npan-public',
       searchApiKey: 'public-search-key',
@@ -46,7 +47,8 @@ describe('createPublicSearchClient', () => {
   })
 
   it('keeps default filters in a dedicated baseline config so file_category refinement can only compose on top', () => {
-    createPublicSearchClient({
+    createMeiliPublicSearchClient({
+      provider: 'meilisearch',
       host: 'https://search.example.com',
       indexName: 'npan-public',
       searchApiKey: 'public-search-key',

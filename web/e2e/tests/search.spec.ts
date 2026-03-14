@@ -47,11 +47,19 @@ function getStringField(record: Record<string, unknown>, key: string): string | 
 }
 
 async function enablePublicSearchBootstrap(page: Page): Promise<void> {
+  await enablePublicSearchBootstrapWithProvider(page, 'meilisearch')
+}
+
+async function enablePublicSearchBootstrapWithProvider(
+  page: Page,
+  provider: 'meilisearch' | 'typesense',
+): Promise<void> {
   await page.route('**/npan.v1.AppService/GetSearchConfig**', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
+        provider,
         host: PUBLIC_MEILI_HOST,
         indexName: PUBLIC_MEILI_INDEX,
         searchApiKey: PUBLIC_MEILI_SEARCH_API_KEY,
@@ -60,21 +68,75 @@ async function enablePublicSearchBootstrap(page: Page): Promise<void> {
     }),
   )
 
-  await page.route('**/multi-search**', async (route) => {
-    const payload: unknown = route.request().postDataJSON()
-    const postData = isRecord(payload) ? payload : {}
-    const queries = Array.isArray(postData.queries) ? postData.queries : []
-    const queryPayload = isRecord(queries[0]) ? queries[0] : {}
-    const rawQuery = typeof queryPayload.q === 'string' ? queryPayload.q : ''
+  if (provider === 'meilisearch') {
+    await page.route('**/multi-search**', async (route) => {
+      const payload: unknown = route.request().postDataJSON()
+      const postData = isRecord(payload) ? payload : {}
+      const queries = Array.isArray(postData.queries) ? postData.queries : []
+      const queryPayload = isRecord(queries[0]) ? queries[0] : {}
+      const rawQuery = typeof queryPayload.q === 'string' ? queryPayload.q : ''
+      const query = rawQuery.trim().toLowerCase()
+
+      const rawFilter = queryPayload.filter
+      const filterText = typeof rawFilter === 'string'
+        ? rawFilter
+        : Array.isArray(rawFilter)
+          ? JSON.stringify(rawFilter)
+          : ''
+
+      const matchedDocs = PUBLIC_SEARCH_DOCS.filter((doc) => doc.name.toLowerCase().includes(query))
+      const docs = filterText.includes('file_category')
+        ? matchedDocs.filter((doc) => filterText.includes(doc.file_category))
+        : matchedDocs
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          results: [
+            {
+              indexUid: PUBLIC_MEILI_INDEX,
+              hits: docs.map((doc) => ({
+                id: String(doc.source_id),
+                doc_id: `file_${doc.source_id}`,
+                source_id: doc.source_id,
+                type: 'file',
+                name: doc.name,
+                path_text: `/${doc.name}`,
+                parent_id: 0,
+                modified_at: 1700000000,
+                created_at: 1700000000,
+                size: 1024,
+                sha1: `sha1-${doc.source_id}`,
+                in_trash: false,
+                is_deleted: false,
+                file_category: doc.file_category,
+                downloadUrl: 'https://example.com/hit-download.pdf',
+              })),
+              query: rawQuery,
+              processingTimeMs: 1,
+              limit: 20,
+              offset: 0,
+              estimatedTotalHits: docs.length,
+              facetDistribution: {
+                file_category: docs.reduce<Record<string, number>>((acc, doc) => {
+                  acc[doc.file_category] = (acc[doc.file_category] ?? 0) + 1
+                  return acc
+                }, {}),
+              },
+            },
+          ],
+        }),
+      })
+    })
+    return
+  }
+
+  await page.route(`**/collections/${PUBLIC_MEILI_INDEX}/documents/search**`, async (route) => {
+    const requestURL = new URL(route.request().url())
+    const rawQuery = requestURL.searchParams.get('q') ?? ''
     const query = rawQuery.trim().toLowerCase()
-
-    const rawFilter = queryPayload.filter
-    const filterText = typeof rawFilter === 'string'
-      ? rawFilter
-      : Array.isArray(rawFilter)
-        ? JSON.stringify(rawFilter)
-        : ''
-
+    const filterText = requestURL.searchParams.get('filter_by') ?? ''
     const matchedDocs = PUBLIC_SEARCH_DOCS.filter((doc) => doc.name.toLowerCase().includes(query))
     const docs = filterText.includes('file_category')
       ? matchedDocs.filter((doc) => filterText.includes(doc.file_category))
@@ -84,37 +146,43 @@ async function enablePublicSearchBootstrap(page: Page): Promise<void> {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        results: [
-          {
-            indexUid: PUBLIC_MEILI_INDEX,
-            hits: docs.map((doc) => ({
-              id: String(doc.source_id),
-              doc_id: `file_${doc.source_id}`,
-              source_id: doc.source_id,
-              type: 'file',
-              name: doc.name,
-              path_text: `/${doc.name}`,
-              parent_id: 0,
-              modified_at: 1700000000,
-              created_at: 1700000000,
-              size: 1024,
-              sha1: `sha1-${doc.source_id}`,
-              in_trash: false,
-              is_deleted: false,
-              file_category: doc.file_category,
-              downloadUrl: 'https://example.com/hit-download.pdf',
-            })),
-            query: rawQuery,
-            processingTimeMs: 1,
-            limit: 20,
-            offset: 0,
-            estimatedTotalHits: docs.length,
-            facetDistribution: {
-              file_category: docs.reduce<Record<string, number>>((acc, doc) => {
-                acc[doc.file_category] = (acc[doc.file_category] ?? 0) + 1
-                return acc
-              }, {}),
+        found: docs.length,
+        search_time_ms: 1,
+        hits: docs.map((doc) => ({
+          document: {
+            doc_id: `file_${doc.source_id}`,
+            source_id: doc.source_id,
+            type: 'file',
+            name: doc.name,
+            path_text: `/${doc.name}`,
+            parent_id: 0,
+            modified_at: 1700000000,
+            created_at: 1700000000,
+            size: 1024,
+            sha1: `sha1-${doc.source_id}`,
+            in_trash: false,
+            is_deleted: false,
+            file_category: doc.file_category,
+          },
+          highlights: [
+            {
+              field: 'name',
+              snippet: doc.name.replace(query, `<mark>${query}</mark>`),
             },
+          ],
+        })),
+        facet_counts: [
+          {
+            field_name: 'file_category',
+            counts: docs.reduce<Array<{ value: string; count: number }>>((acc, doc) => {
+              const existing = acc.find((item) => item.value === doc.file_category)
+              if (existing) {
+                existing.count += 1
+              } else {
+                acc.push({ value: doc.file_category, count: 1 })
+              }
+              return acc
+            }, []),
           },
         ],
       }),
@@ -308,6 +376,23 @@ test.describe('搜索流程', () => {
     await expect(page.getByTitle('quarterly-report-2024.pdf')).toBeVisible()
     await expect(page.getByTitle('project-design-spec.docx')).toBeVisible()
     await expect(page.getByTitle('architecture-diagram.png')).toHaveCount(0)
+  })
+
+  test('typesense public instantsearch bootstrap renders results and file_category refinement', async ({ page }) => {
+    await enablePublicSearchBootstrapWithProvider(page, 'typesense')
+    searchPage = new SearchPage(page)
+
+    const responsePromise = searchPage.waitForPublicSearchResponse({
+      query: 'design',
+      filterContains: 'file_category',
+    }, 10_000)
+    await searchPage.goto('/?query=design&file_category=doc')
+    const response = await responsePromise
+
+    expect(response.status()).toBe(200)
+    await expect(searchPage.searchInput).toHaveValue('design')
+    await expect(page.getByRole('radio', { name: '文档' })).toBeChecked()
+    await expect(page.getByTitle('project-design-spec.docx')).toBeVisible()
   })
 
   test('浏览器后退/前进可恢复 public search 视图', async ({ page }) => {
