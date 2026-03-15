@@ -24,11 +24,6 @@ services:
       - "18108:8108"
     tmpfs:
       - /data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8108/health || wget -q -O /dev/null http://127.0.0.1:8108/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
 
   npan:
     build:
@@ -42,7 +37,7 @@ services:
       meilisearch:
         condition: service_healthy
       typesense:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "11323:1323"
       - "19091:9091"
@@ -54,10 +49,13 @@ services:
       TYPESENSE_HOST: http://typesense:8108
       TYPESENSE_API_KEY: ci-test-typesense-key-5678
       TYPESENSE_COLLECTION: npan_items
+      TYPESENSE_PUBLIC_SEARCH_HOST: http://typesense:8108
+      TYPESENSE_PUBLIC_SEARCH_INDEX: npan_items
+      TYPESENSE_PUBLIC_SEARCH_API_KEY: ci-test-public-typesense-search-key-5678
       MEILI_PUBLIC_SEARCH_HOST: http://meilisearch:7700
       MEILI_PUBLIC_SEARCH_INDEX: npan_items
       MEILI_PUBLIC_SEARCH_API_KEY: ci-test-public-search-key-5678
-      MEILI_PUBLIC_INSTANTSEARCH_ENABLED: ${MEILI_PUBLIC_INSTANTSEARCH_ENABLED:-false}
+      NPA_PUBLIC_INSTANTSEARCH_ENABLED: ${NPA_PUBLIC_INSTANTSEARCH_ENABLED:-false}
       METRICS_ADDR: ":9091"
       NPA_ADMIN_API_KEY: ci-test-admin-api-key-1234
       NPA_ALLOW_CONFIG_AUTH_FALLBACK: "true"
@@ -88,9 +86,13 @@ services:
       TYPESENSE_HOST: http://typesense:8108
       TYPESENSE_API_KEY: ci-test-typesense-key-5678
       TYPESENSE_COLLECTION: npan_items
+      TYPESENSE_PUBLIC_SEARCH_HOST: http://typesense:8108
+      TYPESENSE_PUBLIC_SEARCH_INDEX: npan_items
+      TYPESENSE_PUBLIC_SEARCH_API_KEY: ci-test-public-typesense-search-key-5678
       MEILI_PUBLIC_SEARCH_HOST: http://meilisearch:7700
       MEILI_PUBLIC_SEARCH_INDEX: npan_items
       MEILI_PUBLIC_SEARCH_API_KEY: ci-test-public-search-key-5678
+      NPA_PUBLIC_INSTANTSEARCH_ENABLED: ${NPA_PUBLIC_INSTANTSEARCH_ENABLED:-false}
       E2E_ADMIN_API_KEY: ci-test-admin-api-key-1234
       CI: "true"
     command: sh -c "npm install 2>/dev/null; npx playwright test"

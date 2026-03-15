@@ -24,11 +24,6 @@ services:
       - "8108:8108"
     volumes:
       - typesense-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8108/health || wget -q -O /dev/null http://127.0.0.1:8108/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
   npan:
     build: .
@@ -38,7 +33,7 @@ services:
       meilisearch:
         condition: service_healthy
       typesense:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "1323:1323"
       - "9091:9091"
