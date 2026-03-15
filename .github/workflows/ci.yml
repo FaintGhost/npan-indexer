@@ -142,10 +142,11 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ github.run_id }}
+          name: playwright-report-${{ github.run_id }}-${{ matrix.backend }}
           path: |
             web/playwright-report/
             web/test-results/
+          if-no-files-found: ignore
           retention-days: 7
 
       - name: Export logs on failure

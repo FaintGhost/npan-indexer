@@ -116,7 +116,7 @@ async function seedMeilisearch(): Promise<void> {
       headers: meiliHeaders(),
       body: JSON.stringify({
         uid: MEILI_INDEX,
-        primaryKey: 'source_id',
+        primaryKey: 'doc_id',
       }),
     })
     if (createRes.ok) {
@@ -142,7 +142,7 @@ async function seedMeilisearch(): Promise<void> {
   }
 
   const addRes = await fetch(
-    `${MEILI_HOST}/indexes/${MEILI_INDEX}/documents`,
+    `${MEILI_HOST}/indexes/${MEILI_INDEX}/documents?primaryKey=doc_id`,
     {
       method: 'POST',
       headers: meiliHeaders(),
