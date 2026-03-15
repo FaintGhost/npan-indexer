@@ -16,6 +16,15 @@ services:
       timeout: 3s
       retries: 10
 
+  typesense:
+    image: typesense/typesense:29.0
+    container_name: typesense-ci
+    command: '--data-dir /data --api-key=ci-test-typesense-key-5678 --enable-cors'
+    ports:
+      - "18108:8108"
+    tmpfs:
+      - /data
+
   npan:
     build:
       context: .
@@ -27,17 +36,26 @@ services:
     depends_on:
       meilisearch:
         condition: service_healthy
+      typesense:
+        condition: service_started
     ports:
       - "11323:1323"
       - "19091:9091"
     environment:
+      NPA_SEARCH_BACKEND: ${NPA_SEARCH_BACKEND:-meilisearch}
       MEILI_HOST: http://meilisearch:7700
       MEILI_API_KEY: ci-test-meili-key-5678
       MEILI_INDEX: npan_items
+      TYPESENSE_HOST: http://typesense:8108
+      TYPESENSE_API_KEY: ci-test-typesense-key-5678
+      TYPESENSE_COLLECTION: npan_items
+      TYPESENSE_PUBLIC_SEARCH_HOST: http://typesense:8108
+      TYPESENSE_PUBLIC_SEARCH_INDEX: npan_items
+      TYPESENSE_PUBLIC_SEARCH_API_KEY: ci-test-public-typesense-search-key-5678
       MEILI_PUBLIC_SEARCH_HOST: http://meilisearch:7700
       MEILI_PUBLIC_SEARCH_INDEX: npan_items
       MEILI_PUBLIC_SEARCH_API_KEY: ci-test-public-search-key-5678
-      MEILI_PUBLIC_INSTANTSEARCH_ENABLED: "false"
+      NPA_PUBLIC_INSTANTSEARCH_ENABLED: ${NPA_PUBLIC_INSTANTSEARCH_ENABLED:-false}
       METRICS_ADDR: ":9091"
       NPA_ADMIN_API_KEY: ci-test-admin-api-key-1234
       NPA_ALLOW_CONFIG_AUTH_FALLBACK: "true"
@@ -60,13 +78,21 @@ services:
     volumes:
       - ./web:/web
     environment:
+      NPA_SEARCH_BACKEND: ${NPA_SEARCH_BACKEND:-meilisearch}
       BASE_URL: http://npan:1323
       MEILI_HOST: http://meilisearch:7700
       MEILI_API_KEY: ci-test-meili-key-5678
       MEILI_INDEX: npan_items
+      TYPESENSE_HOST: http://typesense:8108
+      TYPESENSE_API_KEY: ci-test-typesense-key-5678
+      TYPESENSE_COLLECTION: npan_items
+      TYPESENSE_PUBLIC_SEARCH_HOST: http://typesense:8108
+      TYPESENSE_PUBLIC_SEARCH_INDEX: npan_items
+      TYPESENSE_PUBLIC_SEARCH_API_KEY: ci-test-public-typesense-search-key-5678
       MEILI_PUBLIC_SEARCH_HOST: http://meilisearch:7700
       MEILI_PUBLIC_SEARCH_INDEX: npan_items
       MEILI_PUBLIC_SEARCH_API_KEY: ci-test-public-search-key-5678
+      NPA_PUBLIC_INSTANTSEARCH_ENABLED: ${NPA_PUBLIC_INSTANTSEARCH_ENABLED:-false}
       E2E_ADMIN_API_KEY: ci-test-admin-api-key-1234
       CI: "true"
     command: sh -c "npm install 2>/dev/null; npx playwright test"

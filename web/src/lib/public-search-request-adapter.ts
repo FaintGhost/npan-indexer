@@ -1,4 +1,3 @@
-import type { InstantMeiliSearchObject } from '@meilisearch/instant-meilisearch'
 import { normalizeSearchQuery } from '@/lib/search-query-normalizer'
 
 export const PUBLIC_BASELINE_FILTER = 'type = "file" AND is_deleted = false AND in_trash = false'
@@ -112,7 +111,13 @@ export function adaptPublicSearchRequest<T extends PublicSearchRequest>(request:
   }
 }
 
-export function wrapPublicSearchClient<T extends InstantMeiliSearchObject>(client: T): T {
+type PublicSearchClientLike = {
+  searchClient: {
+    search: (requests: PublicSearchRequest[]) => Promise<unknown>
+  }
+}
+
+export function wrapPublicSearchClient<T extends PublicSearchClientLike>(client: T): T {
   const search = client.searchClient.search.bind(client.searchClient)
 
   return {

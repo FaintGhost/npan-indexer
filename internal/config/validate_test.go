@@ -11,13 +11,19 @@ import (
 // validConfig 返回一个通过所有验证的基准配置
 func validConfig() Config {
 	return Config{
-		AdminAPIKey:       "a-valid-admin-api-key", // >= 16 chars
-		BaseURL:           "https://npan.example.com/openapi",
-		StateDBFile:       "./data/state/sync-state.sqlite",
-		MeiliHost:         "http://127.0.0.1:7700",
-		MeiliIndex:        "npan_items",
-		SyncMaxConcurrent: 5,
-		SubType:           npan.TokenSubjectUser,
+		AdminAPIKey:                 "a-valid-admin-api-key", // >= 16 chars
+		BaseURL:                     "https://npan.example.com/openapi",
+		StateDBFile:                 "./data/state/sync-state.sqlite",
+		SearchBackend:               "meilisearch",
+		MeiliHost:                   "http://127.0.0.1:7700",
+		MeiliIndex:                  "npan_items",
+		TypesenseHost:               "http://127.0.0.1:8108",
+		TypesenseCollection:         "npan_items",
+		TypesensePublicSearchHost:   "https://typesense-search.example.com",
+		TypesensePublicSearchIndex:  "npan_items",
+		TypesensePublicSearchAPIKey: "typesense-search-key",
+		SyncMaxConcurrent:           5,
+		SubType:                     npan.TokenSubjectUser,
 		Retry: models.RetryPolicyOptions{
 			MaxRetries:  3,
 			BaseDelayMS: 500,
@@ -81,6 +87,51 @@ func TestValidate_MissingMeiliIndex_ReturnsError(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected error for empty MeiliIndex, got nil")
+	}
+}
+
+func TestValidate_TypesenseBackendRequiresHostAndCollection(t *testing.T) {
+	cfg := validConfig()
+	cfg.SearchBackend = "typesense"
+	cfg.TypesenseHost = ""
+	cfg.TypesenseCollection = ""
+
+	err := cfg.Validate()
+
+	if err == nil {
+		t.Fatal("expected typesense validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "TYPESENSE_HOST") || !strings.Contains(err.Error(), "TYPESENSE_COLLECTION") {
+		t.Fatalf("expected typesense validation errors, got: %s", err.Error())
+	}
+}
+
+func TestValidate_TypesenseBackendRejectsInstantsearchBootstrap(t *testing.T) {
+	cfg := validConfig()
+	cfg.SearchBackend = "typesense"
+	cfg.PublicSearchInstantsearchOn = true
+
+	err := cfg.Validate()
+
+	if err != nil {
+		t.Fatalf("expected typesense public instantsearch config to validate, got: %v", err)
+	}
+}
+
+func TestValidate_TypesenseBackendRequiresDedicatedPublicConfigWhenInstantsearchEnabled(t *testing.T) {
+	cfg := validConfig()
+	cfg.SearchBackend = "typesense"
+	cfg.PublicSearchInstantsearchOn = true
+	cfg.TypesensePublicSearchHost = ""
+	cfg.TypesensePublicSearchAPIKey = ""
+
+	err := cfg.Validate()
+
+	if err == nil {
+		t.Fatal("expected error for incomplete Typesense public search config")
+	}
+	if !strings.Contains(err.Error(), "TYPESENSE_PUBLIC_SEARCH_HOST") || !strings.Contains(err.Error(), "TYPESENSE_PUBLIC_SEARCH_API_KEY") {
+		t.Fatalf("expected typesense public config validation errors, got: %s", err.Error())
 	}
 }
 

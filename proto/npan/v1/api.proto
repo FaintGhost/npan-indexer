@@ -200,6 +200,7 @@ message GetSearchConfigResponse {
   string index_name = 2;
   string search_api_key = 3;
   bool instantsearch_enabled = 4;
+  string provider = 5;
 }
 
 message AppSearchRequest {

@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.meilisearch.example
+!.env.typesense.example
 
 # Go build artifacts
 /cli

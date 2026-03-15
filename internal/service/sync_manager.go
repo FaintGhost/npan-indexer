@@ -34,7 +34,7 @@ type SyncStartRequest struct {
 }
 
 type SyncManager struct {
-	index            *search.MeiliIndex
+	index            search.IndexOperator
 	progressStore    storage.ProgressStore
 	syncStateStore   storage.SyncStateStore
 	checkpointStores storage.CheckpointStoreFactory
@@ -59,7 +59,7 @@ type SyncManager struct {
 }
 
 type SyncManagerArgs struct {
-	Index              *search.MeiliIndex
+	Index              search.IndexOperator
 	ProgressStore      storage.ProgressStore
 	SyncStateStore     storage.SyncStateStore
 	CheckpointStores   storage.CheckpointStoreFactory
@@ -580,7 +580,7 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 
 	stats, err := indexer.RunFullCrawl(ctx, indexer.FullCrawlDeps{
 		API:             api,
-		IndexWriter:     &meiliIndexWriter{index: m.index},
+		IndexWriter:     &indexWriter{index: m.index},
 		Limiter:         limiter,
 		CheckpointStore: checkpointStore,
 		RootFolderID:    rootID,
@@ -1108,11 +1108,11 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 	return m.progressStore.Save(progress)
 }
 
-type meiliIndexWriter struct {
-	index *search.MeiliIndex
+type indexWriter struct {
+	index search.IndexOperator
 }
 
-func (w *meiliIndexWriter) UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error {
+func (w *indexWriter) UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error {
 	return w.index.UpsertDocuments(ctx, docs)
 }
 
@@ -1130,7 +1130,7 @@ func buildVerification(meiliCount int64, stats models.CrawlStats) *models.SyncVe
 
 	if meiliCount < crawled {
 		v.Warnings = append(v.Warnings,
-			fmt.Sprintf("MeiliSearch 文档数(%d) < 爬取写入数(%d)", meiliCount, crawled))
+			fmt.Sprintf("索引文档数(%d) < 爬取写入数(%d)", meiliCount, crawled))
 	}
 	if discovered > 0 && crawled < discovered {
 		v.Warnings = append(v.Warnings,

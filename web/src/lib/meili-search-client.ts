@@ -2,15 +2,10 @@ import {
   instantMeiliSearch,
   type InstantMeiliSearchObject,
 } from '@meilisearch/instant-meilisearch'
+import type { PublicSearchClientConfig } from '@/lib/public-search-client'
 import { PUBLIC_BASELINE_FILTER } from '@/lib/public-search-request-adapter'
 
-export interface PublicSearchClientConfig {
-  host: string
-  indexName: string
-  searchApiKey: string
-}
-
-export function createPublicSearchClient(
+export function createMeiliPublicSearchClient(
   config: PublicSearchClientConfig,
 ): InstantMeiliSearchObject {
   const client = instantMeiliSearch(config.host, config.searchApiKey, {

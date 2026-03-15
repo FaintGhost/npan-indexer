@@ -117,12 +117,12 @@ describe("SyncProgressDisplay", () => {
         discoveredDocCount: 120,
         skippedCount: 0,
         verified: false,
-        warnings: ["MeiliSearch 文档数(110) < 爬取写入数(120)"],
+        warnings: ["索引文档数(110) < 爬取写入数(120)"],
       },
     };
     render(<SyncProgressDisplay progress={progress} />);
     expect(
-      screen.getByText("MeiliSearch 文档数(110) < 爬取写入数(120)"),
+      screen.getByText("索引文档数(110) < 爬取写入数(120)"),
     ).toBeInTheDocument();
   });
 

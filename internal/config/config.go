@@ -9,6 +9,7 @@ import (
 
 	"npan/internal/models"
 	"npan/internal/npan"
+	"npan/internal/search"
 )
 
 type Config struct {
@@ -31,12 +32,19 @@ type Config struct {
 	SubID        int64
 	SubType      npan.TokenSubjectType
 
+	SearchBackend               string
 	MeiliHost                   string
 	MeiliAPIKey                 string
 	MeiliIndex                  string
+	TypesenseHost               string
+	TypesenseAPIKey             string
+	TypesenseCollection         string
 	PublicSearchHost            string
 	PublicSearchIndexName       string
 	PublicSearchAPIKey          string
+	TypesensePublicSearchHost   string
+	TypesensePublicSearchIndex  string
+	TypesensePublicSearchAPIKey string
 	PublicSearchInstantsearchOn bool
 
 	StateDBFile         string
@@ -165,13 +173,20 @@ func Load() Config {
 		SubID:        readInt64("NPA_SUB_ID", 0),
 		SubType:      subType,
 
+		SearchBackend:               readString("NPA_SEARCH_BACKEND", string(search.BackendMeilisearch)),
 		MeiliHost:                   readString("MEILI_HOST", "http://127.0.0.1:7700"),
 		MeiliAPIKey:                 readString("MEILI_API_KEY", ""),
 		MeiliIndex:                  readString("MEILI_INDEX", "npan_items"),
+		TypesenseHost:               readString("TYPESENSE_HOST", "http://127.0.0.1:8108"),
+		TypesenseAPIKey:             readString("TYPESENSE_API_KEY", ""),
+		TypesenseCollection:         readString("TYPESENSE_COLLECTION", "npan_items"),
 		PublicSearchHost:            readString("MEILI_PUBLIC_SEARCH_HOST", ""),
 		PublicSearchIndexName:       readString("MEILI_PUBLIC_SEARCH_INDEX", ""),
 		PublicSearchAPIKey:          readString("MEILI_PUBLIC_SEARCH_API_KEY", ""),
-		PublicSearchInstantsearchOn: readBool("MEILI_PUBLIC_INSTANTSEARCH_ENABLED", false),
+		TypesensePublicSearchHost:   readString("TYPESENSE_PUBLIC_SEARCH_HOST", ""),
+		TypesensePublicSearchIndex:  readString("TYPESENSE_PUBLIC_SEARCH_INDEX", ""),
+		TypesensePublicSearchAPIKey: readString("TYPESENSE_PUBLIC_SEARCH_API_KEY", ""),
+		PublicSearchInstantsearchOn: readBool("NPA_PUBLIC_INSTANTSEARCH_ENABLED", readBool("MEILI_PUBLIC_INSTANTSEARCH_ENABLED", false)),
 
 		StateDBFile:         readString("NPA_STATE_DB_FILE", "./data/state/sync-state.sqlite"),
 		CheckpointTemplate:  readString("NPA_CHECKPOINT_FILE", "./data/checkpoints/full-crawl.json"),
@@ -197,5 +212,16 @@ func Load() Config {
 			MaxDelayMS:  readInt("NPA_MAX_DELAY_MS", 5000),
 			JitterMS:    readInt("NPA_JITTER_MS", 200),
 		},
+	}
+}
+
+func (c Config) PublicSearchBootstrap(backend search.Backend) (host string, index string, apiKey string) {
+	switch backend {
+	case search.BackendTypesense:
+		return strings.TrimSpace(c.TypesensePublicSearchHost), strings.TrimSpace(c.TypesensePublicSearchIndex), strings.TrimSpace(c.TypesensePublicSearchAPIKey)
+	case search.BackendMeilisearch:
+		fallthrough
+	default:
+		return strings.TrimSpace(c.PublicSearchHost), strings.TrimSpace(c.PublicSearchIndexName), strings.TrimSpace(c.PublicSearchAPIKey)
 	}
 }

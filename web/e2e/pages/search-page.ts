@@ -61,44 +61,65 @@ function isPublicSearchResponse(
   response: Response,
   match?: PublicSearchRequestMatch,
 ): boolean {
-  if (
-    !response.url().includes('/multi-search') ||
-    response.request().method() !== 'POST' ||
-    response.status() !== 200
-  ) {
+  const isMeili = response.url().includes('/multi-search')
+  const isTypesense = response.url().includes('/documents/search')
+  if (!isMeili && !isTypesense) {
+    return false
+  }
+  if (response.status() !== 200) {
+    return false
+  }
+  if (isMeili && response.request().method() !== 'POST') {
+    return false
+  }
+  if (isTypesense && response.request().method() !== 'GET') {
     return false
   }
   if (!match) {
     return true
   }
 
-  const body = getRequestBody(response.request())
-  if (!body || !Array.isArray(body.queries) || !isRecord(body.queries[0])) {
-    return false
+  if (isMeili) {
+    const body = getRequestBody(response.request())
+    if (!body || !Array.isArray(body.queries) || !isRecord(body.queries[0])) {
+      return false
+    }
+
+    const firstQuery = body.queries[0]
+    if (match.query !== undefined && firstQuery.q !== match.query) {
+      return false
+    }
+    if (
+      match.filterContains !== undefined
+      && typeof firstQuery.filter === 'string'
+      && !firstQuery.filter.includes(match.filterContains)
+    ) {
+      return false
+    }
+    if (
+      match.filterContains !== undefined
+      && Array.isArray(firstQuery.filter)
+      && !JSON.stringify(firstQuery.filter).includes(match.filterContains)
+    ) {
+      return false
+    }
+    if (
+      match.filterContains !== undefined
+      && typeof firstQuery.filter !== 'string'
+      && !Array.isArray(firstQuery.filter)
+    ) {
+      return false
+    }
+    return true
   }
 
-  const firstQuery = body.queries[0]
-  if (match.query !== undefined && firstQuery.q !== match.query) {
+  const url = new URL(response.url())
+  if (match.query !== undefined && url.searchParams.get('q') !== match.query) {
     return false
   }
   if (
     match.filterContains !== undefined
-    && typeof firstQuery.filter === 'string'
-    && !firstQuery.filter.includes(match.filterContains)
-  ) {
-    return false
-  }
-  if (
-    match.filterContains !== undefined
-    && Array.isArray(firstQuery.filter)
-    && !JSON.stringify(firstQuery.filter).includes(match.filterContains)
-  ) {
-    return false
-  }
-  if (
-    match.filterContains !== undefined
-    && typeof firstQuery.filter !== 'string'
-    && !Array.isArray(firstQuery.filter)
+    && !url.searchParams.get('filter_by')?.includes(match.filterContains)
   ) {
     return false
   }

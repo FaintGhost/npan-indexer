@@ -14,7 +14,7 @@ import (
 	"npan/internal/models"
 )
 
-// IndexOperator defines the operations available on a Meilisearch index.
+// IndexOperator defines the operations available on a local search index.
 type IndexOperator interface {
 	EnsureSettings(ctx context.Context) error
 	UpsertDocuments(ctx context.Context, docs []models.IndexDocument) error

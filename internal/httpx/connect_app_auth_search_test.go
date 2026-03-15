@@ -53,7 +53,7 @@ func TestGetSearchConfigResponseDescriptor_ExposesPublicFieldsOnly(t *testing.T)
 	t.Parallel()
 
 	message := requireTopLevelMessageDescriptor(t, "GetSearchConfigResponse")
-	cases := []string{"host", "index_name", "search_api_key", "instantsearch_enabled"}
+	cases := []string{"host", "index_name", "search_api_key", "instantsearch_enabled", "provider"}
 	for _, fieldName := range cases {
 		field := message.Fields().ByName(protoreflect.Name(fieldName))
 		if field == nil {
@@ -104,6 +104,9 @@ func TestConnectAppGetSearchConfig_ReturnsDedicatedPublicSearchConfig(t *testing
 	if !resp.Msg.GetInstantsearchEnabled() {
 		t.Fatal("expected instantsearch_enabled=true when dedicated public config is complete")
 	}
+	if got := resp.Msg.GetProvider(); got != "meilisearch" {
+		t.Fatalf("expected provider=meilisearch, got %q", got)
+	}
 	if resp.Msg.GetSearchApiKey() == handlers.cfg.MeiliAPIKey {
 		t.Fatal("expected GetSearchConfig to avoid exposing private MEILI_API_KEY")
 	}
@@ -135,6 +138,36 @@ func TestConnectAppGetSearchConfig_DisablesInstantsearchWhenPublicConfigIncomple
 	}
 	if resp.Msg.GetSearchApiKey() == handlers.cfg.MeiliAPIKey {
 		t.Fatal("expected GetSearchConfig not to fall back to private MEILI_API_KEY")
+	}
+}
+
+func TestConnectAppGetSearchConfig_ReturnsTypesenseInstantsearchConfig(t *testing.T) {
+	t.Parallel()
+
+	handlers := newTestHandlers(t)
+	handlers.cfg.SearchBackend = "typesense"
+	handlers.cfg.TypesensePublicSearchHost = "https://typesense-search.example.com"
+	handlers.cfg.TypesensePublicSearchIndex = "npan-public"
+	handlers.cfg.TypesensePublicSearchAPIKey = "typesense-search-key"
+	handlers.cfg.PublicSearchInstantsearchOn = true
+
+	e := NewServer(handlers, testAdminKey, testDistFS(), nil)
+	ts := httptest.NewServer(e)
+	defer ts.Close()
+
+	client := npanv1connect.NewAppServiceClient(ts.Client(), ts.URL)
+	resp, err := client.GetSearchConfig(context.Background(), connect.NewRequest(&npanv1.GetSearchConfigRequest{}))
+	if err != nil {
+		t.Fatalf("GetSearchConfig RPC returned error: %v", err)
+	}
+	if !resp.Msg.GetInstantsearchEnabled() {
+		t.Fatal("expected instantsearch_enabled=true for typesense backend")
+	}
+	if got := resp.Msg.GetProvider(); got != "typesense" {
+		t.Fatalf("expected provider=typesense, got %q", got)
+	}
+	if got := resp.Msg.GetHost(); got != "https://typesense-search.example.com" {
+		t.Fatalf("expected typesense public host, got %q", got)
 	}
 }
 

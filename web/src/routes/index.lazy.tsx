@@ -32,7 +32,7 @@ import {
   type SearchRouteState,
   type SearchUiState,
 } from '@/lib/instantsearch-routing'
-import { createPublicSearchClient, type PublicSearchClientConfig } from '@/lib/meili-search-client'
+import { createPublicSearchClient, type PublicSearchClientConfig } from '@/lib/public-search-client'
 import { wrapPublicSearchClient } from '@/lib/public-search-request-adapter'
 import { loadSearchConfig, resolveSearchBootstrapMode } from '@/lib/search-config'
 import type { IndexDocument } from '@/lib/schemas'
@@ -262,7 +262,7 @@ function SearchPageFrame({
                 </p>
               </div>
               <div className="inline-flex items-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800">
-                Powered by Meilisearch
+                Powered by Local Search
               </div>
             </div>
 
@@ -818,6 +818,7 @@ export function SearchPage() {
     }
 
     return {
+      provider: searchConfigQuery.data.provider,
       host: searchConfigQuery.data.host,
       indexName: searchConfigQuery.data.indexName,
       searchApiKey: searchConfigQuery.data.searchApiKey,
