@@ -422,11 +422,20 @@ describe('SearchPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows initial state on load', () => {
+  it('shows initial state on load', async () => {
     setTestURL('/')
+    server.use(
+      http.post(GET_SEARCH_CONFIG_PATH, () => {
+        return HttpResponse.json(makeSearchConfigResponse())
+      }),
+    )
+
     render(<SearchPage />, { wrapper })
-    expect(screen.getByText('等待探索')).toBeInTheDocument()
-    expect(screen.getByText('Powered by Local Search')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByText('Powered by Meilisearch')).toBeInTheDocument()
+    })
   })
 
   it('keeps hero mode at viewport height without vertical scrolling', () => {
@@ -482,6 +491,7 @@ describe('SearchPage', () => {
       })
     }, { timeout: 5_000 })
 
+    expect(screen.getByText('Powered by Meilisearch')).toBeInTheDocument()
     expect(appSearchCalls).toBe(0)
   })
 
@@ -505,6 +515,8 @@ describe('SearchPage', () => {
         searchApiKey: 'public-search-key',
       })
     }, { timeout: 5_000 })
+
+    expect(screen.getByText('Powered by Typesense')).toBeInTheDocument()
   })
 
   it('does not issue a real public search request on initial render when query is empty', async () => {
@@ -593,6 +605,8 @@ describe('SearchPage', () => {
       expect(screen.getByTitle('report.pdf')).toBeInTheDocument()
       expect(screen.getByText('已加载 2 / 2 个文件')).toBeInTheDocument()
     })
+
+    expect(screen.queryByText('结果列表')).not.toBeInTheDocument()
   })
 
   it('falls back to legacy AppSearch when GetSearchConfig disables instantsearch', async () => {
@@ -770,22 +784,146 @@ describe('SearchPage', () => {
   })
 
   it('shows result count', async () => {
-    setTestURL('/')
+    setTestURL('/?query=test')
     server.use(
-      http.post('/npan.v1.AppService/AppSearch', () => {
-        const response = makeSearchResponse(3, 50)
-        return HttpResponse.json(toConnectSearchResponse(response.items, response.total))
+      http.post(GET_SEARCH_CONFIG_PATH, () => {
+        return HttpResponse.json(makeSearchConfigResponse())
       }),
+    )
+    createPublicSearchClientSpy.mockReturnValue(
+      makeInstantSearchClient(
+        [
+          {
+            objectID: 'file_1',
+            doc_id: 'file_1',
+            source_id: 1,
+            type: 'file',
+            name: 'file1.pdf',
+            path_text: '/docs/file1.pdf',
+            parent_id: 0,
+            modified_at: 1700000000,
+            created_at: 1700000000,
+            size: 1024,
+            sha1: 'abc',
+            in_trash: false,
+            is_deleted: false,
+          },
+          {
+            objectID: 'file_2',
+            doc_id: 'file_2',
+            source_id: 2,
+            type: 'file',
+            name: 'file2.pdf',
+            path_text: '/docs/file2.pdf',
+            parent_id: 0,
+            modified_at: 1700000001,
+            created_at: 1700000001,
+            size: 2048,
+            sha1: 'def',
+            in_trash: false,
+            is_deleted: false,
+          },
+          {
+            objectID: 'file_3',
+            doc_id: 'file_3',
+            source_id: 3,
+            type: 'file',
+            name: 'file3.pdf',
+            path_text: '/docs/file3.pdf',
+            parent_id: 0,
+            modified_at: 1700000002,
+            created_at: 1700000002,
+            size: 4096,
+            sha1: 'ghi',
+            in_trash: false,
+            is_deleted: false,
+          },
+        ],
+        50,
+      ),
     )
 
     render(<SearchPage />, { wrapper })
-    const user = userEvent.setup()
-    await user.type(screen.getByRole('searchbox'), 'test{Enter}')
 
     await waitFor(() => {
-      // Counter shows "3 / 50"
-      expect(screen.getByText('3 / 50')).toBeInTheDocument()
+      expect(screen.getByText('已加载 3 / 50 个文件')).toBeInTheDocument()
     })
+
+    expect(screen.queryByText('结果列表')).not.toBeInTheDocument()
+  })
+
+  it('keeps trailing spaces in the public input while typing between words', async () => {
+    setTestURL('/')
+    const searchRequests: InstantSearchRequestLog = []
+
+    server.use(
+      http.post(GET_SEARCH_CONFIG_PATH, () => {
+        return HttpResponse.json(makeSearchConfigResponse())
+      }),
+    )
+    createPublicSearchClientSpy.mockReturnValue(
+      makeInstantSearchClient(
+        [
+          {
+            objectID: 'file_1',
+            doc_id: 'file_1',
+            source_id: 1,
+            type: 'file',
+            name: 'mx40-guide.pdf',
+            path_text: '/docs/mx40-guide.pdf',
+            parent_id: 0,
+            modified_at: 1700000000,
+            created_at: 1700000000,
+            size: 1024,
+            sha1: 'abc',
+            in_trash: false,
+            is_deleted: false,
+          },
+        ],
+        1,
+        {
+          onSearch: (requests) => {
+            searchRequests.push(requests)
+          },
+        },
+      ),
+    )
+
+    render(<SearchPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(createPublicSearchClientSpy).toHaveBeenCalled()
+    })
+
+    const user = userEvent.setup()
+    const input = screen.getByRole('searchbox')
+
+    await user.type(input, 'mx40 ')
+    expect(input).toHaveValue('mx40 ')
+
+    await new Promise((resolve) => setTimeout(resolve, 400))
+
+    await waitFor(() => {
+      expect(input).toHaveValue('mx40 ')
+      expect(getLatestCapturedQuery(searchRequests)).toBe('mx40')
+    })
+
+    await user.type(input, 'pdf')
+    expect(input).toHaveValue('mx40 pdf')
+  })
+
+  it('uses the compact mobile-first search layout classes', async () => {
+    setTestURL('/')
+    const { container } = render(<SearchPage />, { wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('Powered by Meilisearch')).toBeInTheDocument()
+    })
+
+    const searchCard = container.querySelector('.search-card') as HTMLElement | null
+    expect(searchCard).not.toBeNull()
+    expect(searchCard).toHaveClass('p-4', 'sm:p-7')
+    expect(screen.getByRole('button', { name: '搜索' })).toHaveClass('w-full', 'sm:w-auto')
   })
 
   it('defaults to all filter when file_category missing', async () => {
