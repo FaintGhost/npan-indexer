@@ -901,12 +901,10 @@ describe('SearchPage', () => {
     await user.type(input, 'mx40 ')
     expect(input).toHaveValue('mx40 ')
 
-    await new Promise((resolve) => setTimeout(resolve, 400))
-
     await waitFor(() => {
       expect(input).toHaveValue('mx40 ')
       expect(getLatestCapturedQuery(searchRequests)).toBe('mx40')
-    })
+    }, { timeout: 1_000 })
 
     await user.type(input, 'pdf')
     expect(input).toHaveValue('mx40 pdf')

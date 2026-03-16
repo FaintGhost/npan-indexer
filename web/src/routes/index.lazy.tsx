@@ -81,6 +81,33 @@ function toErrorMessage(err: unknown): string {
   return 'Unknown error'
 }
 
+function syncInputValuePreservingUserSpaces(currentValue: string, committedQuery: string): string {
+  if (!committedQuery.trim()) {
+    return ''
+  }
+
+  if (currentValue.trim() === committedQuery.trim()) {
+    return currentValue
+  }
+
+  return committedQuery
+}
+
+function poweredByLabelForProvider(provider?: PublicSearchClientConfig['provider']): string {
+  switch (provider) {
+    case 'typesense':
+      return 'Typesense'
+    case 'meilisearch':
+      return 'Meilisearch'
+    default:
+      return 'Local Search'
+  }
+}
+
+function formatLoadedStatus(loadedCount: number, totalCount: number): string {
+  return `已加载 ${loadedCount} / ${totalCount} 个文件`
+}
+
 function mergePages(pages: AppSearchResponse[]): { items: IndexDocument[]; total: number } {
   const seen = new Set<number>()
   const items: IndexDocument[] = []
@@ -555,7 +582,7 @@ function LegacySearchPage({
   let statusText = '随时准备为您检索文件'
   let statusError = false
   if (filteredItems.length > 0) {
-    statusText = `已加载 ${filteredItems.length} / ${searchState.total} 个文件`
+    statusText = formatLoadedStatus(filteredItems.length, searchState.total)
   } else if (error) {
     statusText = error
     statusError = true
@@ -652,17 +679,7 @@ function PublicSearchBody({
     }
 
     previousQueryRef.current = query
-    setInputValue((current) => {
-      if (!query.trim()) {
-        return ''
-      }
-
-      if (current.trim() === query.trim()) {
-        return current
-      }
-
-      return query
-    })
+    setInputValue((current) => syncInputValuePreservingUserSpaces(current, query))
     setDocked(query.trim().length > 0)
   }, [query, setDocked])
 
@@ -730,7 +747,7 @@ function PublicSearchBody({
   let statusText = '随时准备为您检索文件'
   let statusError = false
   if (rawHits.length > 0) {
-    statusText = `已加载 ${rawHits.length} / ${nbHits || rawHits.length} 个文件`
+    statusText = formatLoadedStatus(rawHits.length, nbHits || rawHits.length)
   } else if (status === 'error') {
     statusText = toErrorMessage(error)
     statusError = true
@@ -845,11 +862,7 @@ export function SearchPage() {
 
     return wrapPublicSearchClient(createPublicSearchClient(publicSearchConfig))
   }, [publicSearchConfig])
-  const poweredByLabel = searchConfigQuery.data?.provider === 'typesense'
-    ? 'Typesense'
-    : searchConfigQuery.data?.provider === 'meilisearch'
-      ? 'Meilisearch'
-      : 'Local Search'
+  const poweredByLabel = poweredByLabelForProvider(searchConfigQuery.data?.provider)
 
   if (bootstrapMode === 'public' && publicSearch && publicSearchConfig) {
     return (
