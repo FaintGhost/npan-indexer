@@ -59,7 +59,7 @@ vi.mock('react-instantsearch', () => ({
 }))
 
 describe('SearchResults', () => {
-  it('renders InstantSearch hits and result count text', () => {
+  it('renders InstantSearch hits without the removed summary bar', () => {
     render(
       <SearchResults
         download={{
@@ -71,7 +71,8 @@ describe('SearchResults', () => {
 
     expect(screen.getByTitle('report.pdf')).toBeInTheDocument()
     expect(screen.getByText('manual.pdf')).toBeInTheDocument()
-    expect(screen.getByText('已加载 2 / 2 个文件')).toBeInTheDocument()
+    expect(screen.queryByText('结果列表')).not.toBeInTheDocument()
+    expect(screen.queryByText('已加载 2 / 2 个文件')).not.toBeInTheDocument()
     expect(document.querySelector('mark')?.textContent).toBe('report')
   })
 

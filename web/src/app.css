@@ -173,22 +173,24 @@ mark {
 
 /* ── Hero mode (initial, no results) ── */
 .mode-hero {
-  min-height: 100dvh;
-  overflow: hidden;
+  min-height: auto;
+  overflow: visible;
 }
 
 .mode-hero .search-stage {
-  min-height: 100dvh;
+  min-height: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: 0.75rem;
+  padding-bottom: 0.5rem;
   background: transparent;
   border-bottom: 1px solid transparent;
 }
 
 .mode-hero .search-card {
-  transform: scale(1.01) translateY(-6px);
-  box-shadow: 0 34px 72px -44px rgba(24, 44, 72, 0.68);
+  transform: none;
+  box-shadow: 0 28px 60px -42px rgba(24, 44, 72, 0.68);
 }
 
 .mode-hero .results-wrap {
@@ -202,6 +204,26 @@ mark {
 
 .mode-hero main {
   padding-bottom: 0;
+}
+
+@media (min-width: 640px) {
+  .mode-hero {
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .mode-hero .search-stage {
+    min-height: 100dvh;
+    align-items: center;
+    justify-content: center;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .mode-hero .search-card {
+    transform: scale(1.01) translateY(-6px);
+    box-shadow: 0 34px 72px -44px rgba(24, 44, 72, 0.68);
+  }
 }
 
 /* ── Docked mode (has results / searching) ── */

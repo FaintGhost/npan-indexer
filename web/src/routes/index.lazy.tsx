@@ -4,7 +4,7 @@ import { createLazyFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { KeyboardEvent, ReactNode, RefObject } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { InstantSearch, useInstantSearch, useSearchBox } from 'react-instantsearch'
+import { InstantSearch, useInfiniteHits, useInstantSearch, useSearchBox, useStats } from 'react-instantsearch'
 import { history } from 'instantsearch.js/es/lib/routers'
 import type { RouterProps } from 'instantsearch.js/es/middlewares/createRouterMiddleware'
 import { appSearch as appSearchMethod } from '@/gen/npan/v1/api-AppService_connectquery'
@@ -36,6 +36,7 @@ import { createPublicSearchClient, type PublicSearchClientConfig } from '@/lib/p
 import { wrapPublicSearchClient } from '@/lib/public-search-request-adapter'
 import { loadSearchConfig, resolveSearchBootstrapMode } from '@/lib/search-config'
 import type { IndexDocument } from '@/lib/schemas'
+import type { MeiliHit } from '@/lib/meili-hit-adapter'
 import { useDownload } from '@/hooks/use-download'
 import { useHotkey } from '@/hooks/use-hotkey'
 import { useViewMode } from '@/hooks/use-view-mode'
@@ -78,6 +79,33 @@ function toErrorMessage(err: unknown): string {
     return err.message
   }
   return 'Unknown error'
+}
+
+function syncInputValuePreservingUserSpaces(currentValue: string, committedQuery: string): string {
+  if (!committedQuery.trim()) {
+    return ''
+  }
+
+  if (currentValue.trim() === committedQuery.trim()) {
+    return currentValue
+  }
+
+  return committedQuery
+}
+
+function poweredByLabelForProvider(provider?: PublicSearchClientConfig['provider']): string {
+  switch (provider) {
+    case 'typesense':
+      return 'Typesense'
+    case 'meilisearch':
+      return 'Meilisearch'
+    default:
+      return 'Local Search'
+  }
+}
+
+function formatLoadedStatus(loadedCount: number, totalCount: number): string {
+  return `已加载 ${loadedCount} / ${totalCount} 个文件`
 }
 
 function mergePages(pages: AppSearchResponse[]): { items: IndexDocument[]; total: number } {
@@ -136,7 +164,6 @@ function LegacySearchResults({
     () => items.filter((item) => matchesSearchFilter(item.name, activeFilter)),
     [activeFilter, items],
   )
-  const total = searchState.total
   const hasMore = Boolean(searchQuery.hasNextPage)
 
   const loadMore = useCallback(() => {
@@ -178,13 +205,6 @@ function LegacySearchResults({
       aria-live="polite"
       aria-busy={loading}
     >
-      <div className="frost-panel mb-4 flex items-center justify-between rounded-2xl px-4 py-3">
-        <p className="text-sm font-medium text-slate-700">结果列表</p>
-        <p className="font-mono text-sm font-semibold text-slate-700">
-          {filteredItems.length} / {total}
-        </p>
-      </div>
-
       <div className="thin-scrollbar space-y-3" style={{ viewTransitionName: 'results-list' }}>
         {showInitial && <InitialState />}
         {showNoResults && <NoResultsState />}
@@ -223,6 +243,7 @@ function LegacySearchResults({
 
 function SearchPageFrame({
   isDocked,
+  poweredByLabel,
   statusText,
   statusError,
   inputRef,
@@ -234,6 +255,7 @@ function SearchPageFrame({
   results,
 }: {
   isDocked: boolean
+  poweredByLabel: string
   statusText: string
   statusError: boolean
   inputRef: RefObject<HTMLInputElement | null>
@@ -250,23 +272,23 @@ function SearchPageFrame({
         跳到结果
       </a>
       <header className={`search-stage${isDocked ? ' search-stage-opaque' : ''}`}>
-        <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8">
-          <div className="search-card frost-panel w-full rounded-[2rem] p-5 sm:p-7">
-            <div className="flex flex-col gap-4 border-b border-slate-200/70 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 lg:px-8">
+          <div className="search-card frost-panel w-full rounded-[1.75rem] p-4 sm:rounded-[2rem] sm:p-7">
+            <div className="flex flex-col gap-3 border-b border-slate-200/70 pb-3 sm:gap-4 sm:pb-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h1 className="font-display text-4xl font-semibold leading-[0.95] tracking-[-0.03em] text-slate-900 sm:text-[3.3rem]">
+                <h1 className="font-display text-[2.45rem] font-semibold leading-[0.95] tracking-[-0.03em] text-slate-900 sm:text-[3.3rem]">
                   Npan Search
                 </h1>
                 <p className="mt-2 max-w-[44ch] text-sm leading-6 text-slate-600">
                   像搜索引擎一样查找文件，命中后直接下载。
                 </p>
               </div>
-              <div className="inline-flex items-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800">
-                Powered by Local Search
+              <div className="inline-flex w-fit items-center rounded-xl border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800">
+                Powered by {poweredByLabel}
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:mt-5 sm:gap-3 sm:grid-cols-[1fr_auto]">
               <SearchInput
                 ref={inputRef}
                 value={query}
@@ -277,13 +299,13 @@ function SearchPageFrame({
               <button
                 type="button"
                 onClick={onSubmit}
-                className="action-btn-primary h-12 px-6 text-sm font-semibold"
+                className="action-btn-primary h-12 w-full px-6 text-sm font-semibold sm:w-auto"
               >
                 搜索
               </button>
             </div>
 
-            <div className="mt-3 flex min-h-5 flex-wrap items-center justify-between gap-2">
+            <div className="mt-2 flex min-h-5 flex-wrap items-center justify-between gap-2 sm:mt-3">
               <p className={`text-xs transition-colors duration-300 ${statusError ? 'font-medium text-rose-600' : 'text-slate-600'}`}>
                 {statusText}
               </p>
@@ -307,12 +329,14 @@ function LegacySearchPage({
   isDocked,
   setDocked,
   isBootstrapLoading,
+  poweredByLabel,
 }: {
   inputRef: RefObject<HTMLInputElement | null>
   download: ReturnType<typeof useDownload>
   isDocked: boolean
   setDocked: (docked: boolean) => void
   isBootstrapLoading: boolean
+  poweredByLabel: string
 }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const loadingSinceRef = useRef<number | null>(null)
@@ -361,6 +385,14 @@ function LegacySearchPage({
     ? toErrorMessage(searchQuery.error)
     : null
   const loading = isBootstrapLoading || (legacySearchEnabled && (searchQuery.isPending || searchQuery.isFetching))
+  const searchState = useMemo(
+    () => mergePages(searchQuery.data?.pages ?? []),
+    [searchQuery.data?.pages],
+  )
+  const filteredItems = useMemo(
+    () => searchState.items.filter((item) => matchesSearchFilter(item.name, activeFilter)),
+    [activeFilter, searchState.items],
+  )
 
   const clearDebounce = useCallback(() => {
     if (debounceRef.current) {
@@ -549,11 +581,15 @@ function LegacySearchPage({
 
   let statusText = '随时准备为您检索文件'
   let statusError = false
-  if (loading) {
-    statusText = '检索中...'
+  if (filteredItems.length > 0) {
+    statusText = formatLoadedStatus(filteredItems.length, searchState.total)
   } else if (error) {
     statusText = error
     statusError = true
+  } else if (loading) {
+    statusText = '检索中...'
+  } else if (activeQuery.trim()) {
+    statusText = '未找到相关文件'
   }
 
   const legacyFilters = (
@@ -582,25 +618,7 @@ function LegacySearchPage({
     </div>
   )
 
-  const legacyResults = !searchEnabled ? (
-    <section
-      id="search-results"
-      className="results-wrap mt-3"
-      aria-live="polite"
-      aria-busy={false}
-    >
-      <div className="frost-panel mb-4 rounded-2xl px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-slate-700">结果列表</p>
-          <p className="font-mono text-sm font-semibold text-slate-700">0 / 0</p>
-        </div>
-        <p className="mt-2 text-xs text-slate-600">随时准备为您检索文件</p>
-      </div>
-      <div className="thin-scrollbar space-y-3" style={{ viewTransitionName: 'results-list' }}>
-        <InitialState />
-      </div>
-    </section>
-  ) : (
+  const legacyResults = (
     <LegacySearchResults
       activeQuery={activeQuery}
       activeFilter={activeFilter}
@@ -614,6 +632,7 @@ function LegacySearchPage({
   return (
     <SearchPageFrame
       isDocked={isDocked}
+      poweredByLabel={poweredByLabel}
       statusText={statusText}
       statusError={statusError}
       inputRef={inputRef}
@@ -632,14 +651,18 @@ function PublicSearchBody({
   download,
   isDocked,
   setDocked,
+  poweredByLabel,
 }: {
   inputRef: RefObject<HTMLInputElement | null>
   download: ReturnType<typeof useDownload>
   isDocked: boolean
   setDocked: (docked: boolean) => void
+  poweredByLabel: string
 }) {
   const { query, refine } = useSearchBox()
   const { status, error, setUiState } = useInstantSearch<SearchUiState>({ catchError: true })
+  const { items: rawHits } = useInfiniteHits<MeiliHit>()
+  const { nbHits } = useStats()
   const [inputValue, setInputValue] = useState(query)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const previousQueryRef = useRef(query)
@@ -656,7 +679,7 @@ function PublicSearchBody({
     }
 
     previousQueryRef.current = query
-    setInputValue(query)
+    setInputValue((current) => syncInputValuePreservingUserSpaces(current, query))
     setDocked(query.trim().length > 0)
   }, [query, setDocked])
 
@@ -680,7 +703,6 @@ function PublicSearchBody({
       return
     }
 
-    setInputValue(trimmedQuery)
     setDocked(true)
     refine(trimmedQuery)
   }, [refine, resetSearchState, setDocked])
@@ -724,16 +746,21 @@ function PublicSearchBody({
 
   let statusText = '随时准备为您检索文件'
   let statusError = false
-  if (query.trim() && (status === 'loading' || status === 'stalled')) {
-    statusText = '检索中...'
+  if (rawHits.length > 0) {
+    statusText = formatLoadedStatus(rawHits.length, nbHits || rawHits.length)
   } else if (status === 'error') {
     statusText = toErrorMessage(error)
     statusError = true
+  } else if (query.trim() && (status === 'loading' || status === 'stalled')) {
+    statusText = '检索中...'
+  } else if (query.trim()) {
+    statusText = '未找到相关文件'
   }
 
   return (
     <SearchPageFrame
       isDocked={isDocked}
+      poweredByLabel={poweredByLabel}
       statusText={statusText}
       statusError={statusError}
       inputRef={inputRef}
@@ -754,6 +781,7 @@ function PublicSearchPage({
   setDocked,
   publicSearch,
   publicSearchConfig,
+  poweredByLabel,
 }: {
   inputRef: RefObject<HTMLInputElement | null>
   download: ReturnType<typeof useDownload>
@@ -761,6 +789,7 @@ function PublicSearchPage({
   setDocked: (docked: boolean) => void
   publicSearch: ReturnType<typeof createPublicSearchClient>
   publicSearchConfig: PublicSearchClientConfig
+  poweredByLabel: string
 }) {
   const routing = useMemo<RouterProps<SearchUiState, SearchRouteState>>(() => ({
     router: history<SearchRouteState>({
@@ -781,6 +810,7 @@ function PublicSearchPage({
         download={download}
         isDocked={isDocked}
         setDocked={setDocked}
+        poweredByLabel={poweredByLabel}
       />
     </InstantSearch>
   )
@@ -832,6 +862,7 @@ export function SearchPage() {
 
     return wrapPublicSearchClient(createPublicSearchClient(publicSearchConfig))
   }, [publicSearchConfig])
+  const poweredByLabel = poweredByLabelForProvider(searchConfigQuery.data?.provider)
 
   if (bootstrapMode === 'public' && publicSearch && publicSearchConfig) {
     return (
@@ -842,6 +873,7 @@ export function SearchPage() {
         setDocked={setDocked}
         publicSearch={publicSearch}
         publicSearchConfig={publicSearchConfig}
+        poweredByLabel={poweredByLabel}
       />
     )
   }
@@ -853,6 +885,7 @@ export function SearchPage() {
       isDocked={isDocked}
       setDocked={setDocked}
       isBootstrapLoading={bootstrapMode === 'loading'}
+      poweredByLabel={poweredByLabel}
     />
   )
 }
