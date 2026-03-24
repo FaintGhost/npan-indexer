@@ -768,6 +768,151 @@ func TestRunIncrementalPath_RebuildsDriftedSubfolderWhenLocalCountIsTooLarge(t *
 	}
 }
 
+func TestRunIncrementalPath_RetriesTransientRepairTimeout(t *testing.T) {
+	t.Parallel()
+
+	index := newInMemoryIndexStub([]models.IndexDocument{
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 100, Name: "全部文件", ParentID: 100}, "全部文件"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 200, Name: "Sub A", ParentID: 100}, "folder/200/Sub A"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 300, Name: "Sub B", ParentID: 100}, "folder/300/Sub B"),
+		search.MapFileToIndexDoc(models.NpanFile{ID: 2, Name: "keep.txt", ParentID: 300}, "file/2/keep.txt"),
+	})
+	mgr, tmpDir := newTestSyncManager(t, index)
+	seedRepairProgress(t, mgr, filepath.Join(tmpDir, "repair-checkpoint.json"))
+
+	var subATries int32
+	api := &mockAPI{
+		searchUpdatedWindowFn: func(_ context.Context, _ string, _ *int64, _ *int64, _ int64) (map[string]any, error) {
+			return makeOnePage(nil, nil), nil
+		},
+		getFolderInfoFn: func(_ context.Context, folderID int64) (models.NpanFolder, error) {
+			if folderID == 100 {
+				return models.NpanFolder{ID: 100, Name: "Repair Root", ItemCount: 4}, nil
+			}
+			return models.NpanFolder{ID: folderID}, nil
+		},
+		listFolderChildrenFn: func(_ context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
+			switch folderID {
+			case 100:
+				return models.FolderChildrenPage{
+					PageCount: 1,
+					Folders: []models.NpanFolder{
+						{ID: 200, Name: "Sub A", ParentID: 100, ItemCount: 1},
+						{ID: 300, Name: "Sub B", ParentID: 100, ItemCount: 1},
+					},
+				}, nil
+			case 200:
+				if atomic.AddInt32(&subATries, 1) == 1 {
+					return models.FolderChildrenPage{}, errors.New(`net/http: TLS handshake timeout`)
+				}
+				return models.FolderChildrenPage{
+					PageCount: 1,
+					Files: []models.NpanFile{
+						{ID: 1, Name: "missing.txt", ParentID: 200},
+					},
+				}, nil
+			case 300:
+				return models.FolderChildrenPage{
+					PageCount: 1,
+					Files: []models.NpanFile{
+						{ID: 2, Name: "keep.txt", ParentID: 300},
+					},
+				}, nil
+			}
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	err := mgr.runIncrementalPath(context.Background(), api, SyncStartRequest{
+		Mode:             models.SyncModeIncremental,
+		IncrementalQuery: "*",
+		WindowOverlapMS:  5000,
+	}, &models.SyncState{LastSyncTime: 1700000000000}, mgr.effectiveSyncStateStore())
+	if err != nil {
+		t.Fatalf("expected no error after retry, got: %v", err)
+	}
+	if atomic.LoadInt32(&subATries) < 2 {
+		t.Fatalf("expected transient subtree repair timeout to be retried, got %d tries", subATries)
+	}
+}
+
+func TestRunIncrementalPath_DoesNotFailWholeSyncWhenRepairTimesOut(t *testing.T) {
+	t.Parallel()
+
+	index := newInMemoryIndexStub([]models.IndexDocument{
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 100, Name: "全部文件", ParentID: 100}, "全部文件"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 200, Name: "Sub A", ParentID: 100}, "folder/200/Sub A"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 300, Name: "Sub B", ParentID: 100}, "folder/300/Sub B"),
+		search.MapFileToIndexDoc(models.NpanFile{ID: 2, Name: "keep.txt", ParentID: 300}, "file/2/keep.txt"),
+	})
+	mgr, tmpDir := newTestSyncManager(t, index)
+	seedRepairProgress(t, mgr, filepath.Join(tmpDir, "repair-checkpoint.json"))
+
+	api := &mockAPI{
+		searchUpdatedWindowFn: func(_ context.Context, _ string, _ *int64, _ *int64, _ int64) (map[string]any, error) {
+			return makeOnePage(nil, nil), nil
+		},
+		getFolderInfoFn: func(_ context.Context, folderID int64) (models.NpanFolder, error) {
+			if folderID == 100 {
+				return models.NpanFolder{ID: 100, Name: "Repair Root", ItemCount: 4}, nil
+			}
+			return models.NpanFolder{ID: folderID}, nil
+		},
+		listFolderChildrenFn: func(_ context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
+			switch folderID {
+			case 100:
+				return models.FolderChildrenPage{
+					PageCount: 1,
+					Folders: []models.NpanFolder{
+						{ID: 200, Name: "Sub A", ParentID: 100, ItemCount: 1},
+						{ID: 300, Name: "Sub B", ParentID: 100, ItemCount: 1},
+					},
+				}, nil
+			case 200:
+				return models.FolderChildrenPage{}, errors.New(`net/http: TLS handshake timeout`)
+			case 300:
+				return models.FolderChildrenPage{
+					PageCount: 1,
+					Files: []models.NpanFile{
+						{ID: 2, Name: "keep.txt", ParentID: 300},
+					},
+				}, nil
+			}
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	err := mgr.runIncrementalPath(context.Background(), api, SyncStartRequest{
+		Mode:             models.SyncModeIncremental,
+		IncrementalQuery: "*",
+		WindowOverlapMS:  5000,
+	}, &models.SyncState{LastSyncTime: 1700000000000}, mgr.effectiveSyncStateStore())
+	if err != nil {
+		t.Fatalf("expected incremental sync to tolerate repair timeout, got: %v", err)
+	}
+
+	progress, err := mgr.progressStore.Load()
+	if err != nil {
+		t.Fatalf("load progress: %v", err)
+	}
+	if progress == nil {
+		t.Fatalf("expected progress")
+	}
+	if progress.Status != "done" {
+		t.Fatalf("expected overall incremental sync to complete, got %q", progress.Status)
+	}
+	root := progress.RootProgress["100"]
+	if root == nil {
+		t.Fatalf("expected root progress")
+	}
+	if root.Status != "error" {
+		t.Fatalf("expected root repair failure to be visible, got %q", root.Status)
+	}
+	if root.Error == "" {
+		t.Fatalf("expected root repair error message")
+	}
+}
+
 func TestRunIncrementalPath_SkipsRepairWhenChangesFetched(t *testing.T) {
 	t.Parallel()
 

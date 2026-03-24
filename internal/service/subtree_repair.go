@@ -159,13 +159,15 @@ func (s *indexedTreeSnapshot) collectSubtreeDocIDs(folderID int64) []string {
 }
 
 func (m *SyncManager) fetchFolderInfo(ctx context.Context, api npan.API, folderID int64, limiter *indexer.RequestLimiter) (models.NpanFolder, error) {
-	var folder models.NpanFolder
-	err := limiter.Schedule(ctx, func() error {
-		var innerErr error
-		folder, innerErr = api.GetFolderInfo(ctx, folderID)
-		return innerErr
-	})
-	return folder, err
+	return indexer.WithRetry(ctx, func() (models.NpanFolder, error) {
+		var folder models.NpanFolder
+		err := limiter.Schedule(ctx, func() error {
+			var innerErr error
+			folder, innerErr = api.GetFolderInfo(ctx, folderID)
+			return innerErr
+		})
+		return folder, err
+	}, m.retry)
 }
 
 func (m *SyncManager) listAllFolderChildren(ctx context.Context, api npan.API, folderID int64, limiter *indexer.RequestLimiter) ([]models.NpanFolder, int64, error) {
@@ -176,12 +178,15 @@ func (m *SyncManager) listAllFolderChildren(ctx context.Context, api npan.API, f
 	)
 
 	for {
-		var page models.FolderChildrenPage
-		err := limiter.Schedule(ctx, func() error {
-			var innerErr error
-			page, innerErr = api.ListFolderChildren(ctx, folderID, pageID)
-			return innerErr
-		})
+		page, err := indexer.WithRetry(ctx, func() (models.FolderChildrenPage, error) {
+			var page models.FolderChildrenPage
+			err := limiter.Schedule(ctx, func() error {
+				var innerErr error
+				page, innerErr = api.ListFolderChildren(ctx, folderID, pageID)
+				return innerErr
+			})
+			return page, err
+		}, m.retry)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -274,12 +279,15 @@ func (m *SyncManager) rebuildNestedFolderSubtree(ctx context.Context, api npan.A
 
 		var pageID int64
 		for {
-			var page models.FolderChildrenPage
-			err := limiter.Schedule(ctx, func() error {
-				var innerErr error
-				page, innerErr = api.ListFolderChildren(ctx, currentFolderID, pageID)
-				return innerErr
-			})
+			page, err := indexer.WithRetry(ctx, func() (models.FolderChildrenPage, error) {
+				var page models.FolderChildrenPage
+				err := limiter.Schedule(ctx, func() error {
+					var innerErr error
+					page, innerErr = api.ListFolderChildren(ctx, currentFolderID, pageID)
+					return innerErr
+				})
+				return page, err
+			}, m.retry)
 			if err != nil {
 				return fmt.Errorf("list children for repair folder %d page %d: %w", currentFolderID, pageID, err)
 			}
@@ -365,6 +373,20 @@ func markNestedRepairProgress(progress *models.SyncProgressState, rootID int64, 
 	progress.UpdatedAt = time.Now().UnixMilli()
 }
 
+func markRepairRootError(progress *models.SyncProgressState, rootID int64, message string) {
+	if progress == nil {
+		return
+	}
+	root := progress.RootProgress[fmt.Sprintf("%d", rootID)]
+	if root == nil {
+		return
+	}
+	root.Status = "error"
+	root.Error = message
+	root.UpdatedAt = time.Now().UnixMilli()
+	progress.UpdatedAt = time.Now().UnixMilli()
+}
+
 func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, progress *models.SyncProgressState, request SyncStartRequest, limiter *indexer.RequestLimiter) error {
 	if progress == nil || progress.IncrementalStats == nil || progress.IncrementalStats.ChangesFetched > 0 {
 		return nil
@@ -387,20 +409,35 @@ func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, p
 
 	progressMu := &sync.Mutex{}
 	for _, rootID := range progress.Roots {
+		rootRepairFailed := false
 		rootInfo, err := m.fetchFolderInfo(ctx, api, rootID, limiter)
 		if err != nil {
 			slog.Warn("获取根目录详情失败，跳过目录级补偿", "root_id", rootID, "error", err)
+			progressMu.Lock()
+			markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: %v", err))
+			_ = m.progressStore.Save(progress)
+			progressMu.Unlock()
 			continue
 		}
 
 		snapshot, err := buildIndexedTreeSnapshot(ctx, m.index, rootID)
 		if err != nil {
-			return err
+			slog.Warn("构建本地目录快照失败，跳过目录级补偿", "root_id", rootID, "error", err)
+			progressMu.Lock()
+			markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: %v", err))
+			_ = m.progressStore.Save(progress)
+			progressMu.Unlock()
+			continue
 		}
 
 		targets, err := m.collectRepairTargets(ctx, api, snapshot, rootInfo, limiter)
 		if err != nil {
-			return err
+			slog.Warn("收集补偿目标失败，跳过目录级补偿", "root_id", rootID, "error", err)
+			progressMu.Lock()
+			markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: %v", err))
+			_ = m.progressStore.Save(progress)
+			progressMu.Unlock()
+			continue
 		}
 
 		for _, target := range targets {
@@ -415,7 +452,13 @@ func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, p
 			if target.mode == subtreeRepairModeRebuild {
 				docIDs := snapshot.collectSubtreeDocIDs(target.folder.ID)
 				if err := m.deleteSubtreeDocuments(ctx, docIDs); err != nil {
-					return fmt.Errorf("delete subtree docs for folder %d: %w", target.folder.ID, err)
+					slog.Warn("删除补偿子树失败，跳过当前根目录补偿", "root_id", rootID, "folder_id", target.folder.ID, "error", err)
+					progressMu.Lock()
+					markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: delete subtree docs for folder %d: %v", target.folder.ID, err))
+					_ = m.progressStore.Save(progress)
+					progressMu.Unlock()
+					rootRepairFailed = true
+					continue
 				}
 			}
 
@@ -431,22 +474,49 @@ func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, p
 				}
 				checkpointStore := m.effectiveCheckpointStoreFactory().ForKey(checkpointFile)
 				if err := checkpointStore.Clear(); err != nil {
-					return fmt.Errorf("clear repair checkpoint for root %d: %w", rootID, err)
+					slog.Warn("清理补偿 checkpoint 失败，跳过当前根目录补偿", "root_id", rootID, "error", err)
+					progressMu.Lock()
+					markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: clear repair checkpoint for root %d: %v", rootID, err))
+					_ = m.progressStore.Save(progress)
+					progressMu.Unlock()
+					rootRepairFailed = true
+					continue
 				}
 				if err := m.runSingleRoot(ctx, api, progress, progressMu, rootID, checkpointFile, progressEvery, limiter, true); err != nil {
-					return err
+					slog.Warn("根目录补偿失败，跳过当前根目录补偿", "root_id", rootID, "error", err)
+					progressMu.Lock()
+					markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: %v", err))
+					_ = m.progressStore.Save(progress)
+					progressMu.Unlock()
+					rootRepairFailed = true
+					continue
 				}
 				continue
 			}
 
 			if err := m.rebuildNestedFolderSubtree(ctx, api, target.folder, limiter); err != nil {
-				return err
+				slog.Warn("嵌套目录补偿失败，跳过当前根目录补偿", "root_id", rootID, "folder_id", target.folder.ID, "error", err)
+				progressMu.Lock()
+				markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: %v", err))
+				_ = m.progressStore.Save(progress)
+				progressMu.Unlock()
+				rootRepairFailed = true
+				continue
 			}
+		}
+
+		if rootRepairFailed {
+			continue
 		}
 
 		updatedSnapshot, err := buildIndexedTreeSnapshot(ctx, m.index, rootID)
 		if err != nil {
-			return err
+			slog.Warn("刷新补偿后快照失败，跳过当前根目录统计刷新", "root_id", rootID, "error", err)
+			progressMu.Lock()
+			markRepairRootError(progress, rootID, fmt.Sprintf("repair skipped: %v", err))
+			_ = m.progressStore.Save(progress)
+			progressMu.Unlock()
+			continue
 		}
 		refreshRootProgressFromSnapshot(progress, rootID, rootInfo.ItemCount+1, updatedSnapshot)
 	}
