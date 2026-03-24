@@ -588,7 +588,7 @@ func seedRepairProgress(t *testing.T, mgr *SyncManager, checkpointFile string) {
 	}
 }
 
-func TestRunIncrementalPath_RepairsOnlyDriftedSubfolderWhenCountsDisagree(t *testing.T) {
+func TestRunIncrementalPath_BackfillsOnlyDriftedSubfolderWhenCountsDisagree(t *testing.T) {
 	t.Parallel()
 
 	index := newInMemoryIndexStub([]models.IndexDocument{
@@ -662,11 +662,8 @@ func TestRunIncrementalPath_RepairsOnlyDriftedSubfolderWhenCountsDisagree(t *tes
 			inspectRootCalls, inspectSubACalls, inspectSubBCalls)
 	}
 
-	if len(index.deletes) != 1 {
-		t.Fatalf("expected one targeted delete batch, got %d", len(index.deletes))
-	}
-	if len(index.deletes[0]) != 1 || index.deletes[0][0] != "folder_200" {
-		t.Fatalf("expected targeted delete for folder_200 only, got %#v", index.deletes[0])
+	if len(index.deletes) != 0 {
+		t.Fatalf("expected additive backfill without targeted delete, got %#v", index.deletes)
 	}
 	if len(index.upserts) == 0 {
 		t.Fatalf("expected subtree rebuild upserts")
@@ -688,6 +685,86 @@ func TestRunIncrementalPath_RepairsOnlyDriftedSubfolderWhenCountsDisagree(t *tes
 	}
 	if got, err := index.DocumentCount(context.Background()); err != nil || got != 5 {
 		t.Fatalf("expected repaired document count=5, got=%d err=%v", got, err)
+	}
+}
+
+func TestRunIncrementalPath_RebuildsDriftedSubfolderWhenLocalCountIsTooLarge(t *testing.T) {
+	t.Parallel()
+
+	index := newInMemoryIndexStub([]models.IndexDocument{
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 100, Name: "全部文件", ParentID: 100}, "全部文件"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 200, Name: "Sub A", ParentID: 100}, "folder/200/Sub A"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 300, Name: "Sub B", ParentID: 100}, "folder/300/Sub B"),
+		search.MapFileToIndexDoc(models.NpanFile{ID: 1, Name: "keep.txt", ParentID: 200}, "file/1/keep.txt"),
+		search.MapFileToIndexDoc(models.NpanFile{ID: 9, Name: "stale.txt", ParentID: 200}, "file/9/stale.txt"),
+		search.MapFileToIndexDoc(models.NpanFile{ID: 2, Name: "keep.txt", ParentID: 300}, "file/2/keep.txt"),
+	})
+	mgr, tmpDir := newTestSyncManager(t, index)
+	seedRepairProgress(t, mgr, filepath.Join(tmpDir, "repair-checkpoint.json"))
+
+	api := &mockAPI{
+		searchUpdatedWindowFn: func(_ context.Context, _ string, _ *int64, _ *int64, _ int64) (map[string]any, error) {
+			return makeOnePage(nil, nil), nil
+		},
+		getFolderInfoFn: func(_ context.Context, folderID int64) (models.NpanFolder, error) {
+			if folderID == 100 {
+				return models.NpanFolder{ID: 100, Name: "Repair Root", ItemCount: 4}, nil
+			}
+			return models.NpanFolder{ID: folderID}, nil
+		},
+		listFolderChildrenFn: func(_ context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
+			switch folderID {
+			case 100:
+				return models.FolderChildrenPage{
+					PageCount:  1,
+					TotalCount: 2,
+					Folders: []models.NpanFolder{
+						{ID: 200, Name: "Sub A", ParentID: 100, ItemCount: 1},
+						{ID: 300, Name: "Sub B", ParentID: 100, ItemCount: 1},
+					},
+				}, nil
+			case 200:
+				return models.FolderChildrenPage{
+					PageCount:  1,
+					TotalCount: 1,
+					Files: []models.NpanFile{
+						{ID: 1, Name: "keep.txt", ParentID: 200},
+					},
+				}, nil
+			case 300:
+				return models.FolderChildrenPage{
+					PageCount:  1,
+					TotalCount: 1,
+					Files: []models.NpanFile{
+						{ID: 2, Name: "keep.txt", ParentID: 300},
+					},
+				}, nil
+			}
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	err := mgr.runIncrementalPath(context.Background(), api, SyncStartRequest{
+		Mode:             models.SyncModeIncremental,
+		IncrementalQuery: "*",
+		WindowOverlapMS:  5000,
+	}, &models.SyncState{LastSyncTime: 1700000000000}, mgr.effectiveSyncStateStore())
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if len(index.deletes) != 1 {
+		t.Fatalf("expected one targeted delete batch, got %d", len(index.deletes))
+	}
+	if len(index.deletes[0]) != 3 {
+		t.Fatalf("expected subtree delete to remove stale folder docs, got %#v", index.deletes[0])
+	}
+	if len(index.upserts) == 0 {
+		t.Fatalf("expected subtree rebuild upserts")
+	}
+
+	if got, err := index.DocumentCount(context.Background()); err != nil || got != 5 {
+		t.Fatalf("expected rebuilt document count=5, got=%d err=%v", got, err)
 	}
 }
 

@@ -15,6 +15,20 @@ import (
 
 const subtreeRepairPageSize int64 = 1000
 
+type subtreeRepairMode string
+
+const (
+	subtreeRepairModeBackfill subtreeRepairMode = "backfill"
+	subtreeRepairModeRebuild  subtreeRepairMode = "rebuild"
+)
+
+type subtreeRepairTarget struct {
+	folder       models.NpanFolder
+	localDocs    int64
+	expectedDocs int64
+	mode         subtreeRepairMode
+}
+
 type indexedTreeSnapshot struct {
 	rootID int64
 
@@ -188,17 +202,32 @@ func (m *SyncManager) listAllFolderChildren(ctx context.Context, api npan.API, f
 	return childFolders, directCount, nil
 }
 
-func (m *SyncManager) collectRepairTargets(ctx context.Context, api npan.API, snapshot *indexedTreeSnapshot, folder models.NpanFolder, limiter *indexer.RequestLimiter) ([]models.NpanFolder, error) {
+func classifySubtreeRepair(localDocs int64, expectedDocs int64) subtreeRepairMode {
+	if localDocs < expectedDocs {
+		return subtreeRepairModeBackfill
+	}
+	return subtreeRepairModeRebuild
+}
+
+func (m *SyncManager) collectRepairTargets(ctx context.Context, api npan.API, snapshot *indexedTreeSnapshot, folder models.NpanFolder, limiter *indexer.RequestLimiter) ([]subtreeRepairTarget, error) {
 	childFolders, liveDirectCount, err := m.listAllFolderChildren(ctx, api, folder.ID, limiter)
 	if err != nil {
 		return nil, fmt.Errorf("list live children for folder %d: %w", folder.ID, err)
 	}
 
+	localDocs := snapshot.subtreeDocCount(folder.ID)
+	expectedDocs := folder.ItemCount + 1
+
 	if snapshot.directChildCount(folder.ID) != liveDirectCount {
-		return []models.NpanFolder{folder}, nil
+		return []subtreeRepairTarget{{
+			folder:       folder,
+			localDocs:    localDocs,
+			expectedDocs: expectedDocs,
+			mode:         classifySubtreeRepair(localDocs, expectedDocs),
+		}}, nil
 	}
 
-	var targets []models.NpanFolder
+	var targets []subtreeRepairTarget
 	for _, child := range childFolders {
 		childTargets, err := m.collectRepairTargets(ctx, api, snapshot, child, limiter)
 		if err != nil {
@@ -210,9 +239,13 @@ func (m *SyncManager) collectRepairTargets(ctx context.Context, api npan.API, sn
 		return targets, nil
 	}
 
-	expectedDocs := folder.ItemCount + 1
-	if snapshot.subtreeDocCount(folder.ID) != expectedDocs {
-		return []models.NpanFolder{folder}, nil
+	if localDocs != expectedDocs {
+		return []subtreeRepairTarget{{
+			folder:       folder,
+			localDocs:    localDocs,
+			expectedDocs: expectedDocs,
+			mode:         classifySubtreeRepair(localDocs, expectedDocs),
+		}}, nil
 	}
 	return nil, nil
 }
@@ -341,12 +374,14 @@ func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, p
 		}
 
 		for _, target := range targets {
-			docIDs := snapshot.collectSubtreeDocIDs(target.ID)
-			if err := m.deleteSubtreeDocuments(ctx, docIDs); err != nil {
-				return fmt.Errorf("delete subtree docs for folder %d: %w", target.ID, err)
+			if target.mode == subtreeRepairModeRebuild {
+				docIDs := snapshot.collectSubtreeDocIDs(target.folder.ID)
+				if err := m.deleteSubtreeDocuments(ctx, docIDs); err != nil {
+					return fmt.Errorf("delete subtree docs for folder %d: %w", target.folder.ID, err)
+				}
 			}
 
-			if target.ID == rootID {
+			if target.folder.ID == rootID {
 				root := progress.RootProgress[fmt.Sprintf("%d", rootID)]
 				if root == nil {
 					continue
@@ -366,7 +401,7 @@ func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, p
 				continue
 			}
 
-			if err := m.rebuildNestedFolderSubtree(ctx, api, target, limiter); err != nil {
+			if err := m.rebuildNestedFolderSubtree(ctx, api, target.folder, limiter); err != nil {
 				return err
 			}
 		}
