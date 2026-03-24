@@ -88,6 +88,11 @@ message RootSyncProgress {
   CrawlStats stats = 4;
   int64 updated_at = 5;
   google.protobuf.Timestamp updated_at_ts = 6;
+  optional int64 current_folder_id = 7;
+  optional int64 current_page_id = 8;
+  optional int64 current_page_count = 9;
+  optional int64 queue_length = 10;
+  optional string error = 11;
 }
 
 message IncrementalSyncStats {

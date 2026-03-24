@@ -29,7 +29,12 @@ export const RootProgressSchema = z.object({
   status: z.string(),
   itemCount: z.number().int().nullable().optional(),
   estimatedTotalDocs: z.number().int().nullable().optional(),
+  currentFolderId: z.number().int().nullable().optional(),
+  currentPageId: z.number().int().nullable().optional(),
+  currentPageCount: z.number().int().nullable().optional(),
+  queueLength: z.number().int().nullable().optional(),
   updatedAt: z.number().int(),
+  error: z.string().optional(),
 }).extend({
   stats: CrawlStatsSchema,
   updatedAtTs: ProtoTimestampSchema.optional(),

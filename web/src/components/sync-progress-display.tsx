@@ -281,6 +281,25 @@ function RootDetails({
                     <span>索引统计 {actualDocs.toLocaleString()}</span>
                   </div>
                 )}
+                {root.status === 'running' && (
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-blue-600">
+                    {root.currentFolderId != null && (
+                      <span>当前目录 {root.currentFolderId}</span>
+                    )}
+                    {root.currentPageId != null && root.currentPageCount != null && root.currentPageCount > 0 && (
+                      <span>当前页 {root.currentPageId + 1}/{root.currentPageCount}</span>
+                    )}
+                    {root.currentPageId != null && (root.currentPageCount == null || root.currentPageCount <= 0) && (
+                      <span>当前页 {root.currentPageId + 1}</span>
+                    )}
+                    {root.queueLength != null && (
+                      <span>队列 {root.queueLength}</span>
+                    )}
+                  </div>
+                )}
+                {root.error && (
+                  <div className="mt-1 text-xs text-rose-500">{root.error}</div>
+                )}
               </div>
             )
           })}

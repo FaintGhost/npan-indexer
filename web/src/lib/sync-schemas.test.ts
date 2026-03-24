@@ -91,6 +91,28 @@ describe('RootProgressSchema', () => {
       expect(result.data.estimatedTotalDocs).toBeNull()
     }
   })
+
+  it('parses runtime progress fields', () => {
+    const result = RootProgressSchema.safeParse({
+      rootFolderId: 12345,
+      status: 'running',
+      estimatedTotalDocs: 500,
+      currentFolderId: 200,
+      currentPageId: 0,
+      currentPageCount: 4,
+      queueLength: 1,
+      stats: validStats,
+      updatedAt: 1700000500,
+      error: 'repairing subtree',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.currentFolderId).toBe(200)
+      expect(result.data.currentPageCount).toBe(4)
+      expect(result.data.queueLength).toBe(1)
+      expect(result.data.error).toBe('repairing subtree')
+    }
+  })
 })
 
 describe('SyncProgressSchema', () => {

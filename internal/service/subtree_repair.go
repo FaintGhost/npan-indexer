@@ -327,12 +327,42 @@ func refreshRootProgressFromSnapshot(progress *models.SyncProgressState, rootID 
 	root.Stats.FoldersVisited = snapshot.subtreeFolderCounts[rootID]
 	root.Stats.FilesIndexed = snapshot.subtreeFileCounts[rootID]
 	root.Stats.EndedAt = time.Now().UnixMilli()
+	root.Status = "done"
+	root.Error = ""
+	root.CurrentFolderID = nil
+	root.CurrentPageID = nil
+	root.CurrentPageCount = nil
+	zero := int64(0)
+	root.QueueLength = &zero
 	root.UpdatedAt = time.Now().UnixMilli()
 	if expectedDocs > 0 {
 		expectedCopy := expectedDocs
 		root.EstimatedTotalDocs = &expectedCopy
 	}
 	updateAggregateFromRoots(progress)
+}
+
+func markNestedRepairProgress(progress *models.SyncProgressState, rootID int64, targetFolderID int64) {
+	if progress == nil {
+		return
+	}
+	root := progress.RootProgress[fmt.Sprintf("%d", rootID)]
+	if root == nil {
+		return
+	}
+	root.Status = "running"
+	root.Error = ""
+	root.CurrentFolderID = &targetFolderID
+	pageID := int64(0)
+	root.CurrentPageID = &pageID
+	root.CurrentPageCount = nil
+	queueLength := int64(1)
+	root.QueueLength = &queueLength
+	root.UpdatedAt = time.Now().UnixMilli()
+	progress.ActiveRoot = &rootID
+	progress.Status = "running"
+	progress.LastError = ""
+	progress.UpdatedAt = time.Now().UnixMilli()
 }
 
 func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, progress *models.SyncProgressState, request SyncStartRequest, limiter *indexer.RequestLimiter) error {
@@ -374,6 +404,14 @@ func (m *SyncManager) runIncrementalRepairs(ctx context.Context, api npan.API, p
 		}
 
 		for _, target := range targets {
+			progressMu.Lock()
+			markNestedRepairProgress(progress, rootID, target.folder.ID)
+			if err := m.progressStore.Save(progress); err != nil {
+				progressMu.Unlock()
+				return err
+			}
+			progressMu.Unlock()
+
 			if target.mode == subtreeRepairModeRebuild {
 				docIDs := snapshot.collectSubtreeDocIDs(target.folder.ID)
 				if err := m.deleteSubtreeDocuments(ctx, docIDs); err != nil {

@@ -471,6 +471,14 @@ func toProtoRootProgressMap(in map[string]*models.RootSyncProgress) map[string]*
 			Stats:              toProtoCrawlStats(value.Stats),
 			UpdatedAt:          value.UpdatedAt,
 			UpdatedAtTs:        millisToProtoTimestamp(value.UpdatedAt),
+			CurrentFolderId:    value.CurrentFolderID,
+			CurrentPageId:      value.CurrentPageID,
+			CurrentPageCount:   value.CurrentPageCount,
+			QueueLength:        value.QueueLength,
+		}
+		if value.Error != "" {
+			errorCopy := value.Error
+			out[key].Error = &errorCopy
 		}
 	}
 	return out

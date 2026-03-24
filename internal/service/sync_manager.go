@@ -145,6 +145,18 @@ func (m *SyncManager) GetProgress() (*models.SyncProgressState, error) {
 		progress.Status = "interrupted"
 		progress.LastError = "进程重启，同步中断"
 		progress.ActiveRoot = nil
+		for _, root := range progress.RootProgress {
+			if root == nil || root.Status != "running" {
+				continue
+			}
+			root.Status = "interrupted"
+			root.Error = "进程重启，同步中断"
+			root.CurrentFolderID = nil
+			root.CurrentPageID = nil
+			root.CurrentPageCount = nil
+			root.QueueLength = nil
+			root.UpdatedAt = time.Now().UnixMilli()
+		}
 		progress.UpdatedAt = time.Now().UnixMilli()
 		if err := m.progressStore.Save(progress); err != nil {
 			slog.Warn("保存进度失败", "error", err)

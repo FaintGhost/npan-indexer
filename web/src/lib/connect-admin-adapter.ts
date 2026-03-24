@@ -85,9 +85,20 @@ function mapRootProgress(value: ProtoRootSyncProgress | undefined): RootProgress
       value?.estimatedTotalDocs != null
         ? int64ToNumber(value.estimatedTotalDocs)
         : null,
+    currentFolderId:
+      value?.currentFolderId != null ? int64ToNumber(value.currentFolderId) : null,
+    currentPageId:
+      value?.currentPageId != null ? int64ToNumber(value.currentPageId) : null,
+    currentPageCount:
+      value?.currentPageCount != null
+        ? int64ToNumber(value.currentPageCount)
+        : null,
+    queueLength:
+      value?.queueLength != null ? int64ToNumber(value.queueLength) : null,
     stats: mapCrawlStats(value?.stats),
     updatedAt: int64ToNumber(value?.updatedAt),
     updatedAtTs: timestampToProtoLike(value?.updatedAtTs),
+    error: value?.error ?? undefined,
   }
 }
 

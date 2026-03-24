@@ -484,8 +484,13 @@ func TestToProtoSyncProgressState_PopulatesTimestampSidecar(t *testing.T) {
 		},
 		RootProgress: map[string]*models.RootSyncProgress{
 			"1": {
-				RootFolderID: 1,
-				Status:       "running",
+				RootFolderID:    1,
+				Status:          "running",
+				CurrentFolderID: ptrInt64(42),
+				CurrentPageID:   ptrInt64(3),
+				CurrentPageCount: ptrInt64(9),
+				QueueLength:     ptrInt64(7),
+				Error:           "nested repair in progress",
 				Stats: models.CrawlStats{
 					StartedAt: statsStartedAt,
 					EndedAt:   statsEndedAt,
@@ -512,6 +517,12 @@ func TestToProtoSyncProgressState_PopulatesTimestampSidecar(t *testing.T) {
 	if root == nil || root.GetUpdatedAtTs() == nil {
 		t.Fatalf("expected root progress updated_at_ts to be set")
 	}
+	if root.GetCurrentFolderId() != 42 || root.GetCurrentPageId() != 3 || root.GetCurrentPageCount() != 9 || root.GetQueueLength() != 7 {
+		t.Fatalf("expected root progress runtime fields to round-trip, got %+v", root)
+	}
+	if root.GetError() != "nested repair in progress" {
+		t.Fatalf("expected root error to round-trip, got %q", root.GetError())
+	}
 	if got.GetStartedAtTs().AsTime().UnixMilli() != time.UnixMilli(startedAt).UnixMilli() {
 		t.Fatalf("unexpected started_at_ts value")
 	}
@@ -519,3 +530,5 @@ func TestToProtoSyncProgressState_PopulatesTimestampSidecar(t *testing.T) {
 		t.Fatalf("unexpected updated_at_ts value")
 	}
 }
+
+func ptrInt64(v int64) *int64 { return &v }

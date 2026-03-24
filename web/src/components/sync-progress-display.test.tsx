@@ -222,6 +222,45 @@ describe("SyncProgressDisplay", () => {
     expect(screen.getByText(/索引统计 10/)).toBeInTheDocument();
   });
 
+  it("shows current running repair target details", async () => {
+    const progress: SyncProgress = {
+      ...baseProgress,
+      roots: [100],
+      completedRoots: [],
+      rootNames: { 100: "PIXELHUE" },
+      rootProgress: {
+        "100": {
+          rootFolderId: 100,
+          status: "running",
+          estimatedTotalDocs: 4153,
+          currentFolderId: 200,
+          currentPageId: 0,
+          currentPageCount: 3,
+          queueLength: 1,
+          error: "repairing subtree",
+          stats: {
+            foldersVisited: 400,
+            filesIndexed: 2343,
+            filesDiscovered: 2343,
+            skippedFiles: 0,
+            pagesFetched: 40,
+            failedRequests: 0,
+            startedAt: 0,
+            endedAt: 0,
+          },
+          updatedAt: 0,
+        },
+      },
+    };
+
+    render(<SyncProgressDisplay progress={progress} />);
+    await userEvent.click(screen.getByRole("button", { name: /展开/i }));
+    expect(screen.getByText(/当前目录 200/)).toBeInTheDocument();
+    expect(screen.getByText(/当前页 1\/3/)).toBeInTheDocument();
+    expect(screen.getByText(/队列 1/)).toBeInTheDocument();
+    expect(screen.getByText(/repairing subtree/)).toBeInTheDocument();
+  });
+
   it("supports row toggle selection", async () => {
     const progress: SyncProgress = {
       ...baseProgress,

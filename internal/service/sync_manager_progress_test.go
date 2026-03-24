@@ -115,3 +115,53 @@ func TestGetProgress_RunningButStoreInterrupted(t *testing.T) {
     t.Fatalf("expected empty LastError, got %q", progress.LastError)
   }
 }
+
+func TestGetProgress_MarksRunningRootsInterruptedAfterRestart(t *testing.T) {
+  t.Parallel()
+
+  store := storage.NewJSONProgressStore(filepath.Join(t.TempDir(), "progress.json"))
+
+  currentFolderID := int64(200)
+  currentPageID := int64(3)
+  queueLength := int64(8)
+  if err := store.Save(&models.SyncProgressState{
+    Status:    "running",
+    StartedAt: 1000,
+    UpdatedAt: 2000,
+    RootProgress: map[string]*models.RootSyncProgress{
+      "100": {
+        RootFolderID:     100,
+        Status:           "running",
+        CurrentFolderID:  &currentFolderID,
+        CurrentPageID:    &currentPageID,
+        QueueLength:      &queueLength,
+        UpdatedAt:        2000,
+      },
+    },
+  }); err != nil {
+    t.Fatalf("failed to seed progress store: %v", err)
+  }
+
+  m := &SyncManager{progressStore: store}
+
+  progress, err := m.GetProgress()
+  if err != nil {
+    t.Fatalf("unexpected error: %v", err)
+  }
+  if progress == nil {
+    t.Fatalf("expected progress, got nil")
+  }
+  if progress.Status != "interrupted" {
+    t.Fatalf("expected interrupted progress, got %q", progress.Status)
+  }
+  root := progress.RootProgress["100"]
+  if root == nil {
+    t.Fatalf("expected root progress")
+  }
+  if root.Status != "interrupted" {
+    t.Fatalf("expected root interrupted, got %q", root.Status)
+  }
+  if root.CurrentFolderID != nil || root.CurrentPageID != nil || root.QueueLength != nil {
+    t.Fatalf("expected stale running pointers to be cleared, got %+v", root)
+  }
+}
