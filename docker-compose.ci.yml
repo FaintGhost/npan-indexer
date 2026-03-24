@@ -95,6 +95,21 @@ services:
       NPA_PUBLIC_INSTANTSEARCH_ENABLED: ${NPA_PUBLIC_INSTANTSEARCH_ENABLED:-false}
       E2E_ADMIN_API_KEY: ci-test-admin-api-key-1234
       CI: "true"
-    command: sh -c "npm install 2>/dev/null; npx playwright test"
+    command: >
+      sh -lc "
+        rm -rf /tmp/web &&
+        cp -a /web /tmp/web &&
+        cd /tmp/web &&
+        npm ci 2>/dev/null;
+        status=$?;
+        if [ $status -eq 0 ]; then
+          npx playwright test;
+          status=$?;
+        fi;
+        rm -rf /web/test-results /web/playwright-report;
+        cp -a /tmp/web/test-results /web/test-results 2>/dev/null || true;
+        cp -a /tmp/web/playwright-report /web/playwright-report 2>/dev/null || true;
+        exit $status
+      "
     profiles:
       - e2e
