@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sort"
 	"sync/atomic"
 	"testing"
 
@@ -24,11 +25,16 @@ import (
 // Only SearchUpdatedWindow is exercised; the rest return zero values.
 type mockAPI struct {
 	searchUpdatedWindowFn func(ctx context.Context, queryWords string, start *int64, end *int64, pageID int64) (map[string]any, error)
+	listFolderChildrenFn  func(ctx context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error)
+	getFolderInfoFn       func(ctx context.Context, folderID int64) (models.NpanFolder, error)
 }
 
 var _ npan.API = (*mockAPI)(nil)
 
-func (m *mockAPI) ListFolderChildren(_ context.Context, _ int64, _ int64) (models.FolderChildrenPage, error) {
+func (m *mockAPI) ListFolderChildren(ctx context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
+	if m.listFolderChildrenFn != nil {
+		return m.listFolderChildrenFn(ctx, folderID, pageID)
+	}
 	return models.FolderChildrenPage{}, nil
 }
 
@@ -55,7 +61,10 @@ func (m *mockAPI) SearchItems(_ context.Context, _ models.RemoteSearchParams) (m
 	return models.RemoteSearchResponse{}, nil
 }
 
-func (m *mockAPI) GetFolderInfo(_ context.Context, folderID int64) (models.NpanFolder, error) {
+func (m *mockAPI) GetFolderInfo(ctx context.Context, folderID int64) (models.NpanFolder, error) {
+	if m.getFolderInfoFn != nil {
+		return m.getFolderInfoFn(ctx, folderID)
+	}
 	return models.NpanFolder{ID: folderID}, nil
 }
 
@@ -87,11 +96,98 @@ func (s *incrementalStubIndex) DeleteDocumentsWithContext(ctx context.Context, i
 	return &meilisearch.TaskInfo{TaskUID: 1}, nil
 }
 
+type inMemoryIndexStub struct {
+	docs      map[string]models.IndexDocument
+	upserts   [][]models.IndexDocument
+	deletes   [][]string
+	deleteAll int
+}
+
+func newInMemoryIndexStub(docs []models.IndexDocument) *inMemoryIndexStub {
+	items := make(map[string]models.IndexDocument, len(docs))
+	for _, doc := range docs {
+		items[doc.DocID] = doc
+	}
+	return &inMemoryIndexStub{docs: items}
+}
+
+func (s *inMemoryIndexStub) EnsureSettings(context.Context) error { return nil }
+
+func (s *inMemoryIndexStub) UpsertDocuments(_ context.Context, docs []models.IndexDocument) error {
+	cloned := append([]models.IndexDocument(nil), docs...)
+	s.upserts = append(s.upserts, cloned)
+	for _, doc := range docs {
+		s.docs[doc.DocID] = doc
+	}
+	return nil
+}
+
+func (s *inMemoryIndexStub) DeleteDocuments(_ context.Context, docIDs []string) error {
+	cloned := append([]string(nil), docIDs...)
+	s.deletes = append(s.deletes, cloned)
+	for _, docID := range docIDs {
+		delete(s.docs, docID)
+	}
+	return nil
+}
+
+func (s *inMemoryIndexStub) DeleteAllDocuments(_ context.Context) error {
+	s.deleteAll++
+	s.docs = map[string]models.IndexDocument{}
+	return nil
+}
+
+func (s *inMemoryIndexStub) Search(params models.LocalSearchParams) ([]models.IndexDocument, int64, error) {
+	items := make([]models.IndexDocument, 0, len(s.docs))
+	for _, doc := range s.docs {
+		if params.ParentID != nil && doc.ParentID != *params.ParentID {
+			continue
+		}
+		if params.Type != "" && params.Type != "all" && string(doc.Type) != params.Type {
+			continue
+		}
+		if !params.IncludeDeleted && (doc.InTrash || doc.IsDeleted) {
+			continue
+		}
+		items = append(items, doc)
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].DocID == items[j].DocID {
+			return items[i].SourceID < items[j].SourceID
+		}
+		return items[i].DocID < items[j].DocID
+	})
+	total := int64(len(items))
+	page := params.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	start := int((page - 1) * pageSize)
+	if start >= len(items) {
+		return []models.IndexDocument{}, total, nil
+	}
+	end := start + int(pageSize)
+	if end > len(items) {
+		end = len(items)
+	}
+	return append([]models.IndexDocument(nil), items[start:end]...), total, nil
+}
+
+func (s *inMemoryIndexStub) Ping() error { return nil }
+
+func (s *inMemoryIndexStub) DocumentCount(context.Context) (int64, error) {
+	return int64(len(s.docs)), nil
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
-func newTestSyncManager(t *testing.T, idx *search.MeiliIndex) (*SyncManager, string) {
+func newTestSyncManager(t *testing.T, idx search.IndexOperator) (*SyncManager, string) {
 	t.Helper()
 	tmpDir := t.TempDir()
 
@@ -453,5 +549,186 @@ func TestRunIncremental_DefaultQueryAndOpenEndedWindow(t *testing.T) {
 	}
 	if capturedEnd != nil {
 		t.Fatalf("expected nil end for open-ended incremental window, got %v", *capturedEnd)
+	}
+}
+
+func seedRepairProgress(t *testing.T, mgr *SyncManager, checkpointFile string) {
+	t.Helper()
+	err := mgr.progressStore.Save(&models.SyncProgressState{
+		Status:         "done",
+		Mode:           string(models.SyncModeFull),
+		StartedAt:      1700000000000,
+		UpdatedAt:      1700000000000,
+		Roots:          []int64{100},
+		CompletedRoots: []int64{100},
+		RootNames:      map[int64]string{100: "Repair Root"},
+		RootProgress: map[string]*models.RootSyncProgress{
+			"100": {
+				RootFolderID:   100,
+				CheckpointFile: checkpointFile,
+				Status:         "done",
+				Stats: models.CrawlStats{
+					FoldersVisited: 1,
+					FilesIndexed:   0,
+					StartedAt:      1700000000000,
+					EndedAt:        1700000000000,
+				},
+				UpdatedAt: 1700000000000,
+			},
+		},
+		AggregateStats: models.CrawlStats{
+			FoldersVisited: 1,
+			FilesIndexed:   0,
+			StartedAt:      1700000000000,
+			EndedAt:        1700000000000,
+		},
+	})
+	if err != nil {
+		t.Fatalf("seed progress: %v", err)
+	}
+}
+
+func TestRunIncrementalPath_RepairsOnlyDriftedSubfolderWhenCountsDisagree(t *testing.T) {
+	t.Parallel()
+
+	index := newInMemoryIndexStub([]models.IndexDocument{
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 100, Name: "全部文件", ParentID: 100}, "全部文件"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 200, Name: "Sub A", ParentID: 100}, "folder/200/Sub A"),
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 300, Name: "Sub B", ParentID: 100}, "folder/300/Sub B"),
+		search.MapFileToIndexDoc(models.NpanFile{ID: 2, Name: "keep.txt", ParentID: 300}, "file/2/keep.txt"),
+	})
+	mgr, tmpDir := newTestSyncManager(t, index)
+	seedRepairProgress(t, mgr, filepath.Join(tmpDir, "repair-checkpoint.json"))
+
+	var inspectRootCalls int32
+	var inspectSubACalls int32
+	var inspectSubBCalls int32
+	api := &mockAPI{
+		searchUpdatedWindowFn: func(_ context.Context, _ string, _ *int64, _ *int64, _ int64) (map[string]any, error) {
+			return makeOnePage(nil, nil), nil
+		},
+		getFolderInfoFn: func(_ context.Context, folderID int64) (models.NpanFolder, error) {
+			if folderID == 100 {
+				return models.NpanFolder{ID: 100, Name: "Repair Root", ItemCount: 4}, nil
+			}
+			return models.NpanFolder{ID: folderID}, nil
+		},
+		listFolderChildrenFn: func(_ context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
+			switch folderID {
+			case 100:
+				atomic.AddInt32(&inspectRootCalls, 1)
+				return models.FolderChildrenPage{
+					PageCount:  1,
+					TotalCount: 2,
+					Folders: []models.NpanFolder{
+						{ID: 200, Name: "Sub A", ParentID: 100, ItemCount: 1},
+						{ID: 300, Name: "Sub B", ParentID: 100, ItemCount: 1},
+					},
+				}, nil
+			case 200:
+				atomic.AddInt32(&inspectSubACalls, 1)
+				return models.FolderChildrenPage{
+					PageCount:  1,
+					TotalCount: 1,
+					Files: []models.NpanFile{
+						{ID: 1, Name: "missing.txt", ParentID: 200},
+					},
+				}, nil
+			case 300:
+				atomic.AddInt32(&inspectSubBCalls, 1)
+				return models.FolderChildrenPage{
+					PageCount:  1,
+					TotalCount: 1,
+					Files: []models.NpanFile{
+						{ID: 2, Name: "keep.txt", ParentID: 300},
+					},
+				}, nil
+			}
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	err := mgr.runIncrementalPath(context.Background(), api, SyncStartRequest{
+		Mode:             models.SyncModeIncremental,
+		IncrementalQuery: "*",
+		WindowOverlapMS:  5000,
+	}, &models.SyncState{LastSyncTime: 1700000000000}, mgr.effectiveSyncStateStore())
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if atomic.LoadInt32(&inspectRootCalls) == 0 || atomic.LoadInt32(&inspectSubACalls) < 2 || atomic.LoadInt32(&inspectSubBCalls) == 0 {
+		t.Fatalf("expected live inspection plus targeted subfolder rebuild, got root=%d subA=%d subB=%d",
+			inspectRootCalls, inspectSubACalls, inspectSubBCalls)
+	}
+
+	if len(index.deletes) != 1 {
+		t.Fatalf("expected one targeted delete batch, got %d", len(index.deletes))
+	}
+	if len(index.deletes[0]) != 1 || index.deletes[0][0] != "folder_200" {
+		t.Fatalf("expected targeted delete for folder_200 only, got %#v", index.deletes[0])
+	}
+	if len(index.upserts) == 0 {
+		t.Fatalf("expected subtree rebuild upserts")
+	}
+
+	progress, err := mgr.progressStore.Load()
+	if err != nil {
+		t.Fatalf("load progress: %v", err)
+	}
+	root := progress.RootProgress["100"]
+	if root == nil {
+		t.Fatalf("expected repaired root progress")
+	}
+	if root.Stats.FoldersVisited != 3 || root.Stats.FilesIndexed != 2 {
+		t.Fatalf("expected refreshed stats folders=3 files=2, got %+v", root.Stats)
+	}
+	if progress.IncrementalStats == nil || progress.IncrementalStats.ChangesFetched != 0 {
+		t.Fatalf("expected no incremental changes, got %#v", progress.IncrementalStats)
+	}
+	if got, err := index.DocumentCount(context.Background()); err != nil || got != 5 {
+		t.Fatalf("expected repaired document count=5, got=%d err=%v", got, err)
+	}
+}
+
+func TestRunIncrementalPath_SkipsRepairWhenChangesFetched(t *testing.T) {
+	t.Parallel()
+
+	index := newInMemoryIndexStub([]models.IndexDocument{
+		search.MapFolderToIndexDoc(models.NpanFolder{ID: 100, Name: "全部文件", ParentID: 100}, "全部文件"),
+	})
+	mgr, tmpDir := newTestSyncManager(t, index)
+	seedRepairProgress(t, mgr, filepath.Join(tmpDir, "repair-checkpoint.json"))
+
+	var repairCalls int32
+	api := &mockAPI{
+		searchUpdatedWindowFn: func(_ context.Context, _ string, _ *int64, _ *int64, _ int64) (map[string]any, error) {
+			return makeOnePage(
+				[]map[string]any{
+					makeFileEntry(1, "changed-file", 100, 1, false, false),
+				},
+				nil,
+			), nil
+		},
+		getFolderInfoFn: func(_ context.Context, folderID int64) (models.NpanFolder, error) {
+			return models.NpanFolder{ID: folderID, Name: "Repair Root", ItemCount: 1}, nil
+		},
+		listFolderChildrenFn: func(_ context.Context, folderID int64, pageID int64) (models.FolderChildrenPage, error) {
+			atomic.AddInt32(&repairCalls, 1)
+			return models.FolderChildrenPage{PageCount: 1}, nil
+		},
+	}
+
+	err := mgr.runIncrementalPath(context.Background(), api, SyncStartRequest{
+		Mode:             models.SyncModeIncremental,
+		IncrementalQuery: "*",
+		WindowOverlapMS:  5000,
+	}, &models.SyncState{LastSyncTime: 1700000000000}, mgr.effectiveSyncStateStore())
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if atomic.LoadInt32(&repairCalls) != 0 {
+		t.Fatalf("expected repair crawl to be skipped when incremental changes were fetched")
 	}
 }

@@ -10,6 +10,11 @@ import {
 type FileCategoryRefinementItem = ReturnType<typeof useRefinementList>['items'][number]
 type FileCategoryItemMap = Partial<Record<Exclude<SearchFilter, 'all'>, FileCategoryRefinementItem>>
 type CurrentRefinementItems = ReturnType<typeof useCurrentRefinements>['items']
+type SpecificSearchFilter = Exclude<SearchFilter, 'all'>
+
+function isSpecificSearchFilter(filter: SearchFilter): filter is SpecificSearchFilter {
+  return filter !== DEFAULT_FILTER
+}
 
 function getFilterFromItem(item: FileCategoryRefinementItem | undefined): SearchFilter {
   return getSearchFilterFromRefinement(typeof item?.label === 'string' ? item.label : undefined)
@@ -34,7 +39,7 @@ function getSelectedFilter(
 function getFilterItemMap(items: Array<FileCategoryRefinementItem>): FileCategoryItemMap {
   return items.reduce<FileCategoryItemMap>((result, item) => {
     const filter = getFilterFromItem(item)
-    if (filter !== DEFAULT_FILTER) {
+    if (isSpecificSearchFilter(filter)) {
       result[filter] = item
     }
     return result
@@ -70,10 +75,10 @@ export function SearchFilters() {
       return
     }
 
-    const activeToken = activeFilter === DEFAULT_FILTER
-      ? undefined
-      : getRefinementToken(activeFilter, filterItems)
-    if (nextFilter === DEFAULT_FILTER) {
+    const activeToken = isSpecificSearchFilter(activeFilter)
+      ? getRefinementToken(activeFilter, filterItems)
+      : undefined
+    if (!isSpecificSearchFilter(nextFilter)) {
       if (activeToken) {
         refine(activeToken)
       }

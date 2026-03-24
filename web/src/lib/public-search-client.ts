@@ -1,4 +1,4 @@
-import type { InstantMeiliSearchObject } from '@meilisearch/instant-meilisearch'
+import type { SearchClient } from 'algoliasearch-helper/types/algoliasearch.js'
 import { createMeiliPublicSearchClient } from '@/lib/meili-search-client'
 import { createTypesensePublicSearchClient } from '@/lib/typesense-search-client'
 
@@ -12,14 +12,12 @@ export interface PublicSearchClientConfig {
 }
 
 export interface PublicSearchClientInstance {
-  searchClient: {
-    search: (requests: Array<Record<string, unknown>>) => Promise<{ results: Array<Record<string, unknown>> }>
-  }
+  searchClient: SearchClient
 }
 
 export function createPublicSearchClient(
   config: PublicSearchClientConfig,
-): InstantMeiliSearchObject | PublicSearchClientInstance {
+): PublicSearchClientInstance {
   if (config.provider === 'typesense') {
     return createTypesensePublicSearchClient(config)
   }

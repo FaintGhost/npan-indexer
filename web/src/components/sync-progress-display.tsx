@@ -229,7 +229,7 @@ function RootDetails({
                   : 'text-slate-500'
 
             const rootName = rootNames?.[key]
-            const estimated = root.estimatedTotalDocs
+            const displayedCount = root.itemCount ?? root.estimatedTotalDocs
             const actualDocs = root.stats.filesIndexed + root.stats.foldersVisited
             const rootID = root.rootFolderId
             const selected = rootSelection?.selectedRootIds.includes(rootID) ?? false
@@ -273,10 +273,12 @@ function RootDetails({
                     <span className="text-rose-400">{root.stats.failedRequests} 失败</span>
                   )}
                 </div>
-                {estimated != null && (
+                {(displayedCount != null || actualDocs > 0) && (
                   <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                    <span>估计 {estimated.toLocaleString()}</span>
-                    <span>实际 {actualDocs.toLocaleString()}</span>
+                    {displayedCount != null && (
+                      <span>官网总计 {displayedCount.toLocaleString()}</span>
+                    )}
+                    <span>索引统计 {actualDocs.toLocaleString()}</span>
                   </div>
                 )}
               </div>

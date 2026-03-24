@@ -475,16 +475,16 @@ describe('AdminSyncPage', () => {
     await user.click(screen.getByRole('button', { name: /刷新目录详情/i }))
     await user.click(screen.getByRole('button', { name: /展开/i }))
 
-    expect(await screen.findByText('估计 11')).toBeInTheDocument()
-    expect(screen.getByText('估计 21')).toBeInTheDocument()
+    expect(await screen.findByText('官网总计 10')).toBeInTheDocument()
+    expect(screen.getByText('官网总计 20')).toBeInTheDocument()
 
     await advanceTimers(2100)
 
     await waitFor(() => {
       expect(progressRequestCount).toBeGreaterThan(1)
     })
-    expect(screen.getByText('估计 11')).toBeInTheDocument()
-    expect(screen.getByText('估计 21')).toBeInTheDocument()
+    expect(screen.getByText('官网总计 10')).toBeInTheDocument()
+    expect(screen.getByText('官网总计 20')).toBeInTheDocument()
   })
 
   it('keeps inspected catalog details when later progress requests return not found', async () => {
@@ -544,7 +544,7 @@ describe('AdminSyncPage', () => {
     await user.click(screen.getByRole('button', { name: /刷新目录详情/i }))
     await user.click(screen.getByRole('button', { name: /展开/i }))
 
-    expect(await screen.findByText('估计 11')).toBeInTheDocument()
+    expect(await screen.findByText('官网总计 10')).toBeInTheDocument()
 
     await advanceTimers(2100)
 
@@ -552,7 +552,7 @@ describe('AdminSyncPage', () => {
       expect(progressRequestCount).toBeGreaterThan(1)
     })
     expect(screen.queryByText('暂无同步记录')).not.toBeInTheDocument()
-    expect(screen.getByText('估计 11')).toBeInTheDocument()
+    expect(screen.getByText('官网总计 10')).toBeInTheDocument()
   })
 
   it('full sync with force rebuild explicitly disables resume', async () => {

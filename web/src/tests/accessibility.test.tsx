@@ -46,15 +46,14 @@ describe('Accessibility', () => {
     expect(screen.getByRole('button', { name: /确认/i })).toBeInTheDocument()
   })
 
-  it('search page results area exists', () => {
+  it('search page results area exists', async () => {
     server.use(
       http.post('/npan.v1.AppService/AppSearch', () => {
         return HttpResponse.json({ result: { items: [], total: '0' } })
       }),
     )
     render(<SearchPage />, { wrapper })
-    // Initial state should render without errors
-    expect(screen.getByText('等待探索')).toBeInTheDocument()
+    expect(await screen.findByText('等待探索')).toBeInTheDocument()
   })
 
   it('filter controls have accessible radio semantics', async () => {

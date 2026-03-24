@@ -234,6 +234,17 @@ func containsInt64(items []int64, target int64) bool {
 	return false
 }
 
+func removeInt64(items []int64, target int64) []int64 {
+	result := make([]int64, 0, len(items))
+	for _, item := range items {
+		if item == target {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
 func uniqueSorted(values []int64) []int64 {
 	seen := map[int64]struct{}{}
 	result := make([]int64, 0, len(values))
@@ -553,7 +564,7 @@ func restoreProgress(existing *models.SyncProgressState, roots []int64, rootChec
 	return &restored
 }
 
-func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress *models.SyncProgressState, progressMu *sync.Mutex, rootID int64, checkpointFile string, progressEvery int, limiter *indexer.RequestLimiter) error {
+func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress *models.SyncProgressState, progressMu *sync.Mutex, rootID int64, checkpointFile string, progressEvery int, limiter *indexer.RequestLimiter, resetStats bool) error {
 	key := fmt.Sprintf("%d", rootID)
 
 	progressMu.Lock()
@@ -567,6 +578,14 @@ func (m *SyncManager) runSingleRoot(ctx context.Context, api npan.API, progress 
 	rp.Status = "running"
 	rp.Error = ""
 	now := time.Now().UnixMilli()
+	if resetStats {
+		resumeBase = models.CrawlStats{
+			StartedAt: now,
+			EndedAt:   now,
+		}
+		rp.Stats = resumeBase
+		progress.CompletedRoots = removeInt64(progress.CompletedRoots, rootID)
+	}
 	rp.UpdatedAt = now
 	progress.ActiveRoot = &rootID
 	updateAggregateFromRoots(progress)
@@ -934,7 +953,7 @@ func (m *SyncManager) run(ctx context.Context, api npan.API, request SyncStartRe
 			}
 			defer func() { <-semaphore }()
 
-			if err := m.runSingleRoot(runCtx, api, progress, progressMu, currentRoot, rootCheckpointMap[currentRoot], progressEvery, limiter); err != nil {
+			if err := m.runSingleRoot(runCtx, api, progress, progressMu, currentRoot, rootCheckpointMap[currentRoot], progressEvery, limiter, false); err != nil {
 				if errors.Is(err, context.Canceled) && ctx.Err() != nil {
 					return
 				}
@@ -1068,6 +1087,9 @@ func (m *SyncManager) runIncrementalPath(ctx context.Context, api npan.API, requ
 	}
 
 	err := m.runIncremental(ctx, api, progress, request, limiter)
+	if err == nil {
+		err = m.runIncrementalRepairs(ctx, api, progress, request, limiter)
+	}
 
 	if err != nil {
 		if ctx.Err() != nil {

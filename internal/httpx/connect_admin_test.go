@@ -174,7 +174,7 @@ func (a *adminConnectTestAPI) ListDepartmentFolders(context.Context, int64) ([]m
 	return nil, errors.New("not implemented")
 }
 
-func (a *adminConnectTestAPI) SearchItems(context.Context, models.RemoteSearchParams) (models.RemoteSearchResponse, error) {
+func (a *adminConnectTestAPI) SearchItems(_ context.Context, params models.RemoteSearchParams) (models.RemoteSearchResponse, error) {
 	return models.RemoteSearchResponse{}, errors.New("not implemented")
 }
 
@@ -237,6 +237,9 @@ func TestConnectAdminInspectRoots_PartialSuccess(t *testing.T) {
 	}
 	if len(resp.Msg.GetErrors()) != 1 {
 		t.Fatalf("expected 1 error, got %d", len(resp.Msg.GetErrors()))
+	}
+	if got := resp.Msg.GetItems()[0].GetItemCount(); got != 10 {
+		t.Fatalf("expected item_count=10, got %d", got)
 	}
 	if got := resp.Msg.GetItems()[0].GetEstimatedTotalDocs(); got != 11 {
 		t.Fatalf("expected estimated_total_docs=11, got %d", got)

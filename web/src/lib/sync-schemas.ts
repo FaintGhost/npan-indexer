@@ -27,6 +27,7 @@ export type CrawlStats = z.infer<typeof CrawlStatsSchema>
 export const RootProgressSchema = z.object({
   rootFolderId: z.number().int(),
   status: z.string(),
+  itemCount: z.number().int().nullable().optional(),
   estimatedTotalDocs: z.number().int().nullable().optional(),
   updatedAt: z.number().int(),
 }).extend({

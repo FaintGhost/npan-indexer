@@ -117,12 +117,13 @@ function mergeRootProgressMaps(
       merged[key] = overlayValue
       continue
     }
-    merged[key] = {
-      ...overlayValue,
-      ...incomingValue,
-      estimatedTotalDocs:
-        incomingValue.estimatedTotalDocs ?? overlayValue.estimatedTotalDocs,
-      updatedAtTs: incomingValue.updatedAtTs ?? overlayValue.updatedAtTs,
+      merged[key] = {
+        ...overlayValue,
+        ...incomingValue,
+        itemCount: incomingValue.itemCount ?? overlayValue.itemCount,
+        estimatedTotalDocs:
+          incomingValue.estimatedTotalDocs ?? overlayValue.estimatedTotalDocs,
+        updatedAtTs: incomingValue.updatedAtTs ?? overlayValue.updatedAtTs,
       stats: {
         ...overlayValue.stats,
         ...incomingValue.stats,
@@ -529,6 +530,7 @@ export function AdminSyncPage() {
               if (existing) {
                 catalogRootProgress[key] = {
                   ...existing,
+                  itemCount: item.item_count,
                   estimatedTotalDocs: item.estimated_total_docs,
                   updatedAt: now,
                 }
@@ -537,6 +539,7 @@ export function AdminSyncPage() {
               catalogRootProgress[key] = {
                 rootFolderId: item.folder_id,
                 status: 'pending',
+                itemCount: item.item_count,
                 estimatedTotalDocs: item.estimated_total_docs,
                 stats: {
                   foldersVisited: 0,

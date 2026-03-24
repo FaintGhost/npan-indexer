@@ -1,3 +1,4 @@
+import type { SearchClient } from 'algoliasearch-helper/types/algoliasearch.js'
 import { normalizeSearchQuery } from '@/lib/search-query-normalizer'
 
 export const PUBLIC_BASELINE_FILTER = 'type = "file" AND is_deleted = false AND in_trash = false'
@@ -112,9 +113,7 @@ export function adaptPublicSearchRequest<T extends PublicSearchRequest>(request:
 }
 
 type PublicSearchClientLike = {
-  searchClient: {
-    search: (requests: PublicSearchRequest[]) => Promise<unknown>
-  }
+  searchClient: SearchClient
 }
 
 export function wrapPublicSearchClient<T extends PublicSearchClientLike>(client: T): T {
@@ -124,7 +123,7 @@ export function wrapPublicSearchClient<T extends PublicSearchClientLike>(client:
     ...client,
     searchClient: {
       ...client.searchClient,
-      search(requests) {
+      search(requests: Parameters<SearchClient['search']>[0]) {
         if (!requests.some((request) => hasNonEmptyQuery(request))) {
           return Promise.resolve(createEmptySearchResponse(requests))
         }

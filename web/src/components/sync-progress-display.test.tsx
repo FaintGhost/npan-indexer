@@ -182,8 +182,8 @@ describe("SyncProgressDisplay", () => {
     render(<SyncProgressDisplay progress={progress} />);
     await userEvent.click(screen.getByRole("button", { name: /展开/i }));
 
-    expect(screen.getByText(/估计 4,152/)).toBeInTheDocument();
-    expect(screen.getByText(/实际 512/)).toBeInTheDocument();
+    expect(screen.getByText(/官网总计 4,152/)).toBeInTheDocument();
+    expect(screen.getByText(/索引统计 512/)).toBeInTheDocument();
   });
 
   it("renders catalogRootProgress when present", async () => {
@@ -198,6 +198,7 @@ describe("SyncProgressDisplay", () => {
         "100": {
           rootFolderId: 100,
           status: "done",
+          itemCount: 10,
           estimatedTotalDocs: 10,
           stats: {
             foldersVisited: 1,
@@ -217,7 +218,8 @@ describe("SyncProgressDisplay", () => {
     render(<SyncProgressDisplay progress={progress} />);
     await userEvent.click(screen.getByRole("button", { name: /展开/i }));
     expect(screen.getByText(/PIXELHUE/)).toBeInTheDocument();
-    expect(screen.getByText(/实际 10/)).toBeInTheDocument();
+    expect(screen.getByText(/官网总计 10/)).toBeInTheDocument();
+    expect(screen.getByText(/索引统计 10/)).toBeInTheDocument();
   });
 
   it("supports row toggle selection", async () => {

@@ -152,7 +152,8 @@ func (s *adminConnectServer) InspectRoots(ctx context.Context, req *connect.Requ
 				continue
 			}
 
-			estimate := folder.ItemCount + 1
+			itemCount := folder.ItemCount
+			estimate := itemCount + 1
 			if estimate < 0 {
 				estimate = 0
 			}
@@ -162,7 +163,7 @@ func (s *adminConnectServer) InspectRoots(ctx context.Context, req *connect.Requ
 				item: &npanv1.InspectRootItem{
 					FolderId:           job.folderID,
 					Name:               folder.Name,
-					ItemCount:          folder.ItemCount,
+					ItemCount:          itemCount,
 					EstimatedTotalDocs: estimate,
 				},
 			}

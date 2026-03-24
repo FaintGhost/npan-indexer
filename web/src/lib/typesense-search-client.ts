@@ -1,3 +1,4 @@
+import type { SearchClient } from 'algoliasearch-helper/types/algoliasearch.js'
 import type { PublicSearchClientConfig, PublicSearchClientInstance } from '@/lib/public-search-client'
 
 type PublicSearchRequest = {
@@ -174,46 +175,50 @@ function buildTypesenseURL(config: PublicSearchClientConfig, request: PublicSear
 export function createTypesensePublicSearchClient(
   config: PublicSearchClientConfig,
 ): PublicSearchClientInstance {
+  const search: SearchClient['search'] = async <T>(
+    requests: Parameters<SearchClient['search']>[0],
+  ) => {
+    const results = await Promise.all(requests.map(async (request: Parameters<SearchClient['search']>[0][number]) => {
+      const response = await fetch(buildTypesenseURL(config, request), {
+        method: 'GET',
+        headers: {
+          'X-TYPESENSE-API-KEY': config.searchApiKey,
+        },
+      })
+      if (!response.ok) {
+        throw new Error(`Typesense public search failed: ${response.status}`)
+      }
+
+      const payload = await response.json() as TypesenseSearchResponse
+      const hitsPerPage = readPositiveInt(request.params?.hitsPerPage, 20)
+      const page = readPositiveInt(request.params?.page, 0)
+      const nbHits = typeof payload.found === 'number' ? payload.found : 0
+
+      return {
+        index: readString(request.indexName) || config.indexName,
+        hitsPerPage,
+        page,
+        nbPages: Math.max(1, Math.ceil(nbHits / hitsPerPage)),
+        nbHits,
+        processingTimeMS: typeof payload.search_time_ms === 'number' ? payload.search_time_ms : 0,
+        query: getQuery(request).trim(),
+        hits: (payload.hits ?? []).map((hit) => ({
+          ...(hit.document ?? {}),
+          _highlightResult: toHighlightResult(hit),
+        })) as Array<T>,
+        exhaustiveNbHits: true,
+        facets: toFacetMap(payload.facet_counts),
+        facets_stats: {},
+        params: '',
+      }
+    }))
+
+    return { results }
+  }
+
   return {
     searchClient: {
-      async search(requests: PublicSearchRequest[]) {
-        const results = await Promise.all(requests.map(async (request) => {
-          const response = await fetch(buildTypesenseURL(config, request), {
-            method: 'GET',
-            headers: {
-              'X-TYPESENSE-API-KEY': config.searchApiKey,
-            },
-          })
-          if (!response.ok) {
-            throw new Error(`Typesense public search failed: ${response.status}`)
-          }
-
-          const payload = await response.json() as TypesenseSearchResponse
-          const hitsPerPage = readPositiveInt(request.params?.hitsPerPage, 20)
-          const page = readPositiveInt(request.params?.page, 0)
-          const nbHits = typeof payload.found === 'number' ? payload.found : 0
-
-          return {
-            index: readString(request.indexName) || config.indexName,
-            hitsPerPage,
-            page,
-            nbPages: Math.max(1, Math.ceil(nbHits / hitsPerPage)),
-            nbHits,
-            processingTimeMS: typeof payload.search_time_ms === 'number' ? payload.search_time_ms : 0,
-            query: getQuery(request).trim(),
-            hits: (payload.hits ?? []).map((hit) => ({
-              ...(hit.document ?? {}),
-              _highlightResult: toHighlightResult(hit),
-            })),
-            exhaustiveNbHits: true,
-            facets: toFacetMap(payload.facet_counts),
-            facets_stats: {},
-            params: '',
-          }
-        }))
-
-        return { results }
-      },
+      search,
     },
   }
 }

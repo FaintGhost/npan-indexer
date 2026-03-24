@@ -1,28 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-
-const currentDir = dirname(fileURLToPath(import.meta.url))
-const normalizerPath = resolve(currentDir, 'search-query-normalizer.ts')
-const hasNormalizerModule = existsSync(normalizerPath)
-
-async function loadNormalizer() {
-  const moduleUrl = pathToFileURL(normalizerPath).href
-  return import(/* @vite-ignore */ moduleUrl)
-}
+import { normalizeSearchQuery } from './search-query-normalizer'
 
 describe('normalizeSearchQuery', () => {
   it('requires a dedicated query normalizer module for legacy preprocess alignment', () => {
-    expect(
-      hasNormalizerModule,
-      'expected search-query-normalizer module to exist so public search can align outbound query with legacy preprocessQuery semantics for extension, version, and multi-word queries',
-    ).toBe(true)
+    expect(typeof normalizeSearchQuery).toBe('function')
   })
-
-  if (!hasNormalizerModule) {
-    return
-  }
 
   it.each([
     ['规格书.pdf', 'pdf 规格书'],
@@ -30,7 +12,6 @@ describe('normalizeSearchQuery', () => {
     ['mx40 spec pdf', 'pdf mx40 spec'],
     ['mx6000 V1.5.0 pdf', 'pdf mx6000 1.5.0'],
   ])('aligns legacy preprocess semantics for %s', async (input, expected) => {
-    const { normalizeSearchQuery } = await loadNormalizer()
     expect(normalizeSearchQuery(input)).toBe(expected)
   })
 
@@ -40,7 +21,6 @@ describe('normalizeSearchQuery', () => {
     ['VIVO手机', 'VIVO手机'],
     ['4.9.4.0', '4.9.4.0'],
   ])('keeps unsupported query %s unchanged', async (input, expected) => {
-    const { normalizeSearchQuery } = await loadNormalizer()
     expect(normalizeSearchQuery(input)).toBe(expected)
   })
 })
