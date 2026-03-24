@@ -154,3 +154,34 @@ func TestFetchIncrementalChanges_NoRetryOnNonRetriableError(t *testing.T) {
 		t.Fatalf("expected no retry, attempts=1, got %d", attempts)
 	}
 }
+
+func TestFetchIncrementalChanges_OpenEndedWindowOmitsZeroUntil(t *testing.T) {
+	t.Parallel()
+
+	since := int64(123)
+	calls := 0
+	_, err := FetchIncrementalChanges(context.Background(), IncrementalFetchOptions{
+		Since: since,
+		Until: 0,
+		Retry: models.RetryPolicyOptions{MaxRetries: 1},
+		Fetch: func(_ context.Context, start *int64, end *int64, pageID int64) (map[string]any, error) {
+			calls++
+			if pageID != 0 {
+				t.Fatalf("expected first page only, got %d", pageID)
+			}
+			if start == nil || *start != since {
+				t.Fatalf("expected start=%d, got %v", since, start)
+			}
+			if end != nil {
+				t.Fatalf("expected open-ended window with nil end, got %v", *end)
+			}
+			return map[string]any{"page_count": 1}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected 1 call, got %d", calls)
+	}
+}

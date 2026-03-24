@@ -32,15 +32,24 @@ func FetchIncrementalChanges(ctx context.Context, opts IncrementalFetchOptions) 
 		return nil, fmt.Errorf("缺少 Fetch 函数")
 	}
 
-	start := opts.Since
-	end := opts.Until
+	var start *int64
+	if opts.Since > 0 {
+		since := opts.Since
+		start = &since
+	}
+
+	var end *int64
+	if opts.Until > 0 {
+		until := opts.Until
+		end = &until
+	}
 
 	pageID := int64(0)
 	changesByID := map[string]IncrementalInputItem{}
 
 	for {
 		page, err := WithRetry(ctx, func() (map[string]any, error) {
-			return opts.Fetch(ctx, &start, &end, pageID)
+			return opts.Fetch(ctx, start, end, pageID)
 		}, opts.Retry)
 		if err != nil {
 			return nil, err

@@ -99,12 +99,12 @@ func newTestSyncManager(t *testing.T, idx *search.MeiliIndex) (*SyncManager, str
 	syncStateFile := filepath.Join(tmpDir, "sync_state.json")
 
 	mgr := NewSyncManager(SyncManagerArgs{
-		Index:            idx,
-		ProgressStore:    storage.NewJSONProgressStore(progressFile),
-		SyncStateStore:   storage.NewJSONSyncStateStore(syncStateFile),
-		CheckpointStores: storage.NewJSONCheckpointStoreFactory(),
-		MeiliHost:        "http://127.0.0.1:7700",
-		MeiliIndex:       "test_items",
+		Index:              idx,
+		ProgressStore:      storage.NewJSONProgressStore(progressFile),
+		SyncStateStore:     storage.NewJSONSyncStateStore(syncStateFile),
+		CheckpointStores:   storage.NewJSONCheckpointStoreFactory(),
+		MeiliHost:          "http://127.0.0.1:7700",
+		MeiliIndex:         "test_items",
 		CheckpointTemplate: filepath.Join(tmpDir, "checkpoint.json"),
 		RootWorkers:        1,
 		ProgressEvery:      1,
@@ -408,5 +408,50 @@ func TestRunIncremental_DeleteRetrySuccess(t *testing.T) {
 	}
 	if stats.ChangesFetched != 2 {
 		t.Errorf("expected ChangesFetched=2, got %d", stats.ChangesFetched)
+	}
+}
+
+func TestRunIncremental_DefaultQueryAndOpenEndedWindow(t *testing.T) {
+	t.Parallel()
+
+	stub := &incrementalStubIndex{}
+	meiliIdx := search.NewMeiliIndexFromManager(stub)
+	mgr, _ := newTestSyncManager(t, meiliIdx)
+	mgr.defaultIncrementalQuery = ""
+	limiter := indexer.NewRequestLimiter(2, 0)
+
+	var capturedQuery string
+	var capturedStart *int64
+	var capturedEnd *int64
+
+	api := &mockAPI{
+		searchUpdatedWindowFn: func(_ context.Context, queryWords string, start *int64, end *int64, _ int64) (map[string]any, error) {
+			capturedQuery = queryWords
+			capturedStart = start
+			capturedEnd = end
+			return makeOnePage(nil, nil), nil
+		},
+	}
+
+	progress := newTestProgress(1700000000)
+	request := SyncStartRequest{
+		Mode:             models.SyncModeIncremental,
+		IncrementalQuery: "",
+		WindowOverlapMS:  5000,
+	}
+
+	err := mgr.runIncremental(context.Background(), api, progress, request, limiter)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if capturedQuery != "* OR *" {
+		t.Fatalf("expected fallback query '* OR *', got %q", capturedQuery)
+	}
+	if capturedStart == nil || *capturedStart != 1699999995 {
+		t.Fatalf("expected overlapped start 1699999995, got %v", capturedStart)
+	}
+	if capturedEnd != nil {
+		t.Fatalf("expected nil end for open-ended incremental window, got %v", *capturedEnd)
 	}
 }

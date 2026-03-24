@@ -680,7 +680,7 @@ func (m *SyncManager) runIncremental(ctx context.Context, api npan.API, progress
 		query = m.defaultIncrementalQuery
 	}
 	if query == "" {
-		query = "*"
+		query = "* OR *"
 	}
 
 	overlapMS := request.WindowOverlapMS
